@@ -1,31 +1,39 @@
+import AssignmentRoundedIcon from '@mui/icons-material/AssignmentRounded'
 import DnsRoundedIcon from '@mui/icons-material/DnsRounded'
-import ForkRightRoundedIcon from '@mui/icons-material/ForkRightRounded'
 import HomeRoundedIcon from '@mui/icons-material/HomeRounded'
+import KeyRoundedIcon from '@mui/icons-material/KeyRounded'
 import LanguageRoundedIcon from '@mui/icons-material/LanguageRounded'
-import LockOpenRoundedIcon from '@mui/icons-material/LockOpenRounded'
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded'
-import SubjectRoundedIcon from '@mui/icons-material/SubjectRounded'
 import WifiRoundedIcon from '@mui/icons-material/WifiRounded'
-import { createBrowserRouter, RouteObject } from 'react-router'
+import { createBrowserRouter, type RouteObject } from 'react-router'
 
 import ConnectionsSvg from '@/assets/image/itemicon/connections.svg?react'
 import HomeSvg from '@/assets/image/itemicon/home.svg?react'
-import LogsSvg from '@/assets/image/itemicon/logs.svg?react'
 import ProfilesSvg from '@/assets/image/itemicon/profiles.svg?react'
 import ProxiesSvg from '@/assets/image/itemicon/proxies.svg?react'
-import RulesSvg from '@/assets/image/itemicon/rules.svg?react'
 import SettingsSvg from '@/assets/image/itemicon/settings.svg?react'
-import UnlockSvg from '@/assets/image/itemicon/unlock.svg?react'
+import { RequireAuth } from '@/components/require-auth'
 
 import Layout from './_layout'
+import ApiKeysPage from './api-keys'
 import ConnectionsPage from './connections'
 import HomePage from './home'
+import LoginPage from './login'
+import PlansPage from './plans'
 import ProfilesPage from './profiles'
 import ProxiesPage from './proxies'
+import RegisterPage from './register'
 import RulesPage from './rules'
 import SettingsPage from './settings'
 import UnlockPage from './unlock'
 
+/**
+ * navItems drives both the sidebar navigation and the router.
+ *
+ * Rules, Logs, Unlock (Test) are intentionally excluded from this list so they
+ * do not appear in the navigation bar. Their routes are still registered below
+ * via hiddenRoutes so the pages remain reachable if needed.
+ */
 export const navItems = [
   {
     label: 'layout.components.navigation.tabs.home',
@@ -52,22 +60,19 @@ export const navItems = [
     Component: ConnectionsPage,
   },
   {
-    label: 'layout.components.navigation.tabs.rules',
-    path: '/rules',
-    icon: [<ForkRightRoundedIcon key="mui" />, <RulesSvg key="svg" />],
-    Component: RulesPage,
+    label: 'layout.components.navigation.tabs.plans',
+    path: '/plans',
+    icon: [
+      <AssignmentRoundedIcon key="mui" />,
+      <AssignmentRoundedIcon key="svg" />,
+    ],
+    Component: PlansPage,
   },
   {
-    label: 'layout.components.navigation.tabs.logs',
-    path: '/logs',
-    icon: [<SubjectRoundedIcon key="mui" />, <LogsSvg key="svg" />],
-    Component: () => null /* KeepAlive: real LogsPage rendered in Layout */,
-  },
-  {
-    label: 'layout.components.navigation.tabs.unlock',
-    path: '/unlock',
-    icon: [<LockOpenRoundedIcon key="mui" />, <UnlockSvg key="svg" />],
-    Component: UnlockPage,
+    label: 'layout.components.navigation.tabs.apiKeys',
+    path: '/api-keys',
+    icon: [<KeyRoundedIcon key="mui" />, <KeyRoundedIcon key="svg" />],
+    Component: ApiKeysPage,
   },
   {
     label: 'layout.components.navigation.tabs.settings',
@@ -77,16 +82,38 @@ export const navItems = [
   },
 ]
 
+/** Routes for pages hidden from the nav bar but still routable. */
+const hiddenRoutes: RouteObject[] = [
+  { path: '/rules', Component: RulesPage },
+  {
+    path: '/logs',
+    Component: () => null /* KeepAlive: real LogsPage rendered in Layout */,
+  },
+  { path: '/unlock', Component: UnlockPage },
+]
+
 export const router = createBrowserRouter([
+  // Public routes — accessible without authentication
+  { path: '/login', Component: LoginPage },
+  { path: '/register', Component: RegisterPage },
+
+  // Protected routes — wrapped in the auth guard
   {
     path: '/',
-    Component: Layout,
-    children: navItems.map(
-      (item) =>
-        ({
-          path: item.path,
-          Component: item.Component,
-        }) as RouteObject,
+    element: (
+      <RequireAuth>
+        <Layout />
+      </RequireAuth>
     ),
+    children: [
+      ...navItems.map(
+        (item) =>
+          ({
+            path: item.path,
+            Component: item.Component,
+          }) as RouteObject,
+      ),
+      ...hiddenRoutes,
+    ],
   },
 ])

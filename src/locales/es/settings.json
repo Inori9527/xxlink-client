@@ -150,7 +150,7 @@
   "components": {
     "verge": {
       "basic": {
-        "title": "Ajustes básicos de Verge",
+        "title": "Ajustes básicos de XXLink",
         "actions": {
           "browse": "Examinar"
         },
@@ -173,7 +173,7 @@
         }
       },
       "advanced": {
-        "title": "Ajustes avanzados de Verge",
+        "title": "Ajustes avanzados de XXLink",
         "tooltips": {
           "backupInfo": "Soporte para la copia de seguridad de archivos de configuración a través de WebDAV",
           "openConfDir": "Si el software no funciona correctamente, !realice una copia de seguridad! y elimine todos los archivos de esta carpeta, luego reinicie el software.",
@@ -197,7 +197,7 @@
           "liteModeSettings": "Configuración del modo ligero",
           "exit": "Salir",
           "exportDiagnostics": "Exportar información de diagnóstico",
-          "vergeVersion": "Versión de Verge"
+          "vergeVersion": "Versión de XXLink"
         }
       },
       "theme": {

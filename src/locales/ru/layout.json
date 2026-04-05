@@ -9,6 +9,8 @@
         "rules": "Правила",
         "logs": "Логи",
         "unlock": "Тест",
+        "plans": "Тарифы",
+        "apiKeys": "Ключи API",
         "settings": "Настройки"
       },
       "menu": {

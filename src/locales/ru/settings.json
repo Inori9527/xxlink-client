@@ -150,7 +150,7 @@
   "components": {
     "verge": {
       "basic": {
-        "title": "Основные настройки Verge",
+        "title": "Основные настройки XXLink",
         "actions": {
           "browse": "Просмотреть"
         },
@@ -173,7 +173,7 @@
         }
       },
       "advanced": {
-        "title": "Расширенные настройки Verge",
+        "title": "Расширенные настройки XXLink",
         "tooltips": {
           "backupInfo": "Поддерживается резервное копирование файлов конфигурации через WebDAV",
           "openConfDir": "Если программа работает неправильно, сделайте резервную копию и удалите все файлы в этой папке, затем перезапустите приложение",
@@ -197,7 +197,7 @@
           "liteModeSettings": "Настройки режима LightWeight",
           "exit": "Выход",
           "exportDiagnostics": "Экспорт диагностической информации",
-          "vergeVersion": "Версия Clash Verge Rev"
+          "vergeVersion": "Версия XXLink"
         }
       },
       "theme": {

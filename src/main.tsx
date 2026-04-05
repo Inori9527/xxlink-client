@@ -13,6 +13,7 @@ import { BaseErrorBoundary } from './components/base'
 import { router } from './pages/_routers'
 import { AppDataProvider } from './providers/app-data-provider'
 import { WindowProvider } from './providers/window'
+import { AuthProvider, authStore } from './services/auth-store'
 import { FALLBACK_LANGUAGE, initializeLanguage } from './services/i18n'
 import {
   preloadAppData,
@@ -25,6 +26,7 @@ import {
   ThemeModeProvider,
   UpdateStateProvider,
 } from './services/states'
+import { syncSubscription } from './services/subscription-sync'
 import { disableWebViewShortcuts } from './utils/disable-webview-shortcuts'
 
 if (!window.ResizeObserver) {
@@ -53,11 +55,13 @@ const initializeApp = (initialThemeMode: 'light' | 'dark') => {
       <ComposeContextProvider contexts={contexts}>
         <BaseErrorBoundary>
           <QueryClientProvider client={queryClient}>
-            <WindowProvider>
-              <AppDataProvider>
-                <RouterProvider router={router} />
-              </AppDataProvider>
-            </WindowProvider>
+            <AuthProvider>
+              <WindowProvider>
+                <AppDataProvider>
+                  <RouterProvider router={router} />
+                </AppDataProvider>
+              </WindowProvider>
+            </AuthProvider>
           </QueryClientProvider>
         </BaseErrorBoundary>
       </ComposeContextProvider>
@@ -68,6 +72,11 @@ const initializeApp = (initialThemeMode: 'light' | 'dark') => {
 const bootstrap = async () => {
   const { initialThemeMode } = await preloadAppData()
   initializeApp(initialThemeMode)
+
+  // Sync subscription in the background if the user is already logged in
+  if (authStore.getState().isAuthenticated) {
+    syncSubscription().catch(console.error)
+  }
 }
 
 bootstrap().catch((error) => {

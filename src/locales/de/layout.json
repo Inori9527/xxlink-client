@@ -9,6 +9,8 @@
         "rules": "Regeln",
         "logs": "Protokolle",
         "unlock": "Testen",
+        "plans": "Tarife",
+        "apiKeys": "API-Schlüssel",
         "settings": "Einstellungen"
       },
       "menu": {

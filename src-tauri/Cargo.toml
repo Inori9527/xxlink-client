@@ -1,11 +1,11 @@
 [package]
-name = "clash-verge"
+name = "xxlink-client"
 version = "2.4.8"
-description = "clash verge"
+description = "XXLink desktop client"
 authors = ["zzzgydi", "Tunglies", "wonfen", "MystiPanda"]
 license = "GPL-3.0-only"
 repository = "https://github.com/clash-verge-rev/clash-verge-rev.git"
-default-run = "clash-verge"
+default-run = "xxlink-client"
 build = "build.rs"
 edition = "2024"
 rust-version = "1.91"
@@ -24,7 +24,7 @@ clippy = ["tauri/test"]
 tracing = []
 
 [package.metadata.bundle]
-identifier = "io.github.clash-verge-rev.clash-verge-rev"
+identifier = "com.xxlink.desktop"
 
 [build-dependencies]
 tauri-build = { version = "2.5.6", features = [] }

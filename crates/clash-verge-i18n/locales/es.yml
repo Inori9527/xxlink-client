@@ -22,18 +22,18 @@ notifications:
     body: Perfil reactivado.
   appQuit:
     title: A punto de salir
-    body: Clash Verge está a punto de salir.
+    body: XXLink está a punto de salir.
   appHidden:
     title: Aplicación oculta
-    body: Clash Verge se está ejecutando en segundo plano.
+    body: XXLink se está ejecutando en segundo plano.
   updateReady:
-    title: Clash Verge Update
+    title: XXLink Update
     body: A new version (v{version}) has been downloaded and is ready to install.
     installNow: Install Now
     later: Later
 service:
-  adminInstallPrompt: Instalar el servicio de Clash Verge requiere privilegios de administrador.
-  adminUninstallPrompt: Desinstalar el servicio de Clash Verge requiere privilegios de administrador.
+  adminInstallPrompt: Instalar el servicio de XXLink requiere privilegios de administrador.
+  adminUninstallPrompt: Desinstalar el servicio de XXLink requiere privilegios de administrador.
 tray:
   dashboard: Panel
   ruleMode: Modo de reglas

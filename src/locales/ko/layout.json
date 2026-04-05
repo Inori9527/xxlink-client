@@ -9,6 +9,8 @@
         "rules": "규칙",
         "logs": "로그",
         "unlock": "테스트",
+        "plans": "요금제",
+        "apiKeys": "API 키",
         "settings": "설정"
       },
       "menu": {

@@ -150,7 +150,7 @@
   "components": {
     "verge": {
       "basic": {
-        "title": "Verge Төп көйләүләр",
+        "title": "XXLink Төп көйләүләр",
         "actions": {
           "browse": "Карау"
         },
@@ -173,7 +173,7 @@
         }
       },
       "advanced": {
-        "title": "Verge Киңәйтелгән көйләүләр",
+        "title": "XXLink Киңәйтелгән көйләүләр",
         "tooltips": {
           "backupInfo": "WebDAV аша конфигурация файлын саклауны хуплый",
           "openConfDir": "Әгәр программада хаталар чыкса, бу папкадагы файлларны саклап калыгыз да, аннары барысын да бетереп, программаны яңадан башлагыз",
@@ -197,7 +197,7 @@
           "liteModeSettings": "LightWeight Mode Settings",
           "exit": "Чыгу",
           "exportDiagnostics": "Export Diagnostic Info",
-          "vergeVersion": "Verge версиясе"
+          "vergeVersion": "XXLink версиясе"
         }
       },
       "theme": {

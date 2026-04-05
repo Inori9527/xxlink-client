@@ -22,18 +22,18 @@ notifications:
     body: Профиль повторно активирован.
   appQuit:
     title: Скорый выход
-    body: Clash Verge скоро завершит работу.
+    body: XXLink скоро завершит работу.
   appHidden:
     title: Приложение скрыто
-    body: Clash Verge работает в фоновом режиме.
+    body: XXLink работает в фоновом режиме.
   updateReady:
-    title: Clash Verge Update
+    title: XXLink Update
     body: A new version (v{version}) has been downloaded and is ready to install.
     installNow: Install Now
     later: Later
 service:
-  adminInstallPrompt: Для установки службы Clash Verge требуются права администратора.
-  adminUninstallPrompt: Для удаления службы Clash Verge требуются права администратора.
+  adminInstallPrompt: Для установки службы XXLink требуются права администратора.
+  adminUninstallPrompt: Для удаления службы XXLink требуются права администратора.
 tray:
   dashboard: Панель
   ruleMode: Режим правил

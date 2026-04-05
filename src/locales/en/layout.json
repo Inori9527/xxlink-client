@@ -9,6 +9,8 @@
         "rules": "Rules",
         "logs": "Logs",
         "unlock": "Test",
+        "plans": "Plans",
+        "apiKeys": "API Keys",
         "settings": "Settings"
       },
       "menu": {

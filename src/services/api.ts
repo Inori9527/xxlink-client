@@ -4,7 +4,257 @@ import { asyncRetry } from 'foxts/async-retry'
 import { extractErrorMessage } from 'foxts/extract-error-message'
 import { once } from 'foxts/once'
 
+import { apiRefreshToken } from '@/services/auth'
+import { authStore } from '@/services/auth-store'
 import { debugLog } from '@/utils/debug'
+
+// ---------------------------------------------------------------------------
+// Backend API client
+// ---------------------------------------------------------------------------
+
+const BASE_URL =
+  (import.meta.env['VITE_API_BASE_URL'] as string | undefined) ??
+  'http://localhost:3000/api'
+
+// ---------------------------------------------------------------------------
+// Shared type definitions
+// ---------------------------------------------------------------------------
+
+export interface User {
+  id: string
+  email: string
+  role: 'USER' | 'ADMIN'
+}
+
+export interface Plan {
+  id: string
+  name: string
+  description: string | null
+  price: number
+  duration: number
+  trafficLimit: number
+  speedLimit: number | null
+  maxDevices: number
+}
+
+export interface Subscription {
+  id: string
+  planId: string
+  subUrl: string
+  trafficUsed: number
+  startAt: string
+  expireAt: string
+  status: 'ACTIVE' | 'EXPIRED' | 'CANCELLED'
+  plan: Plan
+}
+
+export interface Node {
+  id: string
+  name: string
+  protocol: string
+  region: string
+  isActive: boolean
+  host?: string
+  port?: number
+}
+
+export interface UsageData {
+  trafficUsed: string
+  trafficLimit: string
+  trafficRemaining: string
+  percentUsed: number
+  plan: { id: string; name: string; duration: number }
+  status: string
+  expireAt: string
+  startAt: string
+}
+
+export interface PromoValidation {
+  valid: boolean
+  code: string
+  discountType: 'PERCENT' | 'FIXED'
+  discountValue: number
+  discount: number
+  originalPrice: number
+  finalPrice: number
+}
+
+export interface ApiKey {
+  id: string
+  name: string
+  key: string
+  createdAt: string
+  lastUsedAt: string | null
+  requestCount: number
+}
+
+export interface ApiKeyUsage {
+  totalRequests: number
+  totalTokens: number
+  todayRequests: number
+  todayCost: number
+  models: Array<{ name: string; requests: number; tokens: number }>
+}
+
+// ---------------------------------------------------------------------------
+// Backend API response envelope
+// ---------------------------------------------------------------------------
+
+interface BackendResponse<T> {
+  success: boolean
+  data?: T
+  error?: { message: string; code: string }
+}
+
+// ---------------------------------------------------------------------------
+// Core request helper with auto-refresh
+// ---------------------------------------------------------------------------
+
+let isRefreshing = false
+let refreshPromise: Promise<void> | null = null
+
+async function request<T>(
+  path: string,
+  options: {
+    method?: string
+    body?: unknown
+  } = {},
+): Promise<T> {
+  const doRequest = async (): Promise<Response> => {
+    const state = authStore.getState()
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    if (state.accessToken) {
+      headers['Authorization'] = `Bearer ${state.accessToken}`
+    }
+
+    return fetch(`${BASE_URL}${path}`, {
+      method: options.method ?? 'GET',
+      headers,
+      body:
+        options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    })
+  }
+
+  let res = await doRequest()
+
+  // 401 → attempt token refresh once
+  if (res.status === 401) {
+    const state = authStore.getState()
+    if (state.refreshToken) {
+      if (!isRefreshing) {
+        isRefreshing = true
+        refreshPromise = apiRefreshToken(state.refreshToken)
+          .then((tokens) => {
+            // Update the singleton with new tokens; user stays the same
+            if (state.user) {
+              authStore.setAuth(
+                state.user,
+                tokens.accessToken,
+                tokens.refreshToken,
+              )
+            }
+          })
+          .catch(() => {
+            authStore.clearAuth()
+            window.location.href = '/login'
+          })
+          .finally(() => {
+            isRefreshing = false
+            refreshPromise = null
+          })
+      }
+      await refreshPromise
+      // Retry the original request with the refreshed token
+      res = await doRequest()
+    } else {
+      authStore.clearAuth()
+      window.location.href = '/login'
+      throw new Error('Unauthenticated')
+    }
+  }
+
+  let json: BackendResponse<T>
+  try {
+    json = (await res.json()) as BackendResponse<T>
+  } catch {
+    throw new Error(`Server returned non-JSON response (${res.status})`)
+  }
+
+  if (!res.ok || !json.success) {
+    throw new Error(json.error?.message ?? `Request failed (${res.status})`)
+  }
+
+  return json.data as T
+}
+
+// ---------------------------------------------------------------------------
+// getSubUrl helper
+// ---------------------------------------------------------------------------
+
+export function getSubUrl(
+  subUrl: string,
+  format: 'clash' | 'singbox' | 'v2ray' = 'clash',
+): string {
+  try {
+    const url = new URL(subUrl)
+    url.searchParams.set('format', format)
+    return url.toString()
+  } catch {
+    return `${BASE_URL}/subscription/${subUrl}?format=${format}`
+  }
+}
+
+// ---------------------------------------------------------------------------
+// API surface
+// ---------------------------------------------------------------------------
+
+export const api = {
+  subscription: {
+    current: () => request<Subscription | null>('/subscription/'),
+    plans: () => request<Plan[]>('/subscription/plans'),
+    purchase: (planId: string) =>
+      request<Subscription>('/subscription/purchase', {
+        method: 'POST',
+        body: { planId },
+      }),
+  },
+
+  user: {
+    profile: () => request<User>('/user/profile'),
+    usage: () => request<UsageData>('/user/usage'),
+  },
+
+  payment: {
+    createCheckout: (planId: string, promoCode?: string) =>
+      request<{ sessionUrl: string; sessionId: string }>('/payment/checkout', {
+        method: 'POST',
+        body: { planId, ...(promoCode ? { promoCode } : {}) },
+      }),
+  },
+
+  promo: {
+    validate: (code: string, planId: string) =>
+      request<PromoValidation>('/promo/validate', {
+        method: 'POST',
+        body: { code, planId },
+      }),
+  },
+
+  nodes: {
+    list: () => request<Node[]>('/nodes'),
+  },
+
+  apiKeys: {
+    list: () => request<ApiKey[]>('/api-keys'),
+    create: (name: string) =>
+      request<ApiKey>('/api-keys', { method: 'POST', body: { name } }),
+    delete: (id: string) =>
+      request<{ message: string }>(`/api-keys/${id}`, { method: 'DELETE' }),
+    usage: () => request<ApiKeyUsage>('/api-keys/usage'),
+  },
+}
 
 const getUserAgentPromise = once(async () => {
   try {
@@ -12,7 +262,7 @@ const getUserAgentPromise = once(async () => {
     return `${name}/${version}`
   } catch (error) {
     console.debug('Failed to build User-Agent, fallback to default', error)
-    return 'clash-verge-rev'
+    return 'xxlink-client'
   }
 })
 // Get current IP and geolocation information （refactored IP detection with service-specific mappings）

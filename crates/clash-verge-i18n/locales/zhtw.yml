@@ -22,18 +22,18 @@ notifications:
     body: 訂閱已啟用。
   appQuit:
     title: 即將退出
-    body: Clash Verge 即將退出。
+    body: XXLink 即將退出。
   appHidden:
     title: 應用已隱藏
-    body: Clash Verge 正在背景執行。
+    body: XXLink 正在背景執行。
   updateReady:
-    title: Clash Verge Update
+    title: XXLink Update
     body: A new version (v{version}) has been downloaded and is ready to install.
     installNow: Install Now
     later: Later
 service:
-  adminInstallPrompt: 安裝 Clash Verge 服務需要管理員權限
-  adminUninstallPrompt: 卸载 Clash Verge 服務需要管理員權限
+  adminInstallPrompt: 安裝 XXLink 服務需要管理員權限
+  adminUninstallPrompt: 卸载 XXLink 服務需要管理員權限
 tray:
   dashboard: 儀表板
   ruleMode: 規則模式
