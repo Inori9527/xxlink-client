@@ -17,6 +17,39 @@ use std::{
 use sysproxy::{Autoproxy, GuardMonitor, GuardType, Sysproxy};
 use tokio::sync::Mutex as TokioMutex;
 
+/// Directly write proxy state to the Windows registry for reliability.
+/// The sysproxy crate uses InternetSetOptionW which sometimes doesn't
+/// persist to the registry on certain Windows versions.
+#[cfg(target_os = "windows")]
+fn win_registry_set_proxy(enable: bool, server: &str, bypass: &str) -> Result<()> {
+    use winreg::enums::*;
+    use winreg::RegKey;
+
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let (key, _) = hkcu.create_subkey(
+        "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings",
+    )?;
+
+    key.set_value("ProxyEnable", &(if enable { 1u32 } else { 0u32 }))?;
+
+    if enable {
+        key.set_value("ProxyServer", &server)?;
+        key.set_value("ProxyOverride", &bypass)?;
+    }
+
+    // Signal WinInet to pick up changes
+    unsafe {
+        use windows::Win32::Networking::WinInet::{
+            InternetSetOptionW, INTERNET_OPTION_PROXY_SETTINGS_CHANGED,
+            INTERNET_OPTION_REFRESH,
+        };
+        let _ = InternetSetOptionW(None, INTERNET_OPTION_PROXY_SETTINGS_CHANGED, None, 0);
+        let _ = InternetSetOptionW(None, INTERNET_OPTION_REFRESH, None, 0);
+    }
+
+    Ok(())
+}
+
 pub struct Sysopt {
     update_lock: TokioMutex<()>,
     reset_sysproxy: AtomicBool,
@@ -172,20 +205,19 @@ impl Sysopt {
         );
 
         tokio::task::spawn_blocking(move || -> Result<()> {
-            // IMPORTANT: We must be careful about call order here.
-            // When auto.enable=false, auto.set_auto_proxy() calls unset_proxy()
-            // which sets PROXY_TYPE_DIRECT, nuking ANY proxy setting including
-            // the system proxy we just set. Similarly for sys with enable=false.
-            //
-            // Strategy:
-            // - sys_enable=true, pac=false: only set sys (skip auto, it would reset everything)
-            // - sys_enable=true, pac=true:  set auto only (PAC mode takes priority)
-            // - sys_enable=false:           clear both (disable calls first, then it's fine)
             if sys.enable && !auto.enable {
-                // System proxy mode: only set global proxy, do NOT touch auto proxy
+                // System proxy mode: set via sysproxy + registry for reliability
                 if let Err(e) = sys.set_system_proxy() {
                     logging!(error, Type::Core, "Failed to set system proxy: {:?}", e);
                     return Err(e.into());
+                }
+                #[cfg(target_os = "windows")]
+                {
+                    let server = format!("{}:{}", sys.host, sys.port);
+                    let bypass_str: std::string::String = sys.bypass.into();
+                    if let Err(e) = win_registry_set_proxy(true, &server, &bypass_str) {
+                        logging!(error, Type::Core, "Failed to write proxy registry: {:?}", e);
+                    }
                 }
                 logging!(info, Type::Core, "System proxy set successfully");
             } else if auto.enable {
@@ -196,14 +228,16 @@ impl Sysopt {
                 }
                 logging!(info, Type::Core, "Auto proxy (PAC) set successfully");
             } else {
-                // Both disabled: clear everything. Order doesn't matter since both disable.
+                // Both disabled: clear via sysproxy + registry
                 if let Err(e) = sys.set_system_proxy() {
                     logging!(error, Type::Core, "Failed to clear system proxy: {:?}", e);
                     return Err(e.into());
                 }
-                if let Err(e) = auto.set_auto_proxy() {
-                    logging!(error, Type::Core, "Failed to clear auto proxy: {:?}", e);
-                    return Err(e.into());
+                #[cfg(target_os = "windows")]
+                {
+                    if let Err(e) = win_registry_set_proxy(false, "", "") {
+                        logging!(error, Type::Core, "Failed to clear proxy registry: {:?}", e);
+                    }
                 }
                 logging!(info, Type::Core, "All proxies cleared");
             }
@@ -239,8 +273,13 @@ impl Sysopt {
         };
 
         tokio::task::spawn_blocking(move || -> Result<()> {
-            // Both are disabled; just call one unset_proxy() via sys is enough
             sys.set_system_proxy()?;
+            #[cfg(target_os = "windows")]
+            {
+                if let Err(e) = win_registry_set_proxy(false, "", "") {
+                    logging!(error, Type::Core, "Failed to clear proxy registry on reset: {:?}", e);
+                }
+            }
             logging!(info, Type::Core, "System proxy reset successfully");
             Ok(())
         })

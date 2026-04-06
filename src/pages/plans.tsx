@@ -193,7 +193,6 @@ const PlanCard = ({
       elevation={0}
       sx={{
         p: 3,
-        height: '100%',
         display: 'flex',
         flexDirection: 'column',
         border: isCurrent ? '2px solid #4f46e5' : '1px solid',
