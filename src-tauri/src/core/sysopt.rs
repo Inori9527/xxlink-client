@@ -161,9 +161,52 @@ impl Sysopt {
 
         self.access_guard().write().set_guard_type(guard_type);
 
+        logging!(
+            info,
+            Type::Core,
+            "Setting system proxy: enable={}, host={}, port={}, bypass_len={}",
+            sys.enable,
+            sys.host,
+            sys.port,
+            sys.bypass.len()
+        );
+
         tokio::task::spawn_blocking(move || -> Result<()> {
-            sys.set_system_proxy()?;
-            auto.set_auto_proxy()?;
+            // IMPORTANT: We must be careful about call order here.
+            // When auto.enable=false, auto.set_auto_proxy() calls unset_proxy()
+            // which sets PROXY_TYPE_DIRECT, nuking ANY proxy setting including
+            // the system proxy we just set. Similarly for sys with enable=false.
+            //
+            // Strategy:
+            // - sys_enable=true, pac=false: only set sys (skip auto, it would reset everything)
+            // - sys_enable=true, pac=true:  set auto only (PAC mode takes priority)
+            // - sys_enable=false:           clear both (disable calls first, then it's fine)
+            if sys.enable && !auto.enable {
+                // System proxy mode: only set global proxy, do NOT touch auto proxy
+                if let Err(e) = sys.set_system_proxy() {
+                    logging!(error, Type::Core, "Failed to set system proxy: {:?}", e);
+                    return Err(e.into());
+                }
+                logging!(info, Type::Core, "System proxy set successfully");
+            } else if auto.enable {
+                // PAC mode: only set auto proxy
+                if let Err(e) = auto.set_auto_proxy() {
+                    logging!(error, Type::Core, "Failed to set auto proxy: {:?}", e);
+                    return Err(e.into());
+                }
+                logging!(info, Type::Core, "Auto proxy (PAC) set successfully");
+            } else {
+                // Both disabled: clear everything. Order doesn't matter since both disable.
+                if let Err(e) = sys.set_system_proxy() {
+                    logging!(error, Type::Core, "Failed to clear system proxy: {:?}", e);
+                    return Err(e.into());
+                }
+                if let Err(e) = auto.set_auto_proxy() {
+                    logging!(error, Type::Core, "Failed to clear auto proxy: {:?}", e);
+                    return Err(e.into());
+                }
+                logging!(info, Type::Core, "All proxies cleared");
+            }
             Ok(())
         })
         .await??;
@@ -188,16 +231,17 @@ impl Sysopt {
         self.access_guard().write().set_guard_type(GuardType::None);
 
         // 直接关闭所有代理
-        let (sys, auto) = {
+        let sys = {
             let (sys, auto) = &mut *self.inner_proxy.write();
             sys.enable = false;
             auto.enable = false;
-            (sys.clone(), auto.clone())
+            sys.clone()
         };
 
         tokio::task::spawn_blocking(move || -> Result<()> {
+            // Both are disabled; just call one unset_proxy() via sys is enough
             sys.set_system_proxy()?;
-            auto.set_auto_proxy()?;
+            logging!(info, Type::Core, "System proxy reset successfully");
             Ok(())
         })
         .await??;

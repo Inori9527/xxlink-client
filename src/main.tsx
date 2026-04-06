@@ -75,7 +75,13 @@ const bootstrap = async () => {
 
   // Sync subscription in the background if the user is already logged in
   if (authStore.getState().isAuthenticated) {
-    syncSubscription().catch(console.error)
+    // Non-blocking — must never freeze the UI
+    Promise.race([
+      syncSubscription(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('syncSubscription timeout')), 10000),
+      ),
+    ]).catch(console.error)
   }
 }
 

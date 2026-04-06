@@ -6,7 +6,7 @@ import { fetch } from '@tauri-apps/plugin-http'
 
 const BASE_URL =
   (import.meta.env['VITE_API_BASE_URL'] as string | undefined) ??
-  'http://localhost:3000/api'
+  'https://api.xxlink.net/api/v1'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -109,5 +109,5 @@ export async function apiGoogleOAuthCallback(
   code: string,
   redirectUri: string,
 ): Promise<LoginResult> {
-  return post<LoginResult>('/auth/google/callback', { code, redirectUri })
+  return post<LoginResult>('/auth/oauth/google', { code, redirectUri })
 }

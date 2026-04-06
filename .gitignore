@@ -4,6 +4,9 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
+.env.local
+.env*.local
 update.json
 scripts/_env.sh
 .vscode

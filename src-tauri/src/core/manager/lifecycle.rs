@@ -66,10 +66,27 @@ impl CoreManager {
         #[cfg(target_os = "windows")]
         self.wait_for_service_if_needed().await;
 
+        let verge = Config::verge().await.latest_arc();
+        let needs_tun = verge.enable_tun_mode.unwrap_or(false);
+        drop(verge);
+
         let value = SERVICE_MANAGER.lock().await.current();
-        let mode = match value {
-            ServiceStatus::Ready => RunningMode::Service,
-            _ => RunningMode::Sidecar,
+        let mode = if needs_tun {
+            // TUN 模式需要服务模式（管理员权限）
+            match value {
+                ServiceStatus::Ready => RunningMode::Service,
+                _ => RunningMode::Sidecar,
+            }
+        } else {
+            // 非 TUN 模式优先使用 sidecar（更可靠，直接传递配置文件）
+            // 服务模式存在配置文件传递 bug，导致 mihomo 无法正确加载配置
+            if matches!(value, ServiceStatus::Ready) {
+                // 先尝试通过服务停止旧的核心进程，释放端口
+                logging!(info, Type::Core, "Stopping service-managed core before sidecar startup");
+                let _ = crate::core::service::stop_core_by_service().await;
+            }
+            logging!(info, Type::Core, "Using sidecar mode for better config reliability");
+            RunningMode::Sidecar
         };
 
         self.set_running_mode(mode);

@@ -21,7 +21,19 @@ import {
  * Designed to be called fire-and-forget:
  *   syncSubscription().catch(console.error)
  */
+let isSyncing = false
+
 export async function syncSubscription(): Promise<void> {
+  if (isSyncing) return // prevent concurrent runs
+  isSyncing = true
+  try {
+    await doSync()
+  } finally {
+    isSyncing = false
+  }
+}
+
+async function doSync(): Promise<void> {
   // 1. Fetch current subscription
   const sub = await api.subscription.current()
 

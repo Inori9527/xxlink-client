@@ -25,7 +25,8 @@ import { syncSubscription } from '@/services/subscription-sync'
 // ---------------------------------------------------------------------------
 
 const GOOGLE_CLIENT_ID =
-  (import.meta.env['VITE_GOOGLE_CLIENT_ID'] as string | undefined) ?? ''
+  (import.meta.env['VITE_GOOGLE_CLIENT_ID'] as string | undefined) ??
+  '19641496417-pktsiagj5d11nb4c719mbog1q1n2r5gj.apps.googleusercontent.com'
 
 interface OAuthCallbackPayload {
   code?: string
@@ -130,8 +131,12 @@ export default function LoginPage(): ReactNode {
     }
     setError('')
     setGoogleLoading(true)
+    // Use a placeholder redirect_uri — the Rust command will replace it
+    // with the actual local server address (http://127.0.0.1:{port})
+    const placeholderRedirect = 'http://127.0.0.1'
     const params = new URLSearchParams({
       client_id: GOOGLE_CLIENT_ID,
+      redirect_uri: placeholderRedirect,
       response_type: 'code',
       scope: 'email profile',
       state: 'google',
@@ -141,13 +146,13 @@ export default function LoginPage(): ReactNode {
     if (email) params.set('login_hint', email)
     const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
     try {
-      await invoke('open_oauth_window', {
+      await invoke<string>('open_oauth_window', {
         url,
-        callbackUrlPrefix: 'http://127.0.0.1',
+        callbackUrlPrefix: placeholderRedirect,
       })
     } catch (err) {
       setError(
-        `无法打开 Google 登录窗口: ${err instanceof Error ? err.message : String(err)}`,
+        `无法打开浏览器: ${err instanceof Error ? err.message : String(err)}`,
       )
       setGoogleLoading(false)
     }
@@ -255,21 +260,35 @@ export default function LoginPage(): ReactNode {
         </Box>
 
         {/* Google OAuth */}
-        {GOOGLE_CLIENT_ID && (
-          <>
-            <Divider sx={{ my: 2.5 }}>
-              <Typography variant="caption" color="text.secondary">
-                或使用以下方式登录
-              </Typography>
-            </Divider>
+        <>
+          <Divider sx={{ my: 2.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              或使用以下方式登录
+            </Typography>
+          </Divider>
+          {googleLoading ? (
+            <Button
+              variant="outlined"
+              fullWidth
+              onClick={() => setGoogleLoading(false)}
+              startIcon={<CircularProgress size={18} />}
+              sx={{
+                py: 1.2,
+                borderColor: '#ef4444',
+                color: '#ef4444',
+                fontWeight: 500,
+                '&:hover': { borderColor: '#dc2626', bgcolor: '#fef2f2' },
+              }}
+            >
+              取消 Google 登录
+            </Button>
+          ) : (
             <Button
               variant="outlined"
               fullWidth
               onClick={handleGoogleLogin}
-              disabled={anyLoading}
-              startIcon={
-                googleLoading ? <CircularProgress size={18} /> : <GoogleIcon />
-              }
+              disabled={loading}
+              startIcon={<GoogleIcon />}
               sx={{
                 py: 1.2,
                 borderColor: '#d1d5db',
@@ -280,8 +299,8 @@ export default function LoginPage(): ReactNode {
             >
               使用 Google 登录
             </Button>
-          </>
-        )}
+          )}
+        </>
 
         {/* Footer link */}
         <Typography
