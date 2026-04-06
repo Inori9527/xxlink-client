@@ -5,7 +5,6 @@ import {
   Box,
   Button,
   Chip,
-  Grid,
   IconButton,
   LinearProgress,
   Paper,
@@ -398,30 +397,39 @@ const PlansPage = () => {
         可选套餐
       </Typography>
 
-      <Grid container spacing={2} sx={{ mb: 3 }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: {
+            xs: '1fr',
+            sm: 'repeat(2, 1fr)',
+            md: 'repeat(3, 1fr)',
+          },
+          gap: 2,
+          mb: 3,
+        }}
+      >
         {loading
           ? Array.from({ length: 3 }).map((_, i) => (
-              <Grid
+              <Skeleton
                 key={`skeleton-${String(i)}`}
-                size={{ xs: 12, sm: 6, md: 4 }}
-              >
-                <Skeleton variant="rounded" height={320} />
-              </Grid>
+                variant="rounded"
+                height={320}
+              />
             ))
           : plans.map((plan) => (
-              <Grid key={plan.id} size={{ xs: 12, sm: 6, md: 4 }}>
-                <PlanCard
-                  plan={plan}
-                  isCurrent={
-                    subscription?.planId === plan.id &&
-                    subscription.status === 'ACTIVE'
-                  }
-                  onPurchase={handlePurchase}
-                  purchasing={purchasingId === plan.id}
-                />
-              </Grid>
+              <PlanCard
+                key={plan.id}
+                plan={plan}
+                isCurrent={
+                  subscription?.planId === plan.id &&
+                  subscription.status === 'ACTIVE'
+                }
+                onPurchase={handlePurchase}
+                purchasing={purchasingId === plan.id}
+              />
             ))}
-      </Grid>
+      </Box>
 
       {/* Promo Code */}
       {!loading && (
