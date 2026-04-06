@@ -22,13 +22,11 @@ use tokio::sync::Mutex as TokioMutex;
 /// persist to the registry on certain Windows versions.
 #[cfg(target_os = "windows")]
 fn win_registry_set_proxy(enable: bool, server: &str, bypass: &str) -> Result<()> {
-    use winreg::enums::*;
     use winreg::RegKey;
+    use winreg::enums::HKEY_CURRENT_USER;
 
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let (key, _) = hkcu.create_subkey(
-        "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings",
-    )?;
+    let (key, _) = hkcu.create_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings")?;
 
     key.set_value("ProxyEnable", &(if enable { 1u32 } else { 0u32 }))?;
 
@@ -40,8 +38,7 @@ fn win_registry_set_proxy(enable: bool, server: &str, bypass: &str) -> Result<()
     // Signal WinInet to pick up changes
     unsafe {
         use windows::Win32::Networking::WinInet::{
-            InternetSetOptionW, INTERNET_OPTION_PROXY_SETTINGS_CHANGED,
-            INTERNET_OPTION_REFRESH,
+            INTERNET_OPTION_PROXY_SETTINGS_CHANGED, INTERNET_OPTION_REFRESH, InternetSetOptionW,
         };
         let _ = InternetSetOptionW(None, INTERNET_OPTION_PROXY_SETTINGS_CHANGED, None, 0);
         let _ = InternetSetOptionW(None, INTERNET_OPTION_REFRESH, None, 0);
@@ -214,8 +211,7 @@ impl Sysopt {
                 #[cfg(target_os = "windows")]
                 {
                     let server = format!("{}:{}", sys.host, sys.port);
-                    let bypass_str: std::string::String = sys.bypass.into();
-                    if let Err(e) = win_registry_set_proxy(true, &server, &bypass_str) {
+                    if let Err(e) = win_registry_set_proxy(true, &server, &sys.bypass) {
                         logging!(error, Type::Core, "Failed to write proxy registry: {:?}", e);
                     }
                 }
