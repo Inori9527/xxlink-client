@@ -150,7 +150,7 @@
   "components": {
     "verge": {
       "basic": {
-        "title": "Verge基本設定",
+        "title": "XXLink基本設定",
         "actions": {
           "browse": "参照"
         },
@@ -173,7 +173,7 @@
         }
       },
       "advanced": {
-        "title": "Verge詳細設定",
+        "title": "XXLink詳細設定",
         "tooltips": {
           "backupInfo": "WebDAVを使用した設定ファイルのバックアップをサポートします。",
           "openConfDir": "アプリケーションが正常に動作しない場合は、このフォルダ内のすべてのファイルを!バックアップ!して削除し、アプリケーションを再起動してください。",
@@ -197,7 +197,7 @@
           "liteModeSettings": "軽量モード設定",
           "exit": "終了",
           "exportDiagnostics": "診断情報をエクスポート",
-          "vergeVersion": "Vergeバージョン"
+          "vergeVersion": "XXLinkバージョン"
         }
       },
       "theme": {

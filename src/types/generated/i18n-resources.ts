@@ -184,9 +184,11 @@ export interface TranslationResources {
             unlock: string
           }
           tabs: {
+            apiKeys: string
             connections: string
             home: string
             logs: string
+            plans: string
             profiles: string
             proxies: string
             rules: string

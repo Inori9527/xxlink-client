@@ -15,9 +15,40 @@ use std::{
     time::Duration,
 };
 use sysproxy::{Autoproxy, GuardMonitor, GuardType, Sysproxy};
+use tokio::sync::Mutex as TokioMutex;
+
+/// Directly write proxy state to the Windows registry for reliability.
+/// The sysproxy crate uses InternetSetOptionW which sometimes doesn't
+/// persist to the registry on certain Windows versions.
+#[cfg(target_os = "windows")]
+fn win_registry_set_proxy(enable: bool, server: &str, bypass: &str) -> Result<()> {
+    use winreg::RegKey;
+    use winreg::enums::HKEY_CURRENT_USER;
+
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let (key, _) = hkcu.create_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings")?;
+
+    key.set_value("ProxyEnable", &(if enable { 1u32 } else { 0u32 }))?;
+
+    if enable {
+        key.set_value("ProxyServer", &server)?;
+        key.set_value("ProxyOverride", &bypass)?;
+    }
+
+    // Signal WinInet to pick up changes
+    unsafe {
+        use windows::Win32::Networking::WinInet::{
+            INTERNET_OPTION_PROXY_SETTINGS_CHANGED, INTERNET_OPTION_REFRESH, InternetSetOptionW,
+        };
+        let _ = InternetSetOptionW(None, INTERNET_OPTION_PROXY_SETTINGS_CHANGED, None, 0);
+        let _ = InternetSetOptionW(None, INTERNET_OPTION_REFRESH, None, 0);
+    }
+
+    Ok(())
+}
 
 pub struct Sysopt {
-    update_sysproxy: AtomicBool,
+    update_lock: TokioMutex<()>,
     reset_sysproxy: AtomicBool,
     inner_proxy: Arc<RwLock<(Sysproxy, Autoproxy)>>,
     guard: Arc<RwLock<GuardMonitor>>,
@@ -26,7 +57,7 @@ pub struct Sysopt {
 impl Default for Sysopt {
     fn default() -> Self {
         Self {
-            update_sysproxy: AtomicBool::new(false),
+            update_lock: TokioMutex::new(()),
             reset_sysproxy: AtomicBool::new(false),
             inner_proxy: Arc::new(RwLock::new((Sysproxy::default(), Autoproxy::default()))),
             guard: Arc::new(RwLock::new(GuardMonitor::new(GuardType::None, Duration::from_secs(30)))),
@@ -107,94 +138,113 @@ impl Sysopt {
 
     /// init the sysproxy
     pub async fn update_sysproxy(&self) -> Result<()> {
-        if self.update_sysproxy.load(Ordering::Acquire) {
-            logging!(info, Type::Core, "Sysproxy update is already in progress.");
-            return Ok(());
-        }
-        if self
-            .update_sysproxy
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .is_err()
-        {
-            logging!(info, Type::Core, "Sysproxy update is already in progress.");
-            return Ok(());
-        }
-        defer! {
-            logging!(info, Type::Core, "Sysproxy update completed.");
-            self.update_sysproxy.store(false, Ordering::Release);
-        }
+        let _lock = self.update_lock.lock().await;
 
         let verge = Config::verge().await.latest_arc();
-        let port = {
-            let verge_port = verge.verge_mixed_port;
-            match verge_port {
-                Some(port) => port,
-                None => Config::clash().await.latest_arc().get_mixed_port(),
-            }
+        let port = match verge.verge_mixed_port {
+            Some(port) => port,
+            None => Config::clash().await.latest_arc().get_mixed_port(),
         };
         let pac_port = IVerge::get_singleton_port();
-
-        let (sys_enable, pac_enable, proxy_host, proxy_guard) = {
-            (
-                verge.enable_system_proxy.unwrap_or_default(),
-                verge.proxy_auto_config.unwrap_or_default(),
-                verge.proxy_host.clone().unwrap_or_else(|| String::from("127.0.0.1")),
-                verge.enable_proxy_guard.unwrap_or_default(),
-            )
-        };
-
+        let (sys_enable, pac_enable, proxy_host, proxy_guard) = (
+            verge.enable_system_proxy.unwrap_or_default(),
+            verge.proxy_auto_config.unwrap_or_default(),
+            verge.proxy_host.clone().unwrap_or_else(|| String::from("127.0.0.1")),
+            verge.enable_proxy_guard.unwrap_or_default(),
+        );
         // 先 await, 避免持有锁导致的 Send 问题
         let bypass = get_bypass().await;
 
-        let (sys, auto) = &mut *self.inner_proxy.write();
-        sys.enable = false;
-        sys.host = proxy_host.clone().into();
-        sys.port = port;
-        sys.bypass = bypass.into();
+        let (sys, auto, guard_type) = {
+            let (sys, auto) = &mut *self.inner_proxy.write();
+            sys.host = proxy_host.clone().into();
+            sys.port = port;
+            sys.bypass = bypass.into();
+            auto.url = format!("http://{proxy_host}:{pac_port}/commands/pac");
 
-        auto.enable = false;
-        auto.url = format!("http://{proxy_host}:{pac_port}/commands/pac");
+            // `enable_system_proxy` is the master switch.
+            // When disabled, force clear both global proxy and PAC at OS level.
+            let guard_type = if !sys_enable {
+                sys.enable = false;
+                auto.enable = false;
+                GuardType::None
+            } else if pac_enable {
+                sys.enable = false;
+                auto.enable = true;
+                if proxy_guard {
+                    GuardType::Autoproxy(auto.clone())
+                } else {
+                    GuardType::None
+                }
+            } else {
+                sys.enable = true;
+                auto.enable = false;
+                if proxy_guard {
+                    GuardType::Sysproxy(sys.clone())
+                } else {
+                    GuardType::None
+                }
+            };
 
-        self.access_guard().write().set_guard_type(GuardType::None);
+            (sys.clone(), auto.clone(), guard_type)
+        };
 
-        if !sys_enable && !pac_enable {
-            // disable proxy
-            sys.set_system_proxy()?;
-            auto.set_auto_proxy()?;
-            return Ok(());
-        }
+        self.access_guard().write().set_guard_type(guard_type);
 
-        if pac_enable {
-            sys.enable = false;
-            auto.enable = true;
-            sys.set_system_proxy()?;
-            auto.set_auto_proxy()?;
-            if proxy_guard {
-                self.access_guard()
-                    .write()
-                    .set_guard_type(GuardType::Autoproxy(auto.clone()));
+        logging!(
+            info,
+            Type::Core,
+            "Setting system proxy: enable={}, host={}, port={}, bypass_len={}",
+            sys.enable,
+            sys.host,
+            sys.port,
+            sys.bypass.len()
+        );
+
+        tokio::task::spawn_blocking(move || -> Result<()> {
+            if sys.enable && !auto.enable {
+                // System proxy mode: set via sysproxy + registry for reliability
+                if let Err(e) = sys.set_system_proxy() {
+                    logging!(error, Type::Core, "Failed to set system proxy: {:?}", e);
+                    return Err(e.into());
+                }
+                #[cfg(target_os = "windows")]
+                {
+                    let server = format!("{}:{}", sys.host, sys.port);
+                    if let Err(e) = win_registry_set_proxy(true, &server, &sys.bypass) {
+                        logging!(error, Type::Core, "Failed to write proxy registry: {:?}", e);
+                    }
+                }
+                logging!(info, Type::Core, "System proxy set successfully");
+            } else if auto.enable {
+                // PAC mode: only set auto proxy
+                if let Err(e) = auto.set_auto_proxy() {
+                    logging!(error, Type::Core, "Failed to set auto proxy: {:?}", e);
+                    return Err(e.into());
+                }
+                logging!(info, Type::Core, "Auto proxy (PAC) set successfully");
+            } else {
+                // Both disabled: clear via sysproxy + registry
+                if let Err(e) = sys.set_system_proxy() {
+                    logging!(error, Type::Core, "Failed to clear system proxy: {:?}", e);
+                    return Err(e.into());
+                }
+                #[cfg(target_os = "windows")]
+                {
+                    if let Err(e) = win_registry_set_proxy(false, "", "") {
+                        logging!(error, Type::Core, "Failed to clear proxy registry: {:?}", e);
+                    }
+                }
+                logging!(info, Type::Core, "All proxies cleared");
             }
-            return Ok(());
-        }
-
-        if sys_enable {
-            auto.enable = false;
-            sys.enable = true;
-            auto.set_auto_proxy()?;
-            sys.set_system_proxy()?;
-            if proxy_guard {
-                self.access_guard()
-                    .write()
-                    .set_guard_type(GuardType::Sysproxy(sys.clone()));
-            }
-            return Ok(());
-        }
+            Ok(())
+        })
+        .await??;
 
         Ok(())
     }
 
     /// reset the sysproxy
-    #[allow(clippy::unused_async)]
     pub async fn reset_sysproxy(&self) -> Result<()> {
         if self
             .reset_sysproxy
@@ -211,11 +261,25 @@ impl Sysopt {
         self.access_guard().write().set_guard_type(GuardType::None);
 
         // 直接关闭所有代理
-        let (sys, auto) = &mut *self.inner_proxy.write();
-        sys.enable = false;
-        sys.set_system_proxy()?;
-        auto.enable = false;
-        auto.set_auto_proxy()?;
+        let sys = {
+            let (sys, auto) = &mut *self.inner_proxy.write();
+            sys.enable = false;
+            auto.enable = false;
+            sys.clone()
+        };
+
+        tokio::task::spawn_blocking(move || -> Result<()> {
+            sys.set_system_proxy()?;
+            #[cfg(target_os = "windows")]
+            {
+                if let Err(e) = win_registry_set_proxy(false, "", "") {
+                    logging!(error, Type::Core, "Failed to clear proxy registry on reset: {:?}", e);
+                }
+            }
+            logging!(info, Type::Core, "System proxy reset successfully");
+            Ok(())
+        })
+        .await??;
 
         Ok(())
     }

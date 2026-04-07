@@ -8,10 +8,12 @@ notifications:
     body: '{mode} режимына күчтел.'
   systemProxyToggled:
     title: Системалы прокси
-    body: Системалы прокси хәле яңартылды.
+    'on': System proxy has been enabled.
+    'off': System proxy has been disabled.
   tunModeToggled:
     title: TUN режимы
-    body: TUN режимы хәле яңартылды.
+    'on': TUN mode has been enabled.
+    'off': TUN mode has been disabled.
   lightweightModeEntered:
     title: Җиңел режим
     body: Җиңел режимга күчелде.
@@ -20,13 +22,18 @@ notifications:
     body: Профиль яңадан активлаштырылды.
   appQuit:
     title: Чыгар алдыннан
-    body: Clash Verge чыгарга җыена.
+    body: XXLink чыгарга җыена.
   appHidden:
     title: Кушымта яшерелде
-    body: Clash Verge фон режимында эшли.
+    body: XXLink фон режимында эшли.
+  updateReady:
+    title: XXLink Update
+    body: A new version (v{version}) has been downloaded and is ready to install.
+    installNow: Install Now
+    later: Later
 service:
-  adminInstallPrompt: Clash Verge хезмәтен урнаштыру өчен администратор хокуклары кирәк.
-  adminUninstallPrompt: Clash Verge хезмәтен бетерү өчен администратор хокуклары кирәк.
+  adminInstallPrompt: XXLink хезмәтен урнаштыру өчен администратор хокуклары кирәк.
+  adminUninstallPrompt: XXLink хезмәтен бетерү өчен администратор хокуклары кирәк.
 tray:
   dashboard: Идарә панеле
   ruleMode: Кагыйдә режимы

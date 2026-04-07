@@ -8,10 +8,12 @@ notifications:
     body: '{mode} に切り替えました。'
   systemProxyToggled:
     title: システムプロキシ
-    body: システムプロキシの状態が更新されました。
+    'on': System proxy has been enabled.
+    'off': System proxy has been disabled.
   tunModeToggled:
     title: TUN モード
-    body: TUN モードの状態が更新されました。
+    'on': TUN mode has been enabled.
+    'off': TUN mode has been disabled.
   lightweightModeEntered:
     title: 軽量モード
     body: 軽量モードに入りました。
@@ -20,13 +22,18 @@ notifications:
     body: プロファイルが再有効化されました。
   appQuit:
     title: 終了間近
-    body: Clash Verge はまもなく終了します。
+    body: XXLink はまもなく終了します。
   appHidden:
     title: アプリが非表示
-    body: Clash Verge はバックグラウンドで実行中です。
+    body: XXLink はバックグラウンドで実行中です。
+  updateReady:
+    title: XXLink Update
+    body: A new version (v{version}) has been downloaded and is ready to install.
+    installNow: Install Now
+    later: Later
 service:
-  adminInstallPrompt: Clash Verge サービスのインストールには管理者権限が必要です。
-  adminUninstallPrompt: Clash Verge サービスのアンインストールには管理者権限が必要です。
+  adminInstallPrompt: XXLink サービスのインストールには管理者権限が必要です。
+  adminUninstallPrompt: XXLink サービスのアンインストールには管理者権限が必要です。
 tray:
   dashboard: ダッシュボード
   ruleMode: ルールモード

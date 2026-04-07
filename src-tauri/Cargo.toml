@@ -1,11 +1,11 @@
 [package]
-name = "clash-verge"
-version = "2.4.7"
-description = "clash verge"
+name = "xxlink-client"
+version = "2.4.8"
+description = "XXLink desktop client"
 authors = ["zzzgydi", "Tunglies", "wonfen", "MystiPanda"]
 license = "GPL-3.0-only"
 repository = "https://github.com/clash-verge-rev/clash-verge-rev.git"
-default-run = "clash-verge"
+default-run = "xxlink-client"
 build = "build.rs"
 edition = "2024"
 rust-version = "1.91"
@@ -24,7 +24,7 @@ clippy = ["tauri/test"]
 tracing = []
 
 [package.metadata.bundle]
-identifier = "io.github.clash-verge-rev.clash-verge-rev"
+identifier = "com.xxlink.desktop"
 
 [build-dependencies]
 tauri-build = { version = "2.5.6", features = [] }
@@ -57,6 +57,7 @@ smartstring = { workspace = true, features = ["serde"] }
 bitflags = { workspace = true }
 warp = { version = "0.4.2", features = ["server"] }
 open = "5.3.3"
+urlencoding = "2.1.3"
 dunce = "1.0.5"
 nanoid = "0.4"
 chrono = "0.4.44"
@@ -71,7 +72,7 @@ reqwest = { version = "0.13.2", features = [
   "form",
 ] }
 regex = "1.12.3"
-sysproxy = { git = "https://github.com/clash-verge-rev/sysproxy-rs", branch = "0.4.5", features = [
+sysproxy = { git = "https://github.com/clash-verge-rev/sysproxy-rs", branch = "0.5.3", features = [
   "guard",
 ] }
 network-interface = { version = "2.0.5", features = ["serde"] }
@@ -81,7 +82,7 @@ tauri-plugin-fs = "2.4.5"
 tauri-plugin-process = "2.3.1"
 tauri-plugin-deep-link = "2.4.7"
 tauri-plugin-window-state = "2.4.1"
-zip = "8.2.0"
+zip = "8.3.1"
 reqwest_dav = "0.3.3"
 aes-gcm = { version = "0.10.3", features = ["std"] }
 base64 = "0.22.1"
@@ -91,17 +92,17 @@ gethostname = "1.1.0"
 scopeguard = "1.2.0"
 tauri-plugin-notification = "2.3.3"
 tokio-stream = "0.1.18"
-backoff = { version = "0.4.0", features = ["tokio"] }
+backon = { version = "1.6.0", features = ["tokio-sleep"] }
 tauri-plugin-http = "2.5.7"
 console-subscriber = { version = "0.5.0", optional = true }
 tauri-plugin-devtools = { version = "2.0.1" }
 tauri-plugin-mihomo = { git = "https://github.com/clash-verge-rev/tauri-plugin-mihomo", branch = "revert" }
 clash_verge_logger = { git = "https://github.com/clash-verge-rev/clash-verge-logger" }
 async-trait = "0.1.89"
-clash_verge_service_ipc = { version = "2.1.3", features = [
+clash_verge_service_ipc = { version = "2.2.0", features = [
   "client",
 ], git = "https://github.com/clash-verge-rev/clash-verge-service-ipc" }
-arc-swap = "1.8.2"
+arc-swap = "1.9.0"
 tokio-rustls = "0.26"
 rustls = { version = "0.23", features = ["ring"] }
 webpki-roots = "1.0"
@@ -113,7 +114,10 @@ dark-light = { git = "https://github.com/rust-dark-light/dark-light" }
 deelevate = { workspace = true }
 runas = "=1.2.0"
 winreg = "0.56.0"
-windows = { version = "0.62.2", features = ["Win32_Globalization"] }
+windows = { version = "0.62.2", features = [
+  "Win32_Globalization",
+  "Win32_Networking_WinInet",
+] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-autostart = "2.5.1"

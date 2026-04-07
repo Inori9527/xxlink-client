@@ -8,10 +8,12 @@ notifications:
     body: به {mode} تغییر کرد.
   systemProxyToggled:
     title: پروکسی سیستم
-    body: وضعیت پروکسی سیستم به‌روزرسانی شد.
+    'on': System proxy has been enabled.
+    'off': System proxy has been disabled.
   tunModeToggled:
     title: حالت TUN
-    body: وضعیت حالت TUN به‌روزرسانی شد.
+    'on': TUN mode has been enabled.
+    'off': TUN mode has been disabled.
   lightweightModeEntered:
     title: حالت سبک
     body: به حالت سبک وارد شد.
@@ -20,13 +22,18 @@ notifications:
     body: پروفایل دوباره فعال شد.
   appQuit:
     title: در آستانه خروج
-    body: Clash Verge در آستانه خروج است.
+    body: XXLink در آستانه خروج است.
   appHidden:
     title: برنامه پنهان شد
-    body: Clash Verge در پس‌زمینه در حال اجراست.
+    body: XXLink در پس‌زمینه در حال اجراست.
+  updateReady:
+    title: XXLink Update
+    body: A new version (v{version}) has been downloaded and is ready to install.
+    installNow: Install Now
+    later: Later
 service:
-  adminInstallPrompt: نصب سرویس Clash Verge به دسترسی مدیر نیاز دارد.
-  adminUninstallPrompt: حذف سرویس Clash Verge به دسترسی مدیر نیاز دارد.
+  adminInstallPrompt: نصب سرویس XXLink به دسترسی مدیر نیاز دارد.
+  adminUninstallPrompt: حذف سرویس XXLink به دسترسی مدیر نیاز دارد.
 tray:
   dashboard: داشبورد
   ruleMode: حالت قوانین

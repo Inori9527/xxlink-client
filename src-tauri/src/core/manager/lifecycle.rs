@@ -66,10 +66,27 @@ impl CoreManager {
         #[cfg(target_os = "windows")]
         self.wait_for_service_if_needed().await;
 
+        let verge = Config::verge().await.latest_arc();
+        let needs_tun = verge.enable_tun_mode.unwrap_or(false);
+        drop(verge);
+
         let value = SERVICE_MANAGER.lock().await.current();
-        let mode = match value {
-            ServiceStatus::Ready => RunningMode::Service,
-            _ => RunningMode::Sidecar,
+        let mode = if needs_tun {
+            // TUN 模式需要服务模式（管理员权限）
+            match value {
+                ServiceStatus::Ready => RunningMode::Service,
+                _ => RunningMode::Sidecar,
+            }
+        } else {
+            // 非 TUN 模式优先使用 sidecar（更可靠，直接传递配置文件）
+            // 服务模式存在配置文件传递 bug，导致 mihomo 无法正确加载配置
+            if matches!(value, ServiceStatus::Ready) {
+                // 先尝试通过服务停止旧的核心进程，释放端口
+                logging!(info, Type::Core, "Stopping service-managed core before sidecar startup");
+                let _ = crate::core::service::stop_core_by_service().await;
+            }
+            logging!(info, Type::Core, "Using sidecar mode for better config reliability");
+            RunningMode::Sidecar
         };
 
         self.set_running_mode(mode);
@@ -84,7 +101,7 @@ impl CoreManager {
     #[cfg(target_os = "windows")]
     async fn wait_for_service_if_needed(&self) {
         use crate::{config::Config, constants::timing, core::service};
-        use backoff::{Error as BackoffError, ExponentialBackoff};
+        use backon::{ConstantBuilder, Retryable as _};
 
         let needs_service = Config::verge().await.latest_arc().enable_tun_mode.unwrap_or(false);
 
@@ -92,16 +109,12 @@ impl CoreManager {
             return;
         }
 
-        let backoff = ExponentialBackoff {
-            initial_interval: timing::SERVICE_WAIT_INTERVAL,
-            max_interval: timing::SERVICE_WAIT_INTERVAL,
-            max_elapsed_time: Some(timing::SERVICE_WAIT_MAX),
-            multiplier: 1.0,
-            randomization_factor: 0.0,
-            ..Default::default()
-        };
+        let max_times = timing::SERVICE_WAIT_MAX.as_millis() / timing::SERVICE_WAIT_INTERVAL.as_millis();
+        let backoff = ConstantBuilder::default()
+            .with_delay(timing::SERVICE_WAIT_INTERVAL)
+            .with_max_times(max_times as usize);
 
-        let operation = || async {
+        let _ = (|| async {
             let mut manager = SERVICE_MANAGER.lock().await;
 
             if matches!(manager.current(), ServiceStatus::Ready) {
@@ -111,19 +124,19 @@ impl CoreManager {
             // If the service IPC path is not ready yet, treat it as transient and retry.
             // Running init/refresh too early can mark service state unavailable and break later config reloads.
             if !service::is_service_ipc_path_exists() {
-                return Err(BackoffError::transient(anyhow::anyhow!("Service IPC not ready")));
+                return Err(anyhow::anyhow!("Service IPC not ready"));
             }
 
-            manager.init().await.map_err(BackoffError::transient)?;
+            manager.init().await?;
             let _ = manager.refresh().await;
 
             if matches!(manager.current(), ServiceStatus::Ready) {
                 Ok(())
             } else {
-                Err(BackoffError::transient(anyhow::anyhow!("Service not ready")))
+                Err(anyhow::anyhow!("Service not ready"))
             }
-        };
-
-        let _ = backoff::future::retry(backoff, operation).await;
+        })
+        .retry(backoff)
+        .await;
     }
 }

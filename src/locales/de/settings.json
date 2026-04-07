@@ -150,7 +150,7 @@
   "components": {
     "verge": {
       "basic": {
-        "title": "Verge-Grundeinstellungen",
+        "title": "XXLink-Grundeinstellungen",
         "actions": {
           "browse": "Durchsuchen"
         },
@@ -173,7 +173,7 @@
         }
       },
       "advanced": {
-        "title": "Verge-Erweiterte Einstellungen",
+        "title": "XXLink-Erweiterte Einstellungen",
         "tooltips": {
           "backupInfo": "Unterstützt die Sicherung von Konfigurationsdateien über WebDAV",
           "openConfDir": "Wenn die Software fehlerhaft funktioniert, !sichern Sie! alle Dateien in diesem Verzeichnis, löschen Sie sie und starten Sie die Software neu.",
@@ -197,7 +197,7 @@
           "liteModeSettings": "Einstellungen für den Leichtgewichtigen Modus",
           "exit": "Beenden",
           "exportDiagnostics": "Diagnoseinformationen exportieren",
-          "vergeVersion": "Verge-Version"
+          "vergeVersion": "XXLink-Version"
         }
       },
       "theme": {

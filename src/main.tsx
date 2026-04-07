@@ -1,9 +1,8 @@
-/// <reference types="vite/client" />
-/// <reference types="vite-plugin-svgr/client" />
 import './assets/styles/index.scss'
 import './services/monaco'
 
 import { ResizeObserver } from '@juggle/resize-observer'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { ComposeContextProvider } from 'foxact/compose-context-provider'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
@@ -14,17 +13,20 @@ import { BaseErrorBoundary } from './components/base'
 import { router } from './pages/_routers'
 import { AppDataProvider } from './providers/app-data-provider'
 import { WindowProvider } from './providers/window'
+import { AuthProvider, authStore } from './services/auth-store'
 import { FALLBACK_LANGUAGE, initializeLanguage } from './services/i18n'
 import {
   preloadAppData,
   resolveThemeMode,
   getPreloadConfig,
 } from './services/preload'
+import { queryClient } from './services/query-client'
 import {
   LoadingCacheProvider,
   ThemeModeProvider,
   UpdateStateProvider,
 } from './services/states'
+import { syncSubscription } from './services/subscription-sync'
 import { disableWebViewShortcuts } from './utils/disable-webview-shortcuts'
 
 if (!window.ResizeObserver) {
@@ -52,11 +54,15 @@ const initializeApp = (initialThemeMode: 'light' | 'dark') => {
     <React.StrictMode>
       <ComposeContextProvider contexts={contexts}>
         <BaseErrorBoundary>
-          <WindowProvider>
-            <AppDataProvider>
-              <RouterProvider router={router} />
-            </AppDataProvider>
-          </WindowProvider>
+          <QueryClientProvider client={queryClient}>
+            <AuthProvider>
+              <WindowProvider>
+                <AppDataProvider>
+                  <RouterProvider router={router} />
+                </AppDataProvider>
+              </WindowProvider>
+            </AuthProvider>
+          </QueryClientProvider>
         </BaseErrorBoundary>
       </ComposeContextProvider>
     </React.StrictMode>,
@@ -66,6 +72,17 @@ const initializeApp = (initialThemeMode: 'light' | 'dark') => {
 const bootstrap = async () => {
   const { initialThemeMode } = await preloadAppData()
   initializeApp(initialThemeMode)
+
+  // Sync subscription in the background if the user is already logged in
+  if (authStore.getState().isAuthenticated) {
+    // Non-blocking — must never freeze the UI
+    Promise.race([
+      syncSubscription(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('syncSubscription timeout')), 10000),
+      ),
+    ]).catch(console.error)
+  }
 }
 
 bootstrap().catch((error) => {
