@@ -2,9 +2,11 @@ import AssignmentRoundedIcon from '@mui/icons-material/AssignmentRounded'
 import DnsRoundedIcon from '@mui/icons-material/DnsRounded'
 import HomeRoundedIcon from '@mui/icons-material/HomeRounded'
 import LanguageRoundedIcon from '@mui/icons-material/LanguageRounded'
+import PowerSettingsNewRoundedIcon from '@mui/icons-material/PowerSettingsNewRounded'
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded'
 import WifiRoundedIcon from '@mui/icons-material/WifiRounded'
 import { createBrowserRouter, type RouteObject } from 'react-router'
+import { Navigate } from 'react-router'
 
 import ConnectionsSvg from '@/assets/image/itemicon/connections.svg?react'
 import HomeSvg from '@/assets/image/itemicon/home.svg?react'
@@ -15,6 +17,7 @@ import { RequireAuth } from '@/components/require-auth'
 
 import Layout from './_layout'
 import ApiKeysPage from './api-keys'
+import ConnectPage from './connect'
 import ConnectionsPage from './connections'
 import HomePage from './home'
 import LoginPage from './login'
@@ -36,8 +39,17 @@ import UnlockPage from './unlock'
  */
 export const navItems = [
   {
+    label: 'layout.components.navigation.tabs.connect',
+    path: '/connect',
+    icon: [
+      <PowerSettingsNewRoundedIcon key="mui" />,
+      <PowerSettingsNewRoundedIcon key="svg" />,
+    ],
+    Component: ConnectPage,
+  },
+  {
     label: 'layout.components.navigation.tabs.home',
-    path: '/',
+    path: '/home',
     icon: [<HomeRoundedIcon key="mui" />, <HomeSvg key="svg" />],
     Component: HomePage,
   },
@@ -101,6 +113,7 @@ export const router = createBrowserRouter([
       </RequireAuth>
     ),
     children: [
+      { index: true, element: <Navigate to="/connect" replace /> },
       ...navItems.map(
         (item) =>
           ({

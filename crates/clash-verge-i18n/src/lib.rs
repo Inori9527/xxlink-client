@@ -6,8 +6,8 @@ i18n!("locales", fallback = "zh");
 #[inline]
 fn locale_alias(locale: &str) -> Option<&'static str> {
     match locale {
-        "zh" | "zh-cn" | "zh-hans" | "zh-sg" | "zh-my" | "zh-chs" | "zh-tw" | "zh-hk"
-        | "zh-hant" | "zh-mo" | "zh-cht" => Some("zh"),
+        "zh" | "zh-cn" | "zh-hans" | "zh-sg" | "zh-my" | "zh-chs" | "zh-tw" | "zh-hk" | "zh-hant" | "zh-mo"
+        | "zh-cht" => Some("zh"),
         _ => None,
     }
 }

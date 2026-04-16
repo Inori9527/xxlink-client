@@ -2,10 +2,11 @@
   "components": {
     "navigation": {
       "tabs": {
+        "connect": "连 接",
         "home": "首 页",
         "proxies": "代 理",
         "profiles": "订 阅",
-        "connections": "连 接",
+        "connections": "连 接 列 表",
         "rules": "规 则",
         "logs": "日 志",
         "unlock": "测 试",
@@ -20,6 +21,28 @@
         "lock": "锁定菜单排序",
         "collapseNavBar": "收起导航栏",
         "expandNavBar": "展开导航栏"
+      }
+    },
+    "connect": {
+      "title": "连接",
+      "actions": {
+        "connect": "连接",
+        "disconnect": "断开",
+        "connecting": "连接中...",
+        "clickToConnect": "点击连接",
+        "clickToDisconnect": "点击断开"
+      },
+      "labels": {
+        "selectNode": "选择节点",
+        "noNode": "暂无节点",
+        "mode": "模式",
+        "system": "系统代理",
+        "tun": "TUN",
+        "both": "两者",
+        "upload": "上传",
+        "download": "下载",
+        "connected": "已连接",
+        "disconnected": "未连接"
       }
     }
   }

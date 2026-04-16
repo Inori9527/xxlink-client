@@ -2,6 +2,7 @@
   "components": {
     "navigation": {
       "tabs": {
+        "connect": "Connect",
         "home": "Home",
         "proxies": "Proxies",
         "profiles": "Profiles",
@@ -20,6 +21,28 @@
         "lock": "Lock menu order",
         "collapseNavBar": "Collapse navigation bar",
         "expandNavBar": "Expand navigation bar"
+      }
+    },
+    "connect": {
+      "title": "Connect",
+      "actions": {
+        "connect": "Connect",
+        "disconnect": "Disconnect",
+        "connecting": "Connecting...",
+        "clickToConnect": "Click to connect",
+        "clickToDisconnect": "Click to disconnect"
+      },
+      "labels": {
+        "selectNode": "Select Node",
+        "noNode": "No node available",
+        "mode": "Mode",
+        "system": "System Proxy",
+        "tun": "TUN",
+        "both": "Both",
+        "upload": "Upload",
+        "download": "Download",
+        "connected": "Connected",
+        "disconnected": "Disconnected"
       }
     }
   }

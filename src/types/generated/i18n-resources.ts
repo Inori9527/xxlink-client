@@ -174,6 +174,28 @@ export interface TranslationResources {
     }
     layout: {
       components: {
+        connect: {
+          actions: {
+            clickToConnect: string
+            clickToDisconnect: string
+            connect: string
+            connecting: string
+            disconnect: string
+          }
+          labels: {
+            both: string
+            connected: string
+            disconnected: string
+            download: string
+            mode: string
+            noNode: string
+            selectNode: string
+            system: string
+            tun: string
+            upload: string
+          }
+          title: string
+        }
         navigation: {
           menu: {
             collapseNavBar: string
@@ -185,6 +207,7 @@ export interface TranslationResources {
           }
           tabs: {
             apiKeys: string
+            connect: string
             connections: string
             home: string
             logs: string
