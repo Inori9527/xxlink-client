@@ -183,6 +183,7 @@ impl Tray {
     }
 
     /// 更新托盘图标
+    #[allow(clippy::unused_async)]
     pub async fn update_icon(&self, verge: &IVerge) -> Result<()> {
         if handle::Handle::global().is_exiting() {
             logging!(debug, Type::Tray, "应用正在退出，跳过托盘图标更新");

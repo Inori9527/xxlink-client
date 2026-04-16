@@ -23,6 +23,7 @@ fn notify(title: Cow<'_, str>, body: Cow<'_, str>) {
     app_handle.notification().builder().title(title).body(body).show().ok();
 }
 
+#[allow(clippy::unused_async)]
 pub async fn notify_event<'a>(event: NotificationEvent<'a>) {
     match event {
         NotificationEvent::DashboardToggled => {
