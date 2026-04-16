@@ -1,54 +1,13 @@
-import { useQuery } from '@tanstack/react-query'
-import { convertFileSrc } from '@tauri-apps/api/core'
-import { useMemo } from 'react'
-
-import { downloadIconCache } from '@/services/cmds'
-
 export interface UseIconCacheOptions {
   icon?: string | null
   cacheKey?: string
   enabled?: boolean
 }
 
-const getFileNameFromUrl = (url: string) => {
-  const lastSlashIndex = url.lastIndexOf('/')
-  return lastSlashIndex >= 0 ? url.slice(lastSlashIndex + 1) : url
-}
-
-export const useIconCache = ({
-  icon,
-  cacheKey,
-  enabled = true,
-}: UseIconCacheOptions) => {
-  const iconValue = icon?.trim() ?? ''
-  const cacheKeyValue = cacheKey?.trim() ?? ''
-
-  const isEnabled = useMemo(() => {
-    return enabled && iconValue.startsWith('http') && cacheKeyValue !== ''
-  }, [enabled, iconValue, cacheKeyValue])
-
-  const { data } = useQuery({
-    queryKey: ['icon-cache', iconValue, cacheKeyValue],
-    queryFn: async () => {
-      try {
-        const fileName = `${cacheKeyValue}-${getFileNameFromUrl(iconValue)}`
-        const iconPath = await downloadIconCache(iconValue, fileName)
-        return convertFileSrc(iconPath)
-      } catch {
-        return ''
-      }
-    },
-    enabled: isEnabled,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    staleTime: Infinity,
-    gcTime: Infinity,
-    retry: 2,
-  })
-
-  if (!isEnabled) {
-    return ''
-  }
-
-  return data ?? ''
-}
+/**
+ * Icon cache disabled — the `download_icon_cache` backend command was removed
+ * along with other custom icon paths. Always returns an empty string so
+ * consumers fall back to the raw icon URL.
+ */
+// eslint-disable-next-line @eslint-react/no-unnecessary-use-prefix
+export const useIconCache = (_options: UseIconCacheOptions): string => ''

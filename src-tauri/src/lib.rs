@@ -48,7 +48,6 @@ mod app_init {
             .plugin(tauri_plugin_updater::Builder::new().build())
             .plugin(tauri_plugin_clipboard_manager::init())
             .plugin(tauri_plugin_process::init())
-            .plugin(tauri_plugin_global_shortcut::Builder::new().build())
             .plugin(tauri_plugin_fs::init())
             .plugin(tauri_plugin_dialog::init())
             .plugin(tauri_plugin_shell::init())
@@ -181,8 +180,6 @@ mod app_init {
             cmd::patch_verge_config,
             cmd::test_delay,
             cmd::get_app_dir,
-            cmd::copy_icon_file,
-            cmd::download_icon_cache,
             cmd::open_devtools,
             cmd::exit_app,
             cmd::get_network_interfaces_info,
@@ -247,14 +244,10 @@ pub fn run() {
         .invoke_handler(app_init::generate_handlers());
 
     mod event_handlers {
+        use crate::core::{self, handle};
         #[cfg(target_os = "macos")]
         use crate::module::lightweight;
         use crate::utils::window_manager::WindowManager;
-        use crate::{
-            config::Config,
-            core::{self, handle, hotkey},
-            process::AsyncHandler,
-        };
         use clash_verge_logging::{Type, logging};
         use tauri::AppHandle;
         #[cfg(target_os = "macos")]
@@ -301,53 +294,6 @@ pub fn run() {
                     let _ = window.hide();
                 }
             }
-        }
-
-        pub fn handle_window_focus(focused: bool) {
-            AsyncHandler::spawn(move || async move {
-                let is_enable_global_hotkey = Config::verge().await.data_arc().enable_global_hotkey.unwrap_or(true);
-
-                if focused {
-                    #[cfg(target_os = "macos")]
-                    {
-                        use crate::core::hotkey::SystemHotkey;
-                        let _ = hotkey::Hotkey::global()
-                            .register_system_hotkey(SystemHotkey::CmdQ)
-                            .await;
-                        let _ = hotkey::Hotkey::global()
-                            .register_system_hotkey(SystemHotkey::CmdW)
-                            .await;
-                    }
-                    if !is_enable_global_hotkey {
-                        let _ = hotkey::Hotkey::global().init(false).await;
-                    }
-                    return;
-                }
-
-                #[cfg(target_os = "macos")]
-                {
-                    use crate::core::hotkey::SystemHotkey;
-                    let _ = hotkey::Hotkey::global().unregister_system_hotkey(SystemHotkey::CmdQ);
-                    let _ = hotkey::Hotkey::global().unregister_system_hotkey(SystemHotkey::CmdW);
-                }
-
-                if !is_enable_global_hotkey {
-                    let _ = hotkey::Hotkey::global().reset();
-                }
-            });
-        }
-
-        #[cfg(target_os = "macos")]
-        pub fn handle_window_destroyed() {
-            use crate::core::hotkey::SystemHotkey;
-            AsyncHandler::spawn(move || async move {
-                let _ = hotkey::Hotkey::global().unregister_system_hotkey(SystemHotkey::CmdQ);
-                let _ = hotkey::Hotkey::global().unregister_system_hotkey(SystemHotkey::CmdW);
-                let is_enable_global_hotkey = Config::verge().await.data_arc().enable_global_hotkey.unwrap_or(true);
-                if !is_enable_global_hotkey {
-                    let _ = hotkey::Hotkey::global().reset();
-                }
-            });
         }
     }
 
@@ -404,13 +350,6 @@ pub fn run() {
         tauri::RunEvent::WindowEvent { label, event, .. } if label == "main" => match event {
             tauri::WindowEvent::CloseRequested { .. } => {
                 event_handlers::handle_window_close(&event);
-            }
-            tauri::WindowEvent::Focused(focused) => {
-                event_handlers::handle_window_focus(focused);
-            }
-            #[cfg(target_os = "macos")]
-            tauri::WindowEvent::Destroyed => {
-                event_handlers::handle_window_destroyed();
             }
             _ => {}
         },

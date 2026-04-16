@@ -10,12 +10,9 @@ import getSystem from '@/utils/get-system'
 
 import { ConfigViewer } from './mods/config-viewer'
 import { GuardState } from './mods/guard-state'
-import { HotkeyViewer } from './mods/hotkey-viewer'
-import { LayoutViewer } from './mods/layout-viewer'
 import { MiscViewer } from './mods/misc-viewer'
 import { SettingItem, SettingList } from './mods/setting-comp'
 import { ThemeModeSwitch } from './mods/theme-mode-switch'
-import { ThemeViewer } from './mods/theme-viewer'
 import { UpdateViewer } from './mods/update-viewer'
 
 interface Props {
@@ -39,10 +36,7 @@ const SettingVergeBasic = ({ onError }: Props) => {
   const { verge, patchVerge, mutateVerge } = useVerge()
   const { theme_mode, language, tray_event, start_page } = verge ?? {}
   const configRef = useRef<DialogRef>(null)
-  const hotkeyRef = useRef<DialogRef>(null)
   const miscRef = useRef<DialogRef>(null)
-  const themeRef = useRef<DialogRef>(null)
-  const layoutRef = useRef<DialogRef>(null)
   const updateRef = useRef<DialogRef>(null)
 
   const onChangeData = (patch: any) => {
@@ -51,11 +45,8 @@ const SettingVergeBasic = ({ onError }: Props) => {
 
   return (
     <SettingList title={t('settings.components.verge.basic.title')}>
-      <ThemeViewer ref={themeRef} />
       <ConfigViewer ref={configRef} />
-      <HotkeyViewer ref={hotkeyRef} />
       <MiscViewer ref={miscRef} />
-      <LayoutViewer ref={layoutRef} />
       <UpdateViewer ref={updateRef} />
 
       <SettingItem label={t('settings.components.verge.basic.fields.language')}>
@@ -146,23 +137,8 @@ const SettingVergeBasic = ({ onError }: Props) => {
       </SettingItem>
 
       <SettingItem
-        onClick={() => themeRef.current?.open()}
-        label={t('settings.components.verge.basic.fields.themeSetting')}
-      />
-
-      <SettingItem
-        onClick={() => layoutRef.current?.open()}
-        label={t('settings.components.verge.basic.fields.layoutSetting')}
-      />
-
-      <SettingItem
         onClick={() => miscRef.current?.open()}
         label={t('settings.components.verge.basic.fields.misc')}
-      />
-
-      <SettingItem
-        onClick={() => hotkeyRef.current?.open()}
-        label={t('settings.components.verge.basic.fields.hotkeySetting')}
       />
     </SettingList>
   )

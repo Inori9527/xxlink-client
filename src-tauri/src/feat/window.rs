@@ -1,20 +1,10 @@
 use crate::config::Config;
 use crate::core::{CoreManager, handle, sysopt};
-use crate::module::lightweight;
 use crate::utils;
+#[cfg(target_os = "macos")]
 use crate::utils::window_manager::WindowManager;
 use clash_verge_logging::{Type, logging};
 use tokio::time::{Duration, timeout};
-
-pub async fn open_or_close_dashboard() {
-    if lightweight::is_in_lightweight_mode() {
-        let _ = lightweight::exit_lightweight_mode().await;
-        return;
-    }
-
-    let result = WindowManager::toggle_main_window().await;
-    logging!(info, Type::Window, "Window toggle result: {result:?}");
-}
 
 pub async fn quit() {
     logging!(debug, Type::System, "启动退出流程");

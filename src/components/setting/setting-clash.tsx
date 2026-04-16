@@ -17,11 +17,9 @@ import getSystem from '@/utils/get-system'
 import { ClashPortViewer } from './mods/clash-port-viewer'
 import { ControllerViewer } from './mods/controller-viewer'
 import { DnsViewer } from './mods/dns-viewer'
-import { HeaderConfiguration } from './mods/external-controller-cors'
 import { GuardState } from './mods/guard-state'
 import { NetworkInterfaceViewer } from './mods/network-interface-viewer'
 import { SettingItem, SettingList } from './mods/setting-comp'
-import { TunnelsViewer } from './mods/tunnels-viewer'
 
 const isWIN = getSystem() === 'windows'
 
@@ -54,8 +52,6 @@ const SettingClash = ({ onError }: Props) => {
   const ctrlRef = useRef<DialogRef>(null)
   const networkRef = useRef<DialogRef>(null)
   const dnsRef = useRef<DialogRef>(null)
-  const corsRef = useRef<DialogRef>(null)
-  const tunnelRef = useRef<DialogRef>(null)
 
   const onSwitchFormat = (_e: any, value: boolean) => value
   const onChangeData = (patch: Partial<IConfigData>) => {
@@ -93,8 +89,6 @@ const SettingClash = ({ onError }: Props) => {
       <ControllerViewer ref={ctrlRef} />
       <NetworkInterfaceViewer ref={networkRef} />
       <DnsViewer ref={dnsRef} />
-      <HeaderConfiguration ref={corsRef} />
-      <TunnelsViewer ref={tunnelRef} />
       <SettingItem
         label={t('settings.sections.clash.form.fields.allowLan')}
         extra={
@@ -225,16 +219,6 @@ const SettingClash = ({ onError }: Props) => {
 
       <SettingItem
         label={t('settings.sections.clash.form.fields.external')}
-        extra={
-          <TooltipIcon
-            title={t('settings.sections.externalCors.tooltips.open')}
-            icon={SettingsRounded}
-            onClick={(e) => {
-              e.stopPropagation()
-              corsRef.current?.open()
-            }}
-          />
-        }
         onClick={() => {
           ctrlRef.current?.open()
         }}
@@ -256,11 +240,6 @@ const SettingClash = ({ onError }: Props) => {
       <SettingItem
         onClick={onUpdateGeo}
         label={t('settings.sections.clash.form.fields.updateGeoData')}
-      />
-
-      <SettingItem
-        label={t('settings.sections.clash.form.fields.tunnels.title')}
-        onClick={() => tunnelRef.current?.open()}
       />
     </SettingList>
   )

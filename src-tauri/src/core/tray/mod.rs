@@ -5,16 +5,12 @@ use crate::module::lightweight;
 use crate::process::AsyncHandler;
 use crate::singleton;
 use crate::utils::window_manager::WindowManager;
-use crate::{
-    Type, cmd, config::Config, feat, logging, module::lightweight::is_in_lightweight_mode,
-    utils::dirs::find_target_icons,
-};
+use crate::{Type, cmd, config::Config, feat, logging, module::lightweight::is_in_lightweight_mode};
 use clash_verge_limiter::{Limiter, SystemClock, SystemLimiter};
 use clash_verge_logging::logging_error;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri_plugin_clash_verge_sysinfo::is_current_app_handle_admin;
 use tauri_plugin_mihomo::models::Proxies;
-use tokio::fs;
 
 use super::handle;
 use anyhow::Result;
@@ -48,7 +44,7 @@ pub struct Tray {
 }
 
 impl TrayState {
-    async fn get_tray_icon(verge: &IVerge) -> (bool, Vec<u8>) {
+    fn get_tray_icon(verge: &IVerge) -> Vec<u8> {
         let tun_mode = verge.enable_tun_mode.unwrap_or(false);
         let system_mode = verge.enable_system_proxy.unwrap_or(false);
         let kind = if tun_mode {
@@ -58,53 +54,15 @@ impl TrayState {
         } else {
             IconKind::Common
         };
-        Self::load_icon(verge, kind).await
+        Self::default_icon(kind)
     }
 
-    async fn load_icon(verge: &IVerge, kind: IconKind) -> (bool, Vec<u8>) {
-        let (custom_enabled, icon_name) = match kind {
-            IconKind::Common => (verge.common_tray_icon.unwrap_or(false), "common"),
-            IconKind::SysProxy => (verge.sysproxy_tray_icon.unwrap_or(false), "sysproxy"),
-            IconKind::Tun => (verge.tun_tray_icon.unwrap_or(false), "tun"),
-        };
-
-        if custom_enabled
-            && let Ok(Some(path)) = find_target_icons(icon_name)
-            && let Ok(data) = fs::read(path).await
-        {
-            return (true, data);
+    fn default_icon(kind: IconKind) -> Vec<u8> {
+        match kind {
+            IconKind::Common => include_bytes!("../../../icons/tray-icon.ico").to_vec(),
+            IconKind::SysProxy => include_bytes!("../../../icons/tray-icon-sys.ico").to_vec(),
+            IconKind::Tun => include_bytes!("../../../icons/tray-icon-tun.ico").to_vec(),
         }
-
-        Self::default_icon(verge, kind)
-    }
-
-    fn default_icon(verge: &IVerge, kind: IconKind) -> (bool, Vec<u8>) {
-        #[cfg(target_os = "macos")]
-        {
-            let is_mono = verge.tray_icon.as_deref().unwrap_or("monochrome") == "monochrome";
-            if is_mono {
-                return (
-                    false,
-                    match kind {
-                        IconKind::Common => include_bytes!("../../../icons/tray-icon-mono.ico").to_vec(),
-                        IconKind::SysProxy => include_bytes!("../../../icons/tray-icon-sys-mono-new.ico").to_vec(),
-                        IconKind::Tun => include_bytes!("../../../icons/tray-icon-tun-mono-new.ico").to_vec(),
-                    },
-                );
-            }
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        let _ = verge;
-
-        (
-            false,
-            match kind {
-                IconKind::Common => include_bytes!("../../../icons/tray-icon.ico").to_vec(),
-                IconKind::SysProxy => include_bytes!("../../../icons/tray-icon-sys.ico").to_vec(),
-                IconKind::Tun => include_bytes!("../../../icons/tray-icon-tun.ico").to_vec(),
-            },
-        )
     }
 }
 
@@ -238,18 +196,12 @@ impl Tray {
             return Ok(());
         };
 
-        let (_is_custom_icon, icon_bytes) = TrayState::get_tray_icon(verge).await;
+        let icon_bytes = TrayState::get_tray_icon(verge);
 
         logging_error!(
             Type::Tray,
             tray.set_icon(Some(tauri::image::Image::from_bytes(&icon_bytes)?))
         );
-
-        #[cfg(target_os = "macos")]
-        {
-            let is_colorful = verge.tray_icon.as_deref().unwrap_or("monochrome") == "colorful";
-            logging_error!(Type::Tray, tray.set_icon_as_template(!is_colorful));
-        }
 
         Ok(())
     }
@@ -345,7 +297,7 @@ impl Tray {
 
         let verge = Config::verge().await.data_arc();
 
-        let icon_bytes = TrayState::get_tray_icon(&verge).await.1;
+        let icon_bytes = TrayState::get_tray_icon(&verge);
         let icon = tauri::image::Image::from_bytes(&icon_bytes)?;
 
         #[cfg(target_os = "linux")]
@@ -356,11 +308,6 @@ impl Tray {
 
         #[cfg(not(target_os = "linux"))]
         let mut builder = TrayIconBuilder::with_id("main").icon(icon).icon_as_template(false);
-        #[cfg(target_os = "macos")]
-        {
-            let is_monochrome = verge.tray_icon.as_ref().is_none_or(|v| v == "monochrome");
-            builder = builder.icon_as_template(is_monochrome);
-        }
 
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
@@ -382,30 +329,6 @@ impl Tray {
         }
         allow
     }
-}
-
-fn create_hotkeys(hotkeys: &Option<Vec<String>>) -> HashMap<String, String> {
-    hotkeys
-        .as_ref()
-        .map(|h| {
-            h.iter()
-                .filter_map(|item| {
-                    let mut parts = item.split(',');
-                    match (parts.next(), parts.next()) {
-                        (Some(func), Some(key)) => {
-                            // 托盘菜单中的 `accelerator` 属性，在 Linux/Windows 中都不支持小键盘按键的解析
-                            if key.to_uppercase().contains("NUMPAD") {
-                                None
-                            } else {
-                                Some((func.into(), key.into()))
-                            }
-                        }
-                        _ => None,
-                    }
-                })
-                .collect::<std::collections::HashMap<String, String>>()
-        })
-        .unwrap_or_default()
 }
 
 fn create_profile_menu_item(
@@ -623,8 +546,6 @@ async fn create_tray_menu(
 
     let version = env!("CARGO_PKG_VERSION");
 
-    let hotkeys = create_hotkeys(&verge_settings.hotkeys);
-
     let profile_menu_items: Vec<CheckMenuItem<Wry>> = create_profile_menu_item(app_handle, profiles_preview)?;
 
     // Pre-fetch all localized strings
@@ -635,13 +556,7 @@ async fn create_tray_menu(
         .map(|item| item as &dyn IsMenuItem<Wry>)
         .collect();
 
-    let open_window = &MenuItem::with_id(
-        app_handle,
-        MenuIds::DASHBOARD,
-        &texts.dashboard,
-        true,
-        hotkeys.get("open_or_close_dashboard").map(|s| s.as_str()),
-    )?;
+    let open_window = &MenuItem::with_id(app_handle, MenuIds::DASHBOARD, &texts.dashboard, true, None::<&str>)?;
 
     let rule_mode = &CheckMenuItem::with_id(
         app_handle,
@@ -649,7 +564,7 @@ async fn create_tray_menu(
         &texts.rule_mode,
         true,
         current_proxy_mode == "rule",
-        hotkeys.get("clash_mode_rule").map(|s| s.as_str()),
+        None::<&str>,
     )?;
 
     let global_mode = &CheckMenuItem::with_id(
@@ -658,7 +573,7 @@ async fn create_tray_menu(
         &texts.global_mode,
         true,
         current_proxy_mode == "global",
-        hotkeys.get("clash_mode_global").map(|s| s.as_str()),
+        None::<&str>,
     )?;
 
     let direct_mode = &CheckMenuItem::with_id(
@@ -667,7 +582,7 @@ async fn create_tray_menu(
         &texts.direct_mode,
         true,
         current_proxy_mode == "direct",
-        hotkeys.get("clash_mode_direct").map(|s| s.as_str()),
+        None::<&str>,
     )?;
 
     let outbound_modes = if show_outbound_modes_inline {
@@ -715,7 +630,7 @@ async fn create_tray_menu(
         &texts.system_proxy,
         true,
         system_proxy_enabled,
-        hotkeys.get("toggle_system_proxy").map(|s| s.as_str()),
+        None::<&str>,
     )?;
 
     let tun_mode = &CheckMenuItem::with_id(
@@ -724,7 +639,7 @@ async fn create_tray_menu(
         &texts.tun_mode,
         tun_mode_available,
         tun_mode_enabled,
-        hotkeys.get("toggle_tun_mode").map(|s| s.as_str()),
+        None::<&str>,
     )?;
 
     let close_all_connections = &MenuItem::with_id(
@@ -741,7 +656,7 @@ async fn create_tray_menu(
         &texts.lightweight_mode,
         true,
         is_lightweight_mode,
-        hotkeys.get("entry_lightweight_mode").map(|s| s.as_str()),
+        None::<&str>,
     )?;
 
     let open_app_dir = &MenuItem::with_id(app_handle, MenuIds::CONF_DIR, &texts.conf_dir, true, None::<&str>)?;
@@ -793,10 +708,10 @@ async fn create_tray_menu(
         ],
     )?;
 
-    let quit_accelerator = hotkeys.get("quit").map(|s| s.as_str());
-
     #[cfg(target_os = "macos")]
-    let quit_accelerator = quit_accelerator.or(Some("Cmd+Q"));
+    let quit_accelerator: Option<&str> = Some("Cmd+Q");
+    #[cfg(not(target_os = "macos"))]
+    let quit_accelerator: Option<&str> = None;
 
     let quit = &MenuItem::with_id(app_handle, MenuIds::EXIT, &texts.exit, true, quit_accelerator)?;
 

@@ -388,29 +388,6 @@ export async function getSystemInfo() {
   return invoke<string>('get_system_info')
 }
 
-export async function copyIconFile(
-  path: string,
-  name: 'common' | 'sysproxy' | 'tun',
-) {
-  const key = `icon_${name}_update_time`
-  const previousTime = localStorage.getItem(key) || ''
-
-  const currentTime = String(Date.now())
-  localStorage.setItem(key, currentTime)
-
-  const iconInfo = {
-    name,
-    previous_t: previousTime,
-    current_t: currentTime,
-  }
-
-  return invoke<void>('copy_icon_file', { path, iconInfo })
-}
-
-export async function downloadIconCache(url: string, name: string) {
-  return invoke<string>('download_icon_cache', { url, name })
-}
-
 export async function getNetworkInterfaces() {
   return invoke<string[]>('get_network_interfaces')
 }

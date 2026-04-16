@@ -901,10 +901,6 @@ interface IVergeConfig {
   menu_order?: string[]
   notice_position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
   collapse_navbar?: boolean
-  tray_icon?: 'monochrome' | 'colorful'
-  common_tray_icon?: boolean
-  sysproxy_tray_icon?: boolean
-  tun_tray_icon?: boolean
   // enable_tray_speed?: boolean;
   // enable_tray_icon?: boolean;
   tray_proxy_groups_display_mode?: 'default' | 'inline' | 'disable'
@@ -915,7 +911,6 @@ interface IVergeConfig {
   enable_auto_launch?: boolean
   enable_silent_start?: boolean
   enable_system_proxy?: boolean
-  enable_global_hotkey?: boolean
   enable_dns_settings?: boolean
   proxy_auto_config?: boolean
   pac_file_content?: string
@@ -935,22 +930,6 @@ interface IVergeConfig {
   use_default_bypass?: boolean
   proxy_guard_duration?: number
   system_proxy_bypass?: string
-  hotkeys?: string[]
-  theme_setting?: {
-    primary_color?: string
-    secondary_color?: string
-    primary_text?: string
-    secondary_text?: string
-    info_color?: string
-    error_color?: string
-    warning_color?: string
-    success_color?: string
-    font_family?: string
-    css_injection?: string
-    background_image?: string
-    background_blend_mode?: string
-    background_opacity?: number
-  }
   auto_close_connection?: boolean
   auto_check_update?: boolean
   default_latency_test?: string

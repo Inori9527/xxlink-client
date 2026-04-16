@@ -6,7 +6,6 @@ use crate::{
     config::Config,
     core::{
         CoreManager, Timer,
-        hotkey::Hotkey,
         logger::Logger,
         service::{SERVICE_MANAGER, ServiceManager, is_service_ipc_path_exists},
         sysopt,
@@ -70,7 +69,6 @@ pub fn resolve_setup_async() {
             core_init,
             tray_init,
             init_timer(),
-            init_hotkey(),
             init_auto_lightweight_boot(),
             init_silent_updater(),
         );
@@ -111,12 +109,6 @@ pub(super) async fn init_resources() {
 
 pub(super) async fn init_timer() {
     logging_error!(Type::Setup, Timer::global().init().await);
-}
-
-pub(super) async fn init_hotkey() {
-    // if hotkey is not use by global, skip init it
-    let skip_register_hotkeys = !Config::verge().await.latest_arc().enable_global_hotkey.unwrap_or(true);
-    logging_error!(Type::Setup, Hotkey::global().init(skip_register_hotkeys).await);
 }
 
 pub(super) async fn init_auto_lightweight_boot() {

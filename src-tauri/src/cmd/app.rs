@@ -95,18 +95,6 @@ pub fn get_auto_launch_status() -> CmdResult<bool> {
     autostart::get_launch_status().stringify_err()
 }
 
-/// 下载图标缓存
-#[tauri::command]
-pub async fn download_icon_cache(url: String, name: String) -> CmdResult<String> {
-    feat::download_icon_cache(url, name).await
-}
-
-/// 复制图标文件
-#[tauri::command]
-pub async fn copy_icon_file(path: String, icon_info: feat::IconInfo) -> CmdResult<String> {
-    feat::copy_icon_file(path, icon_info).await
-}
-
 /// 通知UI已准备就绪
 #[tauri::command]
 pub async fn notify_ui_ready() {

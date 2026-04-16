@@ -1,6 +1,6 @@
 use crate::{
     config::{Config, IVerge},
-    core::{CoreManager, autostart, handle, hotkey, logger::Logger, sysopt, tray},
+    core::{CoreManager, autostart, handle, logger::Logger, sysopt, tray},
     module::lightweight,
 };
 use anyhow::Result;
@@ -53,7 +53,6 @@ bitflags! {
         const LAUNCH = 1 << 3;
         const SYS_PROXY = 1 << 4;
         const SYSTRAY_ICON = 1 << 5;
-        const HOTKEY = 1 << 6;
         const SYSTRAY_MENU = 1 << 7;
         const SYSTRAY_TOOLTIP = 1 << 8;
         const SYSTRAY_CLICK_BEHAVIOR = 1 << 9;
@@ -77,13 +76,6 @@ fn determine_update_flags(patch: &IVerge) -> UpdateFlags {
     let proxy_bypass = &patch.system_proxy_bypass;
     let language = &patch.language;
     let mixed_port = patch.verge_mixed_port;
-    #[cfg(target_os = "macos")]
-    let tray_icon = &patch.tray_icon;
-    #[cfg(not(target_os = "macos"))]
-    let tray_icon: Option<String> = None;
-    let common_tray_icon = patch.common_tray_icon;
-    let sysproxy_tray_icon = patch.sysproxy_tray_icon;
-    let tun_tray_icon = patch.tun_tray_icon;
     #[cfg(not(target_os = "windows"))]
     let redir_enabled = patch.verge_redir_enabled;
     #[cfg(not(target_os = "windows"))]
@@ -98,7 +90,6 @@ fn determine_update_flags(patch: &IVerge) -> UpdateFlags {
     let http_port = patch.verge_port;
     let enable_tray_speed = patch.enable_tray_speed;
     // let enable_tray_icon = patch.enable_tray_icon;
-    let enable_global_hotkey = patch.enable_global_hotkey;
     let tray_event = &patch.tray_event;
     let home_cards = patch.home_cards.as_ref();
     let enable_auto_light_weight = patch.enable_auto_light_weight_mode;
@@ -141,7 +132,7 @@ fn determine_update_flags(patch: &IVerge) -> UpdateFlags {
     if tun_mode.is_some() {
         update_flags.insert(UpdateFlags::CLASH_CONFIG | UpdateFlags::GROUP_SYS_TRAY);
     }
-    if enable_global_hotkey.is_some() || home_cards.is_some() {
+    if home_cards.is_some() {
         update_flags.insert(UpdateFlags::VERGE_CONFIG);
     }
     if auto_launch.is_some() {
@@ -161,16 +152,8 @@ fn determine_update_flags(patch: &IVerge) -> UpdateFlags {
     if language.is_some() {
         update_flags.insert(UpdateFlags::LANGUAGE | UpdateFlags::SYSTRAY_MENU | UpdateFlags::SYSTRAY_TOOLTIP);
     }
-    if common_tray_icon.is_some()
-        || sysproxy_tray_icon.is_some()
-        || tun_tray_icon.is_some()
-        || tray_icon.is_some()
-        || enable_tray_speed.is_some()
-    {
+    if enable_tray_speed.is_some() {
         update_flags.insert(UpdateFlags::SYSTRAY_ICON);
-    }
-    if patch.hotkeys.is_some() {
-        update_flags.insert(UpdateFlags::HOTKEY | UpdateFlags::SYSTRAY_MENU);
     }
     if tray_event.is_some() {
         update_flags.insert(UpdateFlags::SYSTRAY_CLICK_BEHAVIOR);
@@ -206,9 +189,6 @@ async fn process_terminated_flags(update_flags: UpdateFlags, patch: &IVerge) -> 
         handle::Handle::refresh_clash();
     }
     if update_flags.contains(UpdateFlags::VERGE_CONFIG) {
-        Config::verge()
-            .await
-            .edit_draft(|d| d.enable_global_hotkey = patch.enable_global_hotkey);
         handle::Handle::refresh_verge();
     }
     if update_flags.contains(UpdateFlags::LAUNCH) {
@@ -222,11 +202,6 @@ async fn process_terminated_flags(update_flags: UpdateFlags, patch: &IVerge) -> 
     if update_flags.contains(UpdateFlags::SYS_PROXY) {
         sysopt::Sysopt::global().update_sysproxy().await?;
         sysopt::Sysopt::global().refresh_guard().await;
-    }
-    if update_flags.contains(UpdateFlags::HOTKEY)
-        && let Some(hotkeys) = &patch.hotkeys
-    {
-        hotkey::Hotkey::global().update(hotkeys.to_owned()).await?;
     }
     if update_flags.contains(UpdateFlags::SYSTRAY_MENU) {
         tray::Tray::global().update_menu().await?;
