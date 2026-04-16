@@ -52,7 +52,13 @@
       "goToPlans": "Go to plans",
       "refresh": "Refresh"
     },
-    "expiringSoon": "Expiring soon"
+    "expiringSoon": "Expiring soon",
+    "forceRebuild": {
+      "button": "Force rebuild",
+      "confirm": "This will delete the local subscription and re-import it from the server. Use only if a regular update isn't working. Continue?",
+      "success": "Subscription force-rebuilt",
+      "failed": "Force rebuild failed"
+    }
   },
   "components": {
     "card": {

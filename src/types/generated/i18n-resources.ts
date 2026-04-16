@@ -492,6 +492,12 @@ export interface TranslationResources {
             switchInterrupted: string
           }
         }
+        forceRebuild: {
+          button: string
+          confirm: string
+          failed: string
+          success: string
+        }
         importForm: {
           actions: {
             paste: string

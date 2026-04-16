@@ -1,5 +1,4 @@
 import {
-  DnsOutlined,
   HelpOutlineRounded,
   HistoryEduOutlined,
   RouterOutlined,
@@ -27,11 +26,9 @@ import { useTranslation } from 'react-i18next'
 
 import { BasePage } from '@/components/base'
 import { ClashModeCard } from '@/components/home/clash-mode-card'
-import { CurrentProxyCard } from '@/components/home/current-proxy-card'
 import { EnhancedCard } from '@/components/home/enhanced-card'
 import { EnhancedTrafficStats } from '@/components/home/enhanced-traffic-stats'
 import { HomeProfileCard } from '@/components/home/home-profile-card'
-import { ProxyTunCard } from '@/components/home/proxy-tun-card'
 import { useProfiles } from '@/hooks/use-profiles'
 import { useVerge } from '@/hooks/use-verge'
 import { entry_lightweight_mode, openWebUrl } from '@/services/cmds'
@@ -121,24 +118,6 @@ const HomeSettingsDialog = ({
           <FormControlLabel
             control={
               <Checkbox
-                checked={cards.proxy || false}
-                onChange={() => handleToggle('proxy')}
-              />
-            }
-            label={t('home.page.settings.cards.currentProxy')}
-          />
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={cards.network || false}
-                onChange={() => handleToggle('network')}
-              />
-            }
-            label={t('home.page.settings.cards.network')}
-          />
-          <FormControlLabel
-            control={
-              <Checkbox
                 checked={cards.mode || false}
                 onChange={() => handleToggle('mode')}
               />
@@ -206,12 +185,14 @@ const HomePage = () => {
   } | null>(null)
 
   // Default card visibility state
+  // `proxy` (CurrentProxyCard) and `network` (NetworkSettingsCard) are
+  // hidden by default — end users manage these via the Connect page.
   const defaultCards = useMemo<HomeCardsSettings>(
     () => ({
       info: false,
       profile: true,
-      proxy: true,
-      network: true,
+      proxy: false,
+      network: false,
       mode: true,
       traffic: true,
       clashinfo: true,
@@ -274,8 +255,6 @@ const HomePage = () => {
         'profile',
         <HomeProfileCard current={current} onProfileUpdated={mutateProfiles} />,
       ),
-      renderCard('proxy', <CurrentProxyCard />),
-      renderCard('network', <NetworkSettingsCard />),
       renderCard('mode', <ClashModeEnhancedCard />),
     ],
     [current, mutateProfiles, renderCard],
@@ -383,21 +362,6 @@ const HomePage = () => {
         onSave={handleSaveSettings}
       />
     </BasePage>
-  )
-}
-
-// Enhanced network settings card
-const NetworkSettingsCard = () => {
-  const { t } = useTranslation()
-  return (
-    <EnhancedCard
-      title={t('home.page.cards.networkSettings')}
-      icon={<DnsOutlined />}
-      iconColor="primary"
-      action={null}
-    >
-      <ProxyTunCard />
-    </EnhancedCard>
   )
 }
 

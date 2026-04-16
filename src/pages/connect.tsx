@@ -22,7 +22,7 @@ import {
   useTheme,
 } from '@mui/material'
 import { useLockFn } from 'ahooks'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 
@@ -40,6 +40,11 @@ type ConnectMode = 'system' | 'tun' | 'both'
 
 const MODE_STORAGE_KEY = 'xxlink:connect-mode'
 const DEFAULT_MODE: ConnectMode = 'both'
+
+// Names to exclude from the node dropdown (case-insensitive).
+// "proxy" is the raw manual-selection group the upstream ships; end users
+// should just use "auto" (url-test) which picks the best node automatically.
+const HIDDEN_NODES: ReadonlySet<string> = new Set(['direct', 'reject', 'proxy'])
 
 const loadMode = (): ConnectMode => {
   try {
@@ -139,8 +144,7 @@ const ConnectPage = () => {
           !!entry &&
           typeof entry.name === 'string' &&
           entry.name.length > 0 &&
-          entry.name !== 'DIRECT' &&
-          entry.name !== 'REJECT',
+          !HIDDEN_NODES.has(entry.name.toLowerCase()),
       )
   }, [globalGroup?.all])
 
@@ -159,6 +163,21 @@ const ConnectPage = () => {
   }, [nodeEntries])
 
   const isEmpty = nodeOptions.length === 0
+
+  // Auto-select "auto" (url-test) when the current GLOBAL selection is empty
+  // or has been filtered out of the visible list (e.g. raw "proxy" group).
+  const autoSelectedRef = useRef(false)
+  useEffect(() => {
+    if (autoSelectedRef.current) return
+    if (!globalGroup?.name || nodeOptions.length === 0) return
+    const currentValid = currentNode && nodeOptions.includes(currentNode)
+    if (currentValid) return
+    const autoOption = nodeOptions.find((n) => n.toLowerCase() === 'auto')
+    const target = autoOption ?? nodeOptions[0]
+    if (!target) return
+    autoSelectedRef.current = true
+    changeProxy(globalGroup.name, target, currentNode, true)
+  }, [globalGroup?.name, nodeOptions, currentNode, changeProxy])
 
   const handleModeChange = useCallback((next: ConnectMode) => {
     setMode(next)

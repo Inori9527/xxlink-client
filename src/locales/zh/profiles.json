@@ -52,7 +52,13 @@
       "goToPlans": "前往套餐",
       "refresh": "刷新"
     },
-    "expiringSoon": "即将到期"
+    "expiringSoon": "即将到期",
+    "forceRebuild": {
+      "button": "强制重建",
+      "confirm": "这将删除本地订阅并从服务器重新导入。仅在更新无效时使用。确定继续吗？",
+      "success": "订阅已强制重建",
+      "failed": "强制重建失败"
+    }
   },
   "components": {
     "card": {

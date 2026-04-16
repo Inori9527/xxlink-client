@@ -1,4 +1,4 @@
-import { RefreshRounded } from '@mui/icons-material'
+import { BuildRounded, RefreshRounded } from '@mui/icons-material'
 import { LoadingButton } from '@mui/lab'
 import {
   Box,
@@ -25,6 +25,7 @@ const ProfilePage = () => {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [syncing, setSyncing] = useState(false)
+  const [rebuilding, setRebuilding] = useState(false)
   const { profiles = {}, mutateProfiles } = useProfiles()
 
   const currentItem = useMemo(() => {
@@ -34,7 +35,7 @@ const ProfilePage = () => {
   }, [profiles])
 
   const onSync = async () => {
-    if (syncing) return
+    if (syncing || rebuilding) return
     setSyncing(true)
     try {
       await syncSubscription()
@@ -48,6 +49,25 @@ const ProfilePage = () => {
       )
     } finally {
       setSyncing(false)
+    }
+  }
+
+  const onForceRebuild = async () => {
+    if (syncing || rebuilding) return
+    if (!window.confirm(t('profiles.page.forceRebuild.confirm'))) return
+    setRebuilding(true)
+    try {
+      await syncSubscription({ force: true })
+      await mutateProfiles()
+      showNotice.success('profiles.page.forceRebuild.success')
+    } catch (err) {
+      showNotice.error(
+        'profiles.page.forceRebuild.failed',
+        err as Error | string,
+        4000,
+      )
+    } finally {
+      setRebuilding(false)
     }
   }
 
@@ -180,11 +200,30 @@ const ProfilePage = () => {
                   </Stack>
                 )}
 
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    gap: 1,
+                    justifyContent: 'flex-end',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <LoadingButton
+                    variant="outlined"
+                    size="small"
+                    color="warning"
+                    loading={rebuilding}
+                    disabled={syncing}
+                    startIcon={<BuildRounded />}
+                    onClick={onForceRebuild}
+                  >
+                    {t('profiles.page.forceRebuild.button')}
+                  </LoadingButton>
                   <LoadingButton
                     variant="contained"
                     size="small"
                     loading={syncing}
+                    disabled={rebuilding}
                     startIcon={<RefreshRounded />}
                     onClick={onSync}
                   >

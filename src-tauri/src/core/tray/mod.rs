@@ -145,9 +145,12 @@ impl Tray {
 
         logging_error!(
             Type::Tray,
-            tray.set_menu(Some(
-                create_tray_menu(app_handle, *system_proxy, *tun_mode, tun_mode_available)?,
-            ))
+            tray.set_menu(Some(create_tray_menu(
+                app_handle,
+                *system_proxy,
+                *tun_mode,
+                tun_mode_available
+            )?,))
         );
 
         logging!(debug, Type::Tray, "托盘菜单更新成功");
@@ -326,8 +329,7 @@ fn create_tray_menu(
     let version = env!("CARGO_PKG_VERSION");
     let texts = MenuTexts::new();
 
-    let open_window =
-        &MenuItem::with_id(app_handle, MenuIds::DASHBOARD, &texts.dashboard, true, None::<&str>)?;
+    let open_window = &MenuItem::with_id(app_handle, MenuIds::DASHBOARD, &texts.dashboard, true, None::<&str>)?;
 
     let system_proxy = &CheckMenuItem::with_id(
         app_handle,
@@ -355,13 +357,7 @@ fn create_tray_menu(
         None::<&str>,
     )?;
 
-    let restart_app = &MenuItem::with_id(
-        app_handle,
-        MenuIds::RESTART_APP,
-        &texts.restart_app,
-        true,
-        None::<&str>,
-    )?;
+    let restart_app = &MenuItem::with_id(app_handle, MenuIds::RESTART_APP, &texts.restart_app, true, None::<&str>)?;
 
     let app_version = &MenuItem::with_id(
         app_handle,

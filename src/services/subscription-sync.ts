@@ -25,17 +25,26 @@ import {
  */
 let isSyncing = false
 
-export async function syncSubscription(): Promise<void> {
+export interface SyncOptions {
+  /**
+   * Force a full rebuild: delete every matching remote profile, then
+   * re-import from the current subscription URL. Use when a regular sync
+   * is stuck (stale cached data, bad profile state, etc.).
+   */
+  force?: boolean
+}
+
+export async function syncSubscription(options?: SyncOptions): Promise<void> {
   if (isSyncing) return // prevent concurrent runs
   isSyncing = true
   try {
-    await doSync()
+    await doSync(options?.force ?? false)
   } finally {
     isSyncing = false
   }
 }
 
-async function doSync(): Promise<void> {
+async function doSync(force: boolean): Promise<void> {
   // 1. Fetch current subscription
   const sub = await api.subscription.current()
 
@@ -69,6 +78,23 @@ async function doSync(): Promise<void> {
     'matching profiles out of',
     profilesConfig.items?.length ?? 0,
   )
+
+  // Force mode: wipe every matching profile and fall through to fresh import
+  if (force && remoteProfiles.length > 0) {
+    console.log(
+      '[subscription-sync] Force mode — deleting',
+      remoteProfiles.length,
+      'existing profile(s)',
+    )
+    for (const stale of remoteProfiles) {
+      try {
+        await deleteProfile(stale.uid)
+      } catch (err) {
+        console.warn('[subscription-sync] force delete failed', err)
+      }
+    }
+    remoteProfiles.length = 0
+  }
 
   // Find exact match (same token) or pick the first matching origin profile
   const exactMatch = remoteProfiles.find(
