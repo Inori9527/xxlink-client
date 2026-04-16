@@ -139,10 +139,7 @@ impl ChainItem {
 impl ChainSupport {
     pub fn is_support(&self, core: Option<&String>) -> bool {
         match core {
-            Some(core) => matches!(
-                (self, core.as_str()),
-                (Self::ClashMeta, "verge-mihomo")
-            ),
+            Some(core) => matches!((self, core.as_str()), (Self::ClashMeta, "verge-mihomo")),
             None => true,
         }
     }

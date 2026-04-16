@@ -1,21 +1,7 @@
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 
-export const supportedLanguages = [
-  'en',
-  'ru',
-  'zh',
-  'fa',
-  'tt',
-  'id',
-  'ar',
-  'ko',
-  'tr',
-  'de',
-  'es',
-  'jp',
-  'zhtw',
-]
+export const supportedLanguages = ['zh', 'en']
 
 export const FALLBACK_LANGUAGE = 'zh'
 const LANGUAGE_STORAGE_KEY = 'verge-language'
@@ -29,19 +15,15 @@ export const resolveLanguage = (language?: string) => {
     return FALLBACK_LANGUAGE
   }
 
-  if (normalized === 'zh-tw') return 'zhtw'
-  if (normalized === 'zh-cn') return 'zh'
+  const baseLanguage = normalized.split('-')[0]
+  if (baseLanguage === 'zh') return 'zh'
+  if (baseLanguage === 'en') return 'en'
 
   if (supportedLanguages.includes(normalized)) {
     return normalized
   }
 
-  const baseLanguage = normalized.split('-')[0]
-  if (supportedLanguages.includes(baseLanguage)) {
-    return baseLanguage
-  }
-
-  return FALLBACK_LANGUAGE
+  return 'en'
 }
 
 const getLanguageStorage = () => {

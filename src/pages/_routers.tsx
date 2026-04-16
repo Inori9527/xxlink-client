@@ -1,7 +1,6 @@
 import AssignmentRoundedIcon from '@mui/icons-material/AssignmentRounded'
 import DnsRoundedIcon from '@mui/icons-material/DnsRounded'
 import HomeRoundedIcon from '@mui/icons-material/HomeRounded'
-import KeyRoundedIcon from '@mui/icons-material/KeyRounded'
 import LanguageRoundedIcon from '@mui/icons-material/LanguageRounded'
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded'
 import WifiRoundedIcon from '@mui/icons-material/WifiRounded'
@@ -30,9 +29,10 @@ import UnlockPage from './unlock'
 /**
  * navItems drives both the sidebar navigation and the router.
  *
- * Rules, Logs, Unlock (Test) are intentionally excluded from this list so they
- * do not appear in the navigation bar. Their routes are still registered below
- * via hiddenRoutes so the pages remain reachable if needed.
+ * Rules, Logs, Unlock (Test), and API Keys are intentionally excluded from
+ * this list so they do not appear in the navigation bar. Their routes are
+ * still registered below via hiddenRoutes so the pages remain reachable if
+ * needed.
  */
 export const navItems = [
   {
@@ -69,12 +69,6 @@ export const navItems = [
     Component: PlansPage,
   },
   {
-    label: 'layout.components.navigation.tabs.apiKeys',
-    path: '/api-keys',
-    icon: [<KeyRoundedIcon key="mui" />, <KeyRoundedIcon key="svg" />],
-    Component: ApiKeysPage,
-  },
-  {
     label: 'layout.components.navigation.tabs.settings',
     path: '/settings',
     icon: [<SettingsRoundedIcon key="mui" />, <SettingsSvg key="svg" />],
@@ -90,6 +84,7 @@ const hiddenRoutes: RouteObject[] = [
     Component: () => null /* KeepAlive: real LogsPage rendered in Layout */,
   },
   { path: '/unlock', Component: UnlockPage },
+  { path: '/api-keys', Component: ApiKeysPage },
 ]
 
 export const router = createBrowserRouter([

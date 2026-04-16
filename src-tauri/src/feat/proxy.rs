@@ -65,4 +65,3 @@ pub async fn toggle_tun_mode(not_save_file: Option<bool>) -> bool {
         }
     }
 }
-

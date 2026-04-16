@@ -6,9 +6,8 @@ i18n!("locales", fallback = "zh");
 #[inline]
 fn locale_alias(locale: &str) -> Option<&'static str> {
     match locale {
-        "ja" | "ja-jp" | "jp" => Some("jp"),
-        "zh" | "zh-cn" | "zh-hans" | "zh-sg" | "zh-my" | "zh-chs" => Some("zh"),
-        "zh-tw" | "zh-hk" | "zh-hant" | "zh-mo" | "zh-cht" => Some("zhtw"),
+        "zh" | "zh-cn" | "zh-hans" | "zh-sg" | "zh-my" | "zh-chs" | "zh-tw" | "zh-hk"
+        | "zh-hant" | "zh-mo" | "zh-cht" => Some("zh"),
         _ => None,
     }
 }
@@ -95,9 +94,7 @@ mod test {
         assert_eq!(resolve_supported_language("en-US"), Some("en"));
         assert_eq!(resolve_supported_language("zh"), Some("zh"));
         assert_eq!(resolve_supported_language("zh-CN"), Some("zh"));
-        assert_eq!(resolve_supported_language("zh-Hant"), Some("zhtw"));
-        assert_eq!(resolve_supported_language("jp"), Some("jp"));
-        assert_eq!(resolve_supported_language("ja-JP"), Some("jp"));
+        assert_eq!(resolve_supported_language("zh-Hant"), Some("zh"));
         assert_eq!(resolve_supported_language("fr"), None);
     }
 }

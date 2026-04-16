@@ -1,8 +1,7 @@
 // #[cfg(not(feature = "tracing"))]
 use crate::{
     config::{Config, IClashTemp, IProfiles, IVerge},
-    constants,
-    logging,
+    constants, logging,
     process::AsyncHandler,
     utils::{
         dirs::{self, PathBufExec as _},
@@ -401,7 +400,6 @@ pub const fn init_scheme() -> Result<()> {
 
 #[cfg(target_os = "linux")]
 const DEEP_LINK_SCHEMES: &[&str] = &["clash", "clash-verge"];
-
 
 async fn handle_copy(src: &PathBuf, dest: &PathBuf, file: &str) {
     match fs::copy(src, dest).await {
