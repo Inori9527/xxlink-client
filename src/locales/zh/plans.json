@@ -1,0 +1,61 @@
+{
+  "page": {
+    "title": "套餐购买",
+    "sections": {
+      "available": "可选套餐",
+      "promo": "优惠码"
+    },
+    "current": {
+      "title": "当前套餐：{{name}}",
+      "status": {
+        "active": "活跃",
+        "expired": "已到期",
+        "cancelled": "已取消"
+      },
+      "labels": {
+        "trafficUsage": "流量使用",
+        "startAt": "开始时间",
+        "expireAt": "到期时间",
+        "subUrl": "订阅链接："
+      },
+      "tooltips": {
+        "copy": "复制订阅链接"
+      }
+    },
+    "card": {
+      "badge": "当前套餐",
+      "features": {
+        "traffic": "流量",
+        "speed": "限速",
+        "unlimited": "不限速",
+        "speedMbps": "{{value}} Mbps",
+        "devices": "设备数",
+        "devicesValue": "{{count}} 台",
+        "duration": "有效期"
+      },
+      "actions": {
+        "purchase": "购买",
+        "processing": "处理中…",
+        "current": "当前套餐"
+      }
+    },
+    "form": {
+      "promoPlaceholder": "输入优惠码（可选）",
+      "promoHelp": "购买时将自动应用"
+    },
+    "feedback": {
+      "copied": "订阅链接已复制到剪贴板",
+      "errors": {
+        "loadFailed": "加载失败，请稍后重试",
+        "purchaseFailed": "创建订单失败，请稍后重试",
+        "sessionExpired": "登录已过期，请重新登录",
+        "networkError": "网络错误，请稍后重试",
+        "unknownError": "发生未知错误"
+      }
+    },
+    "duration": {
+      "month": "月",
+      "months": "{{count}} 个月"
+    }
+  }
+}

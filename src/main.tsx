@@ -69,9 +69,75 @@ const initializeApp = (initialThemeMode: 'light' | 'dark') => {
   )
 }
 
+const BOOT_TIMEOUT_MS = 8000
+
+const renderSplashTimeoutFallback = (error: unknown) => {
+  const overlay = document.getElementById('initial-loading-overlay')
+  if (!overlay) return
+  // Swap innerHTML — React has not mounted yet, so we build plain DOM.
+  overlay.innerHTML = ''
+
+  const wrap = document.createElement('div')
+  wrap.style.cssText =
+    'display:flex;flex-direction:column;align-items:center;gap:16px;padding:24px;text-align:center;max-width:420px;'
+
+  const title = document.createElement('div')
+  title.style.cssText = 'font-size:16px;font-weight:600;line-height:1.4;'
+  title.textContent = '应用启动超时 / App startup timed out'
+  wrap.appendChild(title)
+
+  const btnRow = document.createElement('div')
+  btnRow.style.cssText = 'display:flex;gap:12px;margin-top:8px;'
+
+  const reloadBtn = document.createElement('button')
+  reloadBtn.textContent = '重启应用'
+  reloadBtn.style.cssText =
+    'padding:8px 16px;border-radius:6px;border:none;background:#4f46e5;color:#fff;font-size:14px;cursor:pointer;'
+  reloadBtn.addEventListener('click', () => {
+    window.location.reload()
+  })
+
+  const exportBtn = document.createElement('button')
+  exportBtn.textContent = '导出日志'
+  exportBtn.style.cssText =
+    'padding:8px 16px;border-radius:6px;border:1px solid #d1d5db;background:transparent;color:inherit;font-size:14px;cursor:pointer;'
+  exportBtn.addEventListener('click', () => {
+    const payload = {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      ua: navigator.userAgent,
+      time: new Date().toISOString(),
+    }
+    void navigator.clipboard
+      ?.writeText(JSON.stringify(payload, null, 2))
+      .catch(console.error)
+  })
+
+  btnRow.appendChild(reloadBtn)
+  btnRow.appendChild(exportBtn)
+  wrap.appendChild(btnRow)
+  overlay.appendChild(wrap)
+}
+
 const bootstrap = async () => {
-  const { initialThemeMode } = await preloadAppData()
-  initializeApp(initialThemeMode)
+  const timeoutSymbol = Symbol('preload-timeout')
+  const result = await Promise.race([
+    preloadAppData(),
+    new Promise<typeof timeoutSymbol>((resolve) =>
+      setTimeout(() => resolve(timeoutSymbol), BOOT_TIMEOUT_MS),
+    ),
+  ])
+
+  if (result === timeoutSymbol) {
+    const timeoutError = new Error('App startup timed out')
+    console.error('[main.tsx]', timeoutError)
+    renderSplashTimeoutFallback(timeoutError)
+    // Still attempt to render the app so the user can proceed if they dismiss.
+    initializeApp(resolveThemeMode(getPreloadConfig()))
+    return
+  }
+
+  initializeApp(result.initialThemeMode)
 
   // Sync subscription in the background if the user is already logged in
   if (authStore.getState().isAuthenticated) {

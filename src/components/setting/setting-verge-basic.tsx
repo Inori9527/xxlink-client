@@ -1,8 +1,8 @@
-import { MenuItem, Select } from '@mui/material'
-import { useRef } from 'react'
+import { MenuItem, Select, Switch } from '@mui/material'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { DialogRef } from '@/components/base'
+import { DialogRef, TooltipIcon } from '@/components/base'
 import { useVerge } from '@/hooks/use-verge'
 import { navItems } from '@/pages/_routers'
 import { supportedLanguages } from '@/services/i18n'
@@ -21,6 +21,16 @@ interface Props {
 
 const OS = getSystem()
 
+const ADVANCED_SETTINGS_STORAGE_KEY = 'xxlink:show-advanced-settings'
+
+const readAdvancedSettingsFlag = (): boolean => {
+  try {
+    return localStorage.getItem(ADVANCED_SETTINGS_STORAGE_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
 const languageOptions = supportedLanguages.map((code) => {
   const labels: { [key: string]: string } = {
     zh: '中文',
@@ -38,6 +48,25 @@ const SettingVergeBasic = ({ onError }: Props) => {
   const configRef = useRef<DialogRef>(null)
   const miscRef = useRef<DialogRef>(null)
   const updateRef = useRef<DialogRef>(null)
+
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(
+    readAdvancedSettingsFlag,
+  )
+
+  const onToggleShowAdvanced = (_: unknown, checked: boolean) => {
+    setShowAdvanced(checked)
+    try {
+      localStorage.setItem(ADVANCED_SETTINGS_STORAGE_KEY, String(checked))
+      // Notify same-window listeners; 'storage' event only fires cross-tab.
+      window.dispatchEvent(
+        new CustomEvent('xxlink:advanced-settings-changed', {
+          detail: checked,
+        }),
+      )
+    } catch {
+      /* ignore */
+    }
+  }
 
   const onChangeData = (patch: any) => {
     mutateVerge({ ...verge, ...patch }, false)
@@ -118,7 +147,7 @@ const SettingVergeBasic = ({ onError }: Props) => {
         label={t('settings.components.verge.basic.fields.startPage')}
       >
         <GuardState
-          value={start_page ?? '/'}
+          value={start_page ?? '/connect'}
           onCatch={onError}
           onFormat={(e: any) => e.target.value}
           onChange={(e) => onChangeData({ start_page: e })}
@@ -140,6 +169,24 @@ const SettingVergeBasic = ({ onError }: Props) => {
         onClick={() => miscRef.current?.open()}
         label={t('settings.components.verge.basic.fields.misc')}
       />
+
+      <SettingItem
+        label={t('settings.components.verge.basic.fields.showAdvancedSettings')}
+        extra={
+          <TooltipIcon
+            title={t(
+              'settings.components.verge.basic.tooltips.showAdvancedSettings',
+            )}
+            sx={{ opacity: '0.7' }}
+          />
+        }
+      >
+        <Switch
+          edge="end"
+          checked={showAdvanced}
+          onChange={onToggleShowAdvanced}
+        />
+      </SettingItem>
     </SettingList>
   )
 }

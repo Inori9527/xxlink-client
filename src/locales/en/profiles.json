@@ -45,7 +45,14 @@
         "emergencyRefreshFailed": "Emergency refresh failed: {{message}}"
       }
     },
-    "title": "Profiles"
+    "title": "Profiles",
+    "empty": {
+      "title": "No subscription yet",
+      "body": "Please purchase a plan to use VPN nodes",
+      "goToPlans": "Go to plans",
+      "refresh": "Refresh"
+    },
+    "expiringSoon": "Expiring soon"
   },
   "components": {
     "card": {

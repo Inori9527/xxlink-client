@@ -3,11 +3,17 @@ import {
   Box,
   Button,
   ButtonGroup,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   IconButton,
   Grid,
   Typography,
 } from '@mui/material'
 import { useLockFn } from 'ahooks'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 
@@ -21,6 +27,16 @@ import { useAuth } from '@/services/auth-store'
 import { openWebUrl } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
 import { useThemeMode } from '@/services/states'
+
+const ADVANCED_SETTINGS_STORAGE_KEY = 'xxlink:show-advanced-settings'
+
+const readAdvancedSettingsFlag = (): boolean => {
+  try {
+    return localStorage.getItem(ADVANCED_SETTINGS_STORAGE_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
 
 const SettingPage = () => {
   const { t } = useTranslation()
@@ -43,7 +59,22 @@ const SettingPage = () => {
     return openWebUrl('https://t.me/xxlink_official')
   })
 
-  const handleLogout = useLockFn(async () => {
+  const [logoutOpen, setLogoutOpen] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(
+    readAdvancedSettingsFlag,
+  )
+
+  useEffect(() => {
+    const sync = () => setShowAdvanced(readAdvancedSettingsFlag())
+    window.addEventListener('xxlink:advanced-settings-changed', sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener('xxlink:advanced-settings-changed', sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
+
+  const confirmLogout = useLockFn(async () => {
     try {
       if (refreshToken) {
         await apiLogout(refreshToken)
@@ -52,6 +83,7 @@ const SettingPage = () => {
       // Ignore API errors on logout — clear local state regardless
     } finally {
       clearAuth()
+      setLogoutOpen(false)
       navigate('/login')
     }
   })
@@ -68,6 +100,7 @@ const SettingPage = () => {
             size="medium"
             color="inherit"
             title={t('settings.page.actions.manual')}
+            aria-label={t('settings.page.actions.manual')}
             onClick={toGithubDoc}
           >
             <HelpOutlineRounded fontSize="inherit" />
@@ -76,6 +109,7 @@ const SettingPage = () => {
             size="medium"
             color="inherit"
             title={t('settings.page.actions.telegram')}
+            aria-label={t('settings.page.actions.telegram')}
             onClick={toTelegramChannel}
           >
             <Telegram fontSize="inherit" />
@@ -85,6 +119,7 @@ const SettingPage = () => {
             size="medium"
             color="inherit"
             title={t('settings.page.actions.github')}
+            aria-label={t('settings.page.actions.github')}
             onClick={toGithubRepo}
           >
             <GitHub fontSize="inherit" />
@@ -122,14 +157,16 @@ const SettingPage = () => {
           >
             <SettingVergeBasic onError={onError} />
           </Box>
-          <Box
-            sx={{
-              borderRadius: 2,
-              backgroundColor: isDark ? '#282a36' : '#ffffff',
-            }}
-          >
-            <SettingVergeAdvanced onError={onError} />
-          </Box>
+          {showAdvanced && (
+            <Box
+              sx={{
+                borderRadius: 2,
+                backgroundColor: isDark ? '#282a36' : '#ffffff',
+              }}
+            >
+              <SettingVergeAdvanced onError={onError} />
+            </Box>
+          )}
         </Grid>
       </Grid>
 
@@ -153,12 +190,36 @@ const SettingPage = () => {
           variant="outlined"
           color="error"
           size="small"
-          onClick={handleLogout}
+          onClick={() => setLogoutOpen(true)}
           sx={{ mr: 1 }}
         >
-          退出登录
+          {t('settings.actions.logout')}
         </Button>
       </Box>
+
+      <Dialog
+        open={logoutOpen}
+        onClose={() => setLogoutOpen(false)}
+        aria-labelledby="logout-confirm-title"
+        aria-describedby="logout-confirm-description"
+      >
+        <DialogTitle id="logout-confirm-title">
+          {t('settings.actions.logoutConfirmTitle')}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="logout-confirm-description">
+            {t('settings.actions.logoutConfirmBody')}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setLogoutOpen(false)}>
+            {t('settings.actions.cancel')}
+          </Button>
+          <Button onClick={confirmLogout} color="error" autoFocus>
+            {t('settings.actions.confirm')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </BasePage>
   )
 }

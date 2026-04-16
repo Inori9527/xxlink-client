@@ -52,7 +52,7 @@ const LazySystemInfoCard = lazy(() =>
   })),
 )
 
-// 定义首页卡片设置接口
+// Settings shape for the home page cards
 interface HomeCardsSettings {
   profile: boolean
   proxy: boolean
@@ -66,7 +66,7 @@ interface HomeCardsSettings {
   [key: string]: boolean
 }
 
-// 首页设置对话框组件接口
+// Props for the home settings dialog
 interface HomeSettingsDialogProps {
   open: boolean
   onClose: () => void
@@ -80,7 +80,7 @@ const serializeCardFlags = (cards: HomeCardsSettings) =>
     .map((key) => `${key}:${cards[key] ? 1 : 0}`)
     .join('|')
 
-// 首页设置对话框组件
+// Home settings dialog component
 const HomeSettingsDialog = ({
   open,
   onClose,
@@ -198,14 +198,14 @@ const HomePage = () => {
   const { verge } = useVerge()
   const { current, mutateProfiles } = useProfiles()
 
-  // 设置弹窗的状态
+  // Settings dialog visibility
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [localHomeCards, setLocalHomeCards] = useState<{
     value: HomeCardsSettings
     baseSignature: string
   } | null>(null)
 
-  // 卡片显示状态
+  // Default card visibility state
   const defaultCards = useMemo<HomeCardsSettings>(
     () => ({
       info: false,
@@ -245,12 +245,12 @@ const HomePage = () => {
 
   const effectiveHomeCards = pendingLocalCards ?? remoteHomeCards
 
-  // 文档链接函数
+  // Open the XXLink user manual
   const toGithubDoc = useLockFn(() => {
-    return openWebUrl('https://clash-verge-rev.github.io/index.html')
+    return openWebUrl('https://xxlink.dev/docs')
   })
 
-  // 新增：打开设置弹窗
+  // Open the home settings dialog
   const openSettings = useCallback(() => {
     setSettingsOpen(true)
   }, [])
@@ -281,7 +281,7 @@ const HomePage = () => {
     [current, mutateProfiles, renderCard],
   )
 
-  // 新增：保存设置时用requestIdleCallback/setTimeout
+  // Defer local card state update via requestIdleCallback / setTimeout
   const handleSaveSettings = (newCards: HomeCardsSettings) => {
     if (window.requestIdleCallback) {
       window.requestIdleCallback(() =>
@@ -374,7 +374,7 @@ const HomePage = () => {
         {nonCriticalCards}
       </Grid>
 
-      {/* 首页设置弹窗 */}
+      {/* Home settings dialog */}
       <HomeSettingsDialog
         key={dialogKey}
         open={settingsOpen}
@@ -386,7 +386,7 @@ const HomePage = () => {
   )
 }
 
-// 增强版网络设置卡片组件
+// Enhanced network settings card
 const NetworkSettingsCard = () => {
   const { t } = useTranslation()
   return (
@@ -401,7 +401,7 @@ const NetworkSettingsCard = () => {
   )
 }
 
-// 增强版 Clash 模式卡片组件
+// Enhanced Clash mode card
 const ClashModeEnhancedCard = () => {
   const { t } = useTranslation()
   return (

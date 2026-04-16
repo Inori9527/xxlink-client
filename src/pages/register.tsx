@@ -9,12 +9,21 @@ import {
   InputAdornment,
   IconButton,
   Paper,
+  ThemeProvider,
+  createTheme,
 } from '@mui/material'
-import { useState, type FormEvent, type ReactNode, useEffect } from 'react'
+import {
+  useState,
+  useMemo,
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+} from 'react'
 import { useNavigate, Link as RouterLink } from 'react-router'
 
 import { apiRegister, AuthError } from '@/services/auth'
 import { useAuth } from '@/services/auth-store'
+import { getPreloadConfig, resolveThemeMode } from '@/services/preload'
 
 export default function RegisterPage(): ReactNode {
   const navigate = useNavigate()
@@ -27,6 +36,15 @@ export default function RegisterPage(): ReactNode {
   const [showConfirm, setShowConfirm] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Theme mode — mirrors login.tsx so the pre-auth pages honor the user's
+  // preference instead of the hardcoded light background.
+  const mode = useMemo<'light' | 'dark'>(
+    () => resolveThemeMode(getPreloadConfig()),
+    [],
+  )
+  const theme = useMemo(() => createTheme({ palette: { mode } }), [mode])
+  const isDark = mode === 'dark'
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -65,155 +83,161 @@ export default function RegisterPage(): ReactNode {
   }
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        bgcolor: '#f0f2ff',
-        p: 2,
-      }}
-    >
-      <Paper
-        elevation={3}
+    <ThemeProvider theme={theme}>
+      <Box
         sx={{
-          width: '100%',
-          maxWidth: 420,
-          p: 4,
-          borderRadius: 3,
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: isDark ? '#1a1d2a' : '#f0f2ff',
+          color: 'text.primary',
+          p: 2,
         }}
       >
-        {/* Header */}
-        <Box sx={{ textAlign: 'center', mb: 3 }}>
-          <Typography
-            variant="h5"
-            fontWeight={700}
-            sx={{ color: '#4f46e5', letterSpacing: 1 }}
-          >
-            XXLink
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            创建新账号
-          </Typography>
-        </Box>
-
-        {/* Error alert */}
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
-
-        {/* Register form */}
-        <Box component="form" onSubmit={handleSubmit} noValidate>
-          <TextField
-            label="邮箱"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            required
-            fullWidth
-            autoFocus
-            disabled={loading}
-            sx={{ mb: 2 }}
-          />
-          <TextField
-            label="密码"
-            type={showPassword ? 'text' : 'password'}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="至少 8 位字符"
-            required
-            fullWidth
-            disabled={loading}
-            sx={{ mb: 2 }}
-            slotProps={{
-              input: {
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      onClick={() => setShowPassword((v) => !v)}
-                      edge="end"
-                      tabIndex={-1}
-                      aria-label={showPassword ? '隐藏密码' : '显示密码'}
-                    >
-                      {showPassword ? <VisibilityOff /> : <Visibility />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
-          <TextField
-            label="确认密码"
-            type={showConfirm ? 'text' : 'password'}
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            placeholder="••••••••"
-            required
-            fullWidth
-            disabled={loading}
-            sx={{ mb: 3 }}
-            slotProps={{
-              input: {
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      onClick={() => setShowConfirm((v) => !v)}
-                      edge="end"
-                      tabIndex={-1}
-                      aria-label={showConfirm ? '隐藏密码' : '显示密码'}
-                    >
-                      {showConfirm ? <VisibilityOff /> : <Visibility />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
-          <Button
-            type="submit"
-            variant="contained"
-            fullWidth
-            disabled={loading}
-            sx={{
-              py: 1.2,
-              bgcolor: '#4f46e5',
-              '&:hover': { bgcolor: '#4338ca' },
-              fontWeight: 600,
-              fontSize: 15,
-            }}
-          >
-            {loading ? (
-              <CircularProgress size={22} color="inherit" />
-            ) : (
-              '创建账号'
-            )}
-          </Button>
-        </Box>
-
-        {/* Footer link */}
-        <Typography
-          variant="body2"
-          textAlign="center"
-          sx={{ mt: 3 }}
-          color="text.secondary"
+        <Paper
+          elevation={3}
+          sx={{
+            width: '100%',
+            maxWidth: 420,
+            p: 4,
+            borderRadius: 3,
+          }}
         >
-          已有账号？{' '}
-          <RouterLink
-            to="/login"
-            style={{
-              color: '#4f46e5',
-              fontWeight: 600,
-              textDecoration: 'none',
-            }}
+          {/* Header */}
+          <Box sx={{ textAlign: 'center', mb: 3 }}>
+            <Typography
+              variant="h5"
+              fontWeight={700}
+              sx={{
+                color: isDark ? '#818cf8' : '#4f46e5',
+                letterSpacing: 1,
+              }}
+            >
+              XXLink
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              创建新账号
+            </Typography>
+          </Box>
+
+          {/* Error alert */}
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+
+          {/* Register form */}
+          <Box component="form" onSubmit={handleSubmit} noValidate>
+            <TextField
+              label="邮箱"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              required
+              fullWidth
+              autoFocus
+              disabled={loading}
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              label="密码"
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="至少 8 位字符"
+              required
+              fullWidth
+              disabled={loading}
+              sx={{ mb: 2 }}
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        onClick={() => setShowPassword((v) => !v)}
+                        edge="end"
+                        tabIndex={-1}
+                        aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                      >
+                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+            <TextField
+              label="确认密码"
+              type={showConfirm ? 'text' : 'password'}
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              placeholder="••••••••"
+              required
+              fullWidth
+              disabled={loading}
+              sx={{ mb: 3 }}
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        onClick={() => setShowConfirm((v) => !v)}
+                        edge="end"
+                        tabIndex={-1}
+                        aria-label={showConfirm ? '隐藏密码' : '显示密码'}
+                      >
+                        {showConfirm ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+            <Button
+              type="submit"
+              variant="contained"
+              fullWidth
+              disabled={loading}
+              sx={{
+                py: 1.2,
+                bgcolor: '#4f46e5',
+                '&:hover': { bgcolor: '#4338ca' },
+                fontWeight: 600,
+                fontSize: 15,
+              }}
+            >
+              {loading ? (
+                <CircularProgress size={22} color="inherit" />
+              ) : (
+                '创建账号'
+              )}
+            </Button>
+          </Box>
+
+          {/* Footer link */}
+          <Typography
+            variant="body2"
+            textAlign="center"
+            sx={{ mt: 3 }}
+            color="text.secondary"
           >
-            立即登录
-          </RouterLink>
-        </Typography>
-      </Paper>
-    </Box>
+            已有账号？{' '}
+            <RouterLink
+              to="/login"
+              style={{
+                color: isDark ? '#818cf8' : '#4f46e5',
+                fontWeight: 600,
+                textDecoration: 'none',
+              }}
+            >
+              立即登录
+            </RouterLink>
+          </Typography>
+        </Paper>
+      </Box>
+    </ThemeProvider>
   )
 }

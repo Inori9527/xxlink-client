@@ -16,6 +16,7 @@ import {
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { open } from '@tauri-apps/plugin-shell'
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { BasePage } from '@/components/base'
 import { api, type Plan, type Subscription } from '@/services/api'
@@ -36,13 +37,41 @@ function formatPrice(cents: number): string {
   return `¥${(cents / 100).toFixed(2)}`
 }
 
-function formatDuration(days: number): string {
-  const months = Math.round(days / 30)
-  return months === 1 ? '月' : `${months} 个月`
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString()
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('zh-CN')
+/**
+ * Map raw API/network errors onto user-friendly translated strings.
+ * Falls back to the plans.* error keys when no specific match is found.
+ */
+function mapError(
+  err: unknown,
+  t: (key: string) => string,
+  fallbackKey: string,
+): string {
+  if (err instanceof Error) {
+    const msg = err.message || ''
+    const lower = msg.toLowerCase()
+    if (
+      msg.includes('401') ||
+      lower.includes('unauthorized') ||
+      lower.includes('登录')
+    ) {
+      return t('plans.page.feedback.errors.sessionExpired')
+    }
+    if (
+      lower.includes('network') ||
+      lower.includes('fetch') ||
+      lower.includes('timeout') ||
+      lower.includes('econn')
+    ) {
+      return t('plans.page.feedback.errors.networkError')
+    }
+    return msg || t(fallbackKey)
+  }
+  if (typeof err === 'string' && err) return err
+  return t(fallbackKey)
 }
 
 // ---------------------------------------------------------------------------
@@ -55,6 +84,7 @@ interface CurrentSubCardProps {
 }
 
 const CurrentSubCard = ({ sub, onCopied }: CurrentSubCardProps) => {
+  const { t } = useTranslation()
   const used = sub.trafficUsed
   const total = sub.plan.trafficLimit
   const pct = total > 0 ? Math.min((used / total) * 100, 100) : 0
@@ -70,10 +100,10 @@ const CurrentSubCard = ({ sub, onCopied }: CurrentSubCardProps) => {
 
   const statusLabel =
     sub.status === 'ACTIVE'
-      ? '活跃'
+      ? t('plans.page.current.status.active')
       : sub.status === 'EXPIRED'
-        ? '已到期'
-        : '已取消'
+        ? t('plans.page.current.status.expired')
+        : t('plans.page.current.status.cancelled')
 
   return (
     <Paper
@@ -89,7 +119,7 @@ const CurrentSubCard = ({ sub, onCopied }: CurrentSubCardProps) => {
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
         <Typography variant="h6" fontWeight={700}>
-          当前套餐：{sub.plan.name}
+          {t('plans.page.current.title', { name: sub.plan.name })}
         </Typography>
         <Chip
           icon={<CheckCircleIcon />}
@@ -106,7 +136,7 @@ const CurrentSubCard = ({ sub, onCopied }: CurrentSubCardProps) => {
       <Box sx={{ mb: 2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
           <Typography variant="body2" color="text.secondary">
-            流量使用
+            {t('plans.page.current.labels.trafficUsage')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {formatTraffic(used)} / {formatTraffic(total)} ({pct.toFixed(1)}%)
@@ -130,7 +160,7 @@ const CurrentSubCard = ({ sub, onCopied }: CurrentSubCardProps) => {
       <Box sx={{ display: 'flex', gap: 4, mb: 2, flexWrap: 'wrap' }}>
         <Box>
           <Typography variant="caption" color="text.secondary">
-            开始时间
+            {t('plans.page.current.labels.startAt')}
           </Typography>
           <Typography variant="body2" fontWeight={600}>
             {formatDate(sub.startAt)}
@@ -138,7 +168,7 @@ const CurrentSubCard = ({ sub, onCopied }: CurrentSubCardProps) => {
         </Box>
         <Box>
           <Typography variant="caption" color="text.secondary">
-            到期时间
+            {t('plans.page.current.labels.expireAt')}
           </Typography>
           <Typography variant="body2" fontWeight={600}>
             {formatDate(sub.expireAt)}
@@ -153,9 +183,10 @@ const CurrentSubCard = ({ sub, onCopied }: CurrentSubCardProps) => {
           noWrap
           sx={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}
         >
-          订阅链接：{sub.subUrl}
+          {t('plans.page.current.labels.subUrl')}
+          {sub.subUrl}
         </Typography>
-        <Tooltip title="复制订阅链接">
+        <Tooltip title={t('plans.page.current.tooltips.copy')}>
           <IconButton
             size="small"
             onClick={handleCopy}
@@ -186,7 +217,12 @@ const PlanCard = ({
   onPurchase,
   purchasing,
 }: PlanCardProps) => {
-  const monthLabel = formatDuration(plan.duration)
+  const { t } = useTranslation()
+  const months = Math.round(plan.duration / 30)
+  const monthLabel =
+    months === 1
+      ? t('plans.page.duration.month')
+      : t('plans.page.duration.months', { count: months })
 
   return (
     <Paper
@@ -209,7 +245,7 @@ const PlanCard = ({
     >
       {isCurrent && (
         <Chip
-          label="当前套餐"
+          label={t('plans.page.card.badge')}
           size="small"
           sx={{
             position: 'absolute',
@@ -256,13 +292,30 @@ const PlanCard = ({
           mb: 3,
         }}
       >
-        <FeatureRow label="流量" value={formatTraffic(plan.trafficLimit)} />
         <FeatureRow
-          label="限速"
-          value={plan.speedLimit ? `${plan.speedLimit} Mbps` : '不限速'}
+          label={t('plans.page.card.features.traffic')}
+          value={formatTraffic(plan.trafficLimit)}
         />
-        <FeatureRow label="设备数" value={`${plan.maxDevices} 台`} />
-        <FeatureRow label="有效期" value={monthLabel} />
+        <FeatureRow
+          label={t('plans.page.card.features.speed')}
+          value={
+            plan.speedLimit
+              ? t('plans.page.card.features.speedMbps', {
+                  value: plan.speedLimit,
+                })
+              : t('plans.page.card.features.unlimited')
+          }
+        />
+        <FeatureRow
+          label={t('plans.page.card.features.devices')}
+          value={t('plans.page.card.features.devicesValue', {
+            count: plan.maxDevices,
+          })}
+        />
+        <FeatureRow
+          label={t('plans.page.card.features.duration')}
+          value={monthLabel}
+        />
       </Box>
 
       {isCurrent ? (
@@ -272,7 +325,7 @@ const PlanCard = ({
           fullWidth
           sx={{ borderRadius: 1.5 }}
         >
-          当前套餐
+          {t('plans.page.card.actions.current')}
         </Button>
       ) : (
         <Button
@@ -287,7 +340,9 @@ const PlanCard = ({
             fontWeight: 700,
           }}
         >
-          {purchasing ? '处理中…' : '购买'}
+          {purchasing
+            ? t('plans.page.card.actions.processing')
+            : t('plans.page.card.actions.purchase')}
         </Button>
       )}
     </Paper>
@@ -316,6 +371,7 @@ const FeatureRow = ({ label, value }: { label: string; value: string }) => (
 // ---------------------------------------------------------------------------
 
 const PlansPage = () => {
+  const { t } = useTranslation()
   const [plans, setPlans] = useState<Plan[]>([])
   const [subscription, setSubscription] = useState<Subscription | null>(null)
   const [loading, setLoading] = useState(true)
@@ -336,13 +392,13 @@ const PlansPage = () => {
         setPlans(plansData)
         setSubscription(subData)
       } catch (err) {
-        setError(err instanceof Error ? err.message : '加载失败，请稍后重试')
+        setError(mapError(err, t, 'page.feedback.errors.loadFailed'))
       } finally {
         setLoading(false)
       }
     }
     load()
-  }, [])
+  }, [t])
 
   const handlePurchase = async (planId: string) => {
     setPurchasingId(planId)
@@ -353,7 +409,7 @@ const PlansPage = () => {
       )
       await open(result.sessionUrl)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '创建订单失败，请稍后重试')
+      setError(mapError(err, t, 'page.feedback.errors.purchaseFailed'))
     } finally {
       setPurchasingId(null)
     }
@@ -365,14 +421,14 @@ const PlansPage = () => {
   }
 
   return (
-    <BasePage title="套餐购买" contentStyle={{ padding: 16 }}>
+    <BasePage title={t('plans.page.title')} contentStyle={{ padding: 16 }}>
       {copySuccess && (
         <Alert
           severity="success"
           sx={{ mb: 2 }}
           onClose={() => setCopySuccess(false)}
         >
-          订阅链接已复制到剪贴板
+          {t('plans.page.feedback.copied')}
         </Alert>
       )}
 
@@ -393,7 +449,7 @@ const PlansPage = () => {
 
       {/* Plans Grid */}
       <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 2 }}>
-        可选套餐
+        {t('plans.page.sections.available')}
       </Typography>
 
       <Box
@@ -442,18 +498,18 @@ const PlansPage = () => {
           }}
         >
           <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1.5 }}>
-            优惠码
+            {t('plans.page.sections.promo')}
           </Typography>
           <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
             <TextField
               size="small"
-              placeholder="输入优惠码（可选）"
+              placeholder={t('plans.page.form.promoPlaceholder')}
               value={promoCode}
               onChange={(e) => setPromoCode(e.target.value)}
               sx={{ flex: 1, maxWidth: 320 }}
             />
             <Typography variant="body2" color="text.secondary">
-              购买时将自动应用
+              {t('plans.page.form.promoHelp')}
             </Typography>
           </Box>
         </Paper>

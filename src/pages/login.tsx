@@ -10,14 +10,28 @@ import {
   InputAdornment,
   IconButton,
   Paper,
+  Link as MuiLink,
+  Stack,
+  ThemeProvider,
+  createTheme,
 } from '@mui/material'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
-import { useState, type FormEvent, type ReactNode, useEffect } from 'react'
-import { useNavigate, Link as RouterLink } from 'react-router'
+import {
+  useState,
+  useRef,
+  useMemo,
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+} from 'react'
+import { useTranslation } from 'react-i18next'
+import { useNavigate, useLocation, Link as RouterLink } from 'react-router'
 
 import { apiLogin, apiGoogleOAuthCallback, AuthError } from '@/services/auth'
 import { useAuth } from '@/services/auth-store'
+import { openWebUrl } from '@/services/cmds'
+import { getPreloadConfig, resolveThemeMode } from '@/services/preload'
 import { syncSubscription } from '@/services/subscription-sync'
 
 // ---------------------------------------------------------------------------
@@ -40,6 +54,8 @@ interface OAuthCallbackPayload {
 
 export default function LoginPage(): ReactNode {
   const navigate = useNavigate()
+  const location = useLocation()
+  const { t } = useTranslation()
   const { setAuth, isAuthenticated } = useAuth()
 
   const [email, setEmail] = useState('')
@@ -48,6 +64,37 @@ export default function LoginPage(): ReactNode {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+
+  // Show a success banner when redirected from the register page.
+  const registeredStateRef = useRef(
+    Boolean((location.state as { registered?: boolean } | null)?.registered),
+  )
+  const [showRegistered, setShowRegistered] = useState(
+    registeredStateRef.current,
+  )
+
+  // Track cancellation of an in-flight Google OAuth so the stale callback
+  // never mutates auth state after the user aborted.
+  const oauthCancelledRef = useRef(false)
+
+  // Clear the router state after we've consumed it so a refresh/back-nav
+  // does not re-show the banner.
+  useEffect(() => {
+    if (registeredStateRef.current) {
+      window.history.replaceState({}, '')
+    }
+  }, [])
+
+  // Resolve the theme mode once on mount. Login is shown pre-auth so the
+  // app-level ThemeModeProvider has not necessarily wired the MUI theme to
+  // this tree yet; wrap with a minimal ThemeProvider so colors respect the
+  // user's preference instead of hardcoded light values.
+  const mode = useMemo<'light' | 'dark'>(
+    () => resolveThemeMode(getPreloadConfig()),
+    [],
+  )
+  const theme = useMemo(() => createTheme({ palette: { mode } }), [mode])
+  const isDark = mode === 'dark'
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -62,6 +109,12 @@ export default function LoginPage(): ReactNode {
 
     listen<OAuthCallbackPayload>('oauth-callback', async (event) => {
       const { code, error: oauthError, redirectUri } = event.payload
+
+      // If the user cancelled, ignore whatever the listener emits.
+      if (oauthCancelledRef.current) {
+        setGoogleLoading(false)
+        return
+      }
 
       if (oauthError) {
         setError(
@@ -81,10 +134,16 @@ export default function LoginPage(): ReactNode {
 
       try {
         const result = await apiGoogleOAuthCallback(code, redirectUri)
+        if (oauthCancelledRef.current) {
+          return
+        }
         setAuth(result.user, result.accessToken, result.refreshToken)
         syncSubscription().catch(console.error)
         void navigate('/')
       } catch (err) {
+        if (oauthCancelledRef.current) {
+          return
+        }
         setError(
           err instanceof AuthError
             ? err.message
@@ -130,6 +189,7 @@ export default function LoginPage(): ReactNode {
       return
     }
     setError('')
+    oauthCancelledRef.current = false
     setGoogleLoading(true)
     // Use a placeholder redirect_uri — the Rust command will replace it
     // with the actual local server address (http://127.0.0.1:{port})
@@ -158,171 +218,267 @@ export default function LoginPage(): ReactNode {
     }
   }
 
+  const handleCancelGoogleLogin = () => {
+    oauthCancelledRef.current = true
+    setGoogleLoading(false)
+    // TODO: no Rust-side command currently exists to close the OAuth
+    // listener window / abort the local HTTP listener. The ref-based
+    // guard above prevents any stale callback from mutating auth state.
+  }
+
+  const handleForgotPassword = () => {
+    void openWebUrl('https://xxlink.dev/forgot-password')
+  }
+
+  const handleOpenTerms = () => {
+    void openWebUrl('https://xxlink.dev/terms')
+  }
+
+  const handleOpenPrivacy = () => {
+    void openWebUrl('https://xxlink.dev/privacy')
+  }
+
   const anyLoading = loading || googleLoading
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        bgcolor: '#f0f2ff',
-        p: 2,
-      }}
-    >
-      <Paper
-        elevation={3}
+    <ThemeProvider theme={theme}>
+      <Box
         sx={{
-          width: '100%',
-          maxWidth: 420,
-          p: 4,
-          borderRadius: 3,
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: isDark ? '#1a1d2a' : '#f0f2ff',
+          color: 'text.primary',
+          p: 2,
         }}
       >
-        {/* Header */}
-        <Box sx={{ textAlign: 'center', mb: 3 }}>
-          <Typography
-            variant="h5"
-            fontWeight={700}
-            sx={{ color: '#4f46e5', letterSpacing: 1 }}
-          >
-            XXLink
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            登录以继续使用
-          </Typography>
-        </Box>
-
-        {/* Error alert */}
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
-
-        {/* Login form */}
-        <Box component="form" onSubmit={handleSubmit} noValidate>
-          <TextField
-            label="邮箱"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            required
-            fullWidth
-            autoFocus
-            disabled={anyLoading}
-            sx={{ mb: 2 }}
-          />
-          <TextField
-            label="密码"
-            type={showPassword ? 'text' : 'password'}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            required
-            fullWidth
-            disabled={anyLoading}
-            sx={{ mb: 3 }}
-            slotProps={{
-              input: {
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      onClick={() => setShowPassword((v) => !v)}
-                      edge="end"
-                      tabIndex={-1}
-                      aria-label={showPassword ? '隐藏密码' : '显示密码'}
-                    >
-                      {showPassword ? <VisibilityOff /> : <Visibility />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
-          <Button
-            type="submit"
-            variant="contained"
-            fullWidth
-            disabled={anyLoading}
-            sx={{
-              py: 1.2,
-              bgcolor: '#4f46e5',
-              '&:hover': { bgcolor: '#4338ca' },
-              fontWeight: 600,
-              fontSize: 15,
-            }}
-          >
-            {loading ? <CircularProgress size={22} color="inherit" /> : '登录'}
-          </Button>
-        </Box>
-
-        {/* Google OAuth */}
-        <>
-          <Divider sx={{ my: 2.5 }}>
-            <Typography variant="caption" color="text.secondary">
-              或使用以下方式登录
-            </Typography>
-          </Divider>
-          {googleLoading ? (
-            <Button
-              variant="outlined"
-              fullWidth
-              onClick={() => setGoogleLoading(false)}
-              startIcon={<CircularProgress size={18} />}
-              sx={{
-                py: 1.2,
-                borderColor: '#ef4444',
-                color: '#ef4444',
-                fontWeight: 500,
-                '&:hover': { borderColor: '#dc2626', bgcolor: '#fef2f2' },
-              }}
-            >
-              取消 Google 登录
-            </Button>
-          ) : (
-            <Button
-              variant="outlined"
-              fullWidth
-              onClick={handleGoogleLogin}
-              disabled={loading}
-              startIcon={<GoogleIcon />}
-              sx={{
-                py: 1.2,
-                borderColor: '#d1d5db',
-                color: 'text.primary',
-                fontWeight: 500,
-                '&:hover': { borderColor: '#9ca3af', bgcolor: '#f9fafb' },
-              }}
-            >
-              使用 Google 登录
-            </Button>
-          )}
-        </>
-
-        {/* Footer link */}
-        <Typography
-          variant="body2"
-          textAlign="center"
-          sx={{ mt: 3 }}
-          color="text.secondary"
+        <Paper
+          elevation={3}
+          sx={{
+            width: '100%',
+            maxWidth: 420,
+            p: 4,
+            borderRadius: 3,
+          }}
         >
-          还没有账号？{' '}
-          <RouterLink
-            to="/register"
-            style={{
-              color: '#4f46e5',
-              fontWeight: 600,
-              textDecoration: 'none',
-            }}
+          {/* Header */}
+          <Box sx={{ textAlign: 'center', mb: 3 }}>
+            <Typography
+              variant="h5"
+              fontWeight={700}
+              sx={{
+                color: isDark ? '#818cf8' : '#4f46e5',
+                letterSpacing: 1,
+              }}
+            >
+              XXLink
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              登录以继续使用
+            </Typography>
+          </Box>
+
+          {/* Registered success banner */}
+          {showRegistered && (
+            <Alert
+              severity="success"
+              sx={{ mb: 2 }}
+              onClose={() => setShowRegistered(false)}
+            >
+              {t('shared.auth.registeredSuccess')}
+            </Alert>
+          )}
+
+          {/* Error alert */}
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+
+          {/* Login form */}
+          <Box component="form" onSubmit={handleSubmit} noValidate>
+            <TextField
+              label="邮箱"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              required
+              fullWidth
+              autoFocus
+              disabled={anyLoading}
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              label="密码"
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              fullWidth
+              disabled={anyLoading}
+              sx={{ mb: 1 }}
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        onClick={() => setShowPassword((v) => !v)}
+                        edge="end"
+                        tabIndex={-1}
+                        aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                      >
+                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+            {/* Forgot password link */}
+            <Box sx={{ textAlign: 'right', mb: 2 }}>
+              <MuiLink
+                component="button"
+                type="button"
+                variant="body2"
+                onClick={handleForgotPassword}
+                sx={{
+                  color: isDark ? '#818cf8' : '#4f46e5',
+                  fontWeight: 500,
+                  textDecoration: 'none',
+                  '&:hover': { textDecoration: 'underline' },
+                }}
+              >
+                {t('shared.auth.forgotPassword')}
+              </MuiLink>
+            </Box>
+            <Button
+              type="submit"
+              variant="contained"
+              fullWidth
+              disabled={anyLoading}
+              sx={{
+                py: 1.2,
+                bgcolor: '#4f46e5',
+                '&:hover': { bgcolor: '#4338ca' },
+                fontWeight: 600,
+                fontSize: 15,
+              }}
+            >
+              {loading ? (
+                <CircularProgress size={22} color="inherit" />
+              ) : (
+                '登录'
+              )}
+            </Button>
+          </Box>
+
+          {/* Google OAuth */}
+          <>
+            <Divider sx={{ my: 2.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                或使用以下方式登录
+              </Typography>
+            </Divider>
+            {googleLoading ? (
+              <Button
+                variant="outlined"
+                fullWidth
+                onClick={handleCancelGoogleLogin}
+                startIcon={<CircularProgress size={18} />}
+                sx={{
+                  py: 1.2,
+                  borderColor: '#ef4444',
+                  color: '#ef4444',
+                  fontWeight: 500,
+                  '&:hover': { borderColor: '#dc2626', bgcolor: '#fef2f2' },
+                }}
+              >
+                {t('shared.auth.cancelGoogleLogin')}
+              </Button>
+            ) : (
+              <Button
+                variant="outlined"
+                fullWidth
+                onClick={handleGoogleLogin}
+                disabled={loading}
+                startIcon={<GoogleIcon />}
+                sx={{
+                  py: 1.2,
+                  borderColor: isDark ? '#4b5563' : '#d1d5db',
+                  color: 'text.primary',
+                  fontWeight: 500,
+                  '&:hover': {
+                    borderColor: isDark ? '#6b7280' : '#9ca3af',
+                    bgcolor: isDark ? 'rgba(255,255,255,0.04)' : '#f9fafb',
+                  },
+                }}
+              >
+                使用 Google 登录
+              </Button>
+            )}
+          </>
+
+          {/* Footer link */}
+          <Typography
+            variant="body2"
+            textAlign="center"
+            sx={{ mt: 3 }}
+            color="text.secondary"
           >
-            立即注册
-          </RouterLink>
-        </Typography>
-      </Paper>
-    </Box>
+            还没有账号？{' '}
+            <RouterLink
+              to="/register"
+              style={{
+                color: isDark ? '#818cf8' : '#4f46e5',
+                fontWeight: 600,
+                textDecoration: 'none',
+              }}
+            >
+              立即注册
+            </RouterLink>
+          </Typography>
+
+          {/* Legal links */}
+          <Stack
+            direction="row"
+            spacing={2}
+            justifyContent="center"
+            sx={{ mt: 2 }}
+          >
+            <MuiLink
+              component="button"
+              type="button"
+              variant="caption"
+              onClick={handleOpenTerms}
+              sx={{
+                color: 'text.secondary',
+                textDecoration: 'none',
+                '&:hover': { textDecoration: 'underline' },
+              }}
+            >
+              {t('shared.legal.terms')}
+            </MuiLink>
+            <MuiLink
+              component="button"
+              type="button"
+              variant="caption"
+              onClick={handleOpenPrivacy}
+              sx={{
+                color: 'text.secondary',
+                textDecoration: 'none',
+                '&:hover': { textDecoration: 'underline' },
+              }}
+            >
+              {t('shared.legal.privacy')}
+            </MuiLink>
+          </Stack>
+        </Paper>
+      </Box>
+    </ThemeProvider>
   )
 }
 

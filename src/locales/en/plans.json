@@ -1,0 +1,61 @@
+{
+  "page": {
+    "title": "Plans",
+    "sections": {
+      "available": "Available Plans",
+      "promo": "Promo Code"
+    },
+    "current": {
+      "title": "Current plan: {{name}}",
+      "status": {
+        "active": "Active",
+        "expired": "Expired",
+        "cancelled": "Cancelled"
+      },
+      "labels": {
+        "trafficUsage": "Traffic usage",
+        "startAt": "Start date",
+        "expireAt": "Expire date",
+        "subUrl": "Subscription URL:"
+      },
+      "tooltips": {
+        "copy": "Copy subscription URL"
+      }
+    },
+    "card": {
+      "badge": "Current plan",
+      "features": {
+        "traffic": "Traffic",
+        "speed": "Speed limit",
+        "unlimited": "Unlimited",
+        "speedMbps": "{{value}} Mbps",
+        "devices": "Devices",
+        "devicesValue": "{{count}} devices",
+        "duration": "Duration"
+      },
+      "actions": {
+        "purchase": "Purchase",
+        "processing": "Processing…",
+        "current": "Current plan"
+      }
+    },
+    "form": {
+      "promoPlaceholder": "Enter promo code (optional)",
+      "promoHelp": "Will be applied automatically at checkout"
+    },
+    "feedback": {
+      "copied": "Subscription URL copied to clipboard",
+      "errors": {
+        "loadFailed": "Failed to load. Please try again later.",
+        "purchaseFailed": "Failed to create order. Please try again later.",
+        "sessionExpired": "Session expired. Please log in again.",
+        "networkError": "Network error. Please try again later.",
+        "unknownError": "An unknown error occurred."
+      }
+    },
+    "duration": {
+      "month": "month",
+      "months": "{{count}} months"
+    }
+  }
+}

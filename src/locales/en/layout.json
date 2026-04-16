@@ -43,6 +43,24 @@
         "download": "Download",
         "connected": "Connected",
         "disconnected": "Disconnected"
+      },
+      "mode": {
+        "system": "Browser only",
+        "tun": "Global",
+        "both": "Recommended"
+      },
+      "modeTooltip": "Browser only: proxy system browser traffic only. Global: use TUN virtual adapter for all traffic (admin required). Recommended: enable both.",
+      "empty": {
+        "title": "No nodes available",
+        "subtitle": "Please purchase a plan or refresh your subscription",
+        "goToPlans": "Go to Plans",
+        "refresh": "Refresh subscription",
+        "refreshing": "Refreshing..."
+      },
+      "feedback": {
+        "toggleFailed": "Failed to toggle connection",
+        "refreshFailed": "Failed to refresh subscription",
+        "refreshed": "Subscription refreshed"
       }
     }
   }

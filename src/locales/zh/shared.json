@@ -130,5 +130,21 @@
       "warn": "WARN",
       "error": "ERROR"
     }
+  },
+  "errorBoundary": {
+    "title": "应用发生错误",
+    "description": "很抱歉，应用遇到了一个错误。您可以尝试重新加载，或导出日志以便反馈问题。",
+    "reload": "重新加载",
+    "exportLog": "导出日志",
+    "detailsSummary": "错误详情"
+  },
+  "auth": {
+    "forgotPassword": "忘记密码？",
+    "registeredSuccess": "注册成功，请登录",
+    "cancelGoogleLogin": "取消 Google 登录"
+  },
+  "legal": {
+    "terms": "服务条款",
+    "privacy": "隐私政策"
   }
 }

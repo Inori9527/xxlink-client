@@ -191,7 +191,7 @@ const LogPage = () => {
           style={{ flex: 1 }}
         />
       ) : (
-        <BaseEmpty />
+        <BaseEmpty text={!enableLog ? t('logs.empty.paused') : undefined} />
       )}
     </BasePage>
   )

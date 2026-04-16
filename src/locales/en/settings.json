@@ -1,4 +1,11 @@
 {
+  "actions": {
+    "logout": "Log out",
+    "logoutConfirmTitle": "Log out?",
+    "logoutConfirmBody": "Are you sure you want to log out?",
+    "confirm": "Confirm",
+    "cancel": "Cancel"
+  },
   "page": {
     "actions": {
       "manual": "Manual",
@@ -159,6 +166,9 @@
           "showTrayMenu": "Show Tray Menu",
           "disable": "Disable"
         },
+        "tooltips": {
+          "showAdvancedSettings": "Show advanced developer and diagnostic options"
+        },
         "fields": {
           "language": "Language",
           "themeMode": "Theme Mode",
@@ -167,7 +177,8 @@
           "themeSetting": "Theme Setting",
           "layoutSetting": "Layout Setting",
           "misc": "Miscellaneous",
-          "hotkeySetting": "Hotkey Setting"
+          "hotkeySetting": "Hotkey Setting",
+          "showAdvancedSettings": "Advanced Mode"
         }
       },
       "advanced": {

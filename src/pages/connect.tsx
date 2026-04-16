@@ -1,26 +1,30 @@
 import {
   ArrowDownwardRounded,
   ArrowUpwardRounded,
+  InfoOutlineRounded,
   PowerSettingsNewRounded,
+  RefreshRounded,
 } from '@mui/icons-material'
 import {
+  Autocomplete,
   Box,
   Button,
   ButtonGroup,
+  Chip,
   CircularProgress,
-  FormControl,
-  MenuItem,
-  Select,
-  SelectChangeEvent,
+  Paper,
   Stack,
+  TextField,
+  Tooltip,
   Typography,
   alpha,
   keyframes,
   useTheme,
 } from '@mui/material'
 import { useLockFn } from 'ahooks'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router'
 
 import { BasePage } from '@/components/base'
 import { useProxySelection } from '@/hooks/use-proxy-selection'
@@ -28,6 +32,8 @@ import { useTrafficData } from '@/hooks/use-traffic-data'
 import { useVerge } from '@/hooks/use-verge'
 import { useVisibility } from '@/hooks/use-visibility'
 import { useAppData } from '@/providers/app-data-context'
+import { showNotice } from '@/services/notice-service'
+import { syncSubscription } from '@/services/subscription-sync'
 import parseTraffic from '@/utils/parse-traffic'
 
 type ConnectMode = 'system' | 'tun' | 'both'
@@ -53,9 +59,24 @@ const pulse = keyframes`
   100% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0); }
 `
 
+type ProxyEntry = {
+  name: string
+  history?: { time: string; delay: number }[]
+}
+
+const getLatency = (entry: ProxyEntry | undefined): number | undefined => {
+  const history = entry?.history
+  if (!history || history.length === 0) return undefined
+  const last = history[history.length - 1]
+  if (!last || typeof last.delay !== 'number' || last.delay <= 0)
+    return undefined
+  return last.delay
+}
+
 const ConnectPage = () => {
   const { t } = useTranslation()
   const theme = useTheme()
+  const navigate = useNavigate()
   const pageVisible = useVisibility()
   const { verge, patchVerge } = useVerge()
   const { proxies, refreshProxy } = useAppData()
@@ -66,6 +87,9 @@ const ConnectPage = () => {
 
   const [mode, setMode] = useState<ConnectMode>(() => loadMode())
   const [busy, setBusy] = useState(false)
+  const [errorFlash, setErrorFlash] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const tunEnabled = verge?.enable_tun_mode ?? false
   const sysEnabled = verge?.enable_system_proxy ?? false
@@ -93,22 +117,48 @@ const ConnectPage = () => {
 
   // GLOBAL group for simple one-click node selection
   const globalGroup = proxies?.global as
-    | { name?: string; now?: string; all?: Array<{ name: string } | string> }
+    | {
+        name?: string
+        now?: string
+        all?: Array<ProxyEntry | string>
+      }
     | undefined
 
   const currentNode = globalGroup?.now || ''
-  const nodeOptions = useMemo(() => {
+
+  const nodeEntries = useMemo<ProxyEntry[]>(() => {
     const all = globalGroup?.all || []
     return all
-      .map((item) => (typeof item === 'string' ? item : item?.name))
+      .map((item) =>
+        typeof item === 'string'
+          ? ({ name: item } as ProxyEntry)
+          : (item as ProxyEntry),
+      )
       .filter(
-        (name): name is string =>
-          typeof name === 'string' &&
-          name.length > 0 &&
-          name !== 'DIRECT' &&
-          name !== 'REJECT',
+        (entry): entry is ProxyEntry =>
+          !!entry &&
+          typeof entry.name === 'string' &&
+          entry.name.length > 0 &&
+          entry.name !== 'DIRECT' &&
+          entry.name !== 'REJECT',
       )
   }, [globalGroup?.all])
+
+  const nodeOptions = useMemo(
+    () => nodeEntries.map((entry) => entry.name),
+    [nodeEntries],
+  )
+
+  const latencyMap = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const entry of nodeEntries) {
+      const delay = getLatency(entry)
+      if (delay !== undefined) map.set(entry.name, delay)
+    }
+    return map
+  }, [nodeEntries])
+
+  const isEmpty = nodeOptions.length === 0
 
   const handleModeChange = useCallback((next: ConnectMode) => {
     setMode(next)
@@ -117,6 +167,12 @@ const ConnectPage = () => {
     } catch {
       /* ignore */
     }
+  }, [])
+
+  const triggerErrorFlash = useCallback(() => {
+    setErrorFlash(true)
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
+    errorTimerRef.current = setTimeout(() => setErrorFlash(false), 2000)
   }, [])
 
   const handleToggle = useLockFn(async () => {
@@ -139,22 +195,42 @@ const ConnectPage = () => {
       await patchVerge(payload)
     } catch (error) {
       console.error('[Connect] toggle failed', error)
+      showNotice.error('layout.components.connect.feedback.toggleFailed', error)
+      triggerErrorFlash()
     } finally {
       setBusy(false)
     }
   })
 
   const handleNodeChange = useCallback(
-    (event: SelectChangeEvent<string>) => {
-      const newProxy = event.target.value
+    (_event: unknown, newProxy: string | null) => {
       if (!newProxy || !globalGroup?.name) return
       changeProxy(globalGroup.name, newProxy, currentNode, true)
     },
     [changeProxy, currentNode, globalGroup?.name],
   )
 
+  const handleRefresh = useLockFn(async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      await syncSubscription()
+      await refreshProxy()
+      showNotice.success('layout.components.connect.feedback.refreshed')
+    } catch (error) {
+      console.error('[Connect] refresh failed', error)
+      showNotice.error(
+        'layout.components.connect.feedback.refreshFailed',
+        error,
+      )
+    } finally {
+      setRefreshing(false)
+    }
+  })
+
   // Button colors
   const getButtonColor = () => {
+    if (errorFlash) return theme.palette.error.main
     if (busy) return theme.palette.warning.main
     if (connected) return theme.palette.success.main
     return theme.palette.grey[500]
@@ -167,6 +243,12 @@ const ConnectPage = () => {
     : connected
       ? t('layout.components.connect.actions.clickToDisconnect')
       : t('layout.components.connect.actions.clickToConnect')
+
+  const getChipColor = (delay: number): 'success' | 'warning' | 'error' => {
+    if (delay < 200) return 'success'
+    if (delay < 500) return 'warning'
+    return 'error'
+  }
 
   return (
     <BasePage title={t('layout.components.connect.title')}>
@@ -181,141 +263,276 @@ const ConnectPage = () => {
           width: '100%',
         }}
       >
-        {/* Big round button */}
-        <Box
-          sx={{
-            position: 'relative',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Button
-            onClick={handleToggle}
-            disabled={busy}
+        {isEmpty ? (
+          <Paper
+            elevation={0}
             sx={{
-              width: 180,
-              height: 180,
-              minWidth: 180,
-              borderRadius: '50%',
-              bgcolor: buttonColor,
-              color: theme.palette.getContrastText(buttonColor),
-              transition: 'all 0.3s ease-in-out',
-              boxShadow: connected
-                ? `0 0 28px 4px ${alpha(theme.palette.success.main, 0.45)}`
-                : `0 4px 16px ${alpha(theme.palette.common.black, 0.2)}`,
-              animation: busy ? `${pulse} 1.4s infinite` : 'none',
-              '&:hover': {
-                bgcolor: buttonColor,
-                filter: 'brightness(1.08)',
-              },
-              '&.Mui-disabled': {
-                bgcolor: buttonColor,
-                color: theme.palette.getContrastText(buttonColor),
-                opacity: 0.9,
-              },
+              width: '100%',
+              p: 4,
+              borderRadius: 3,
+              textAlign: 'center',
+              bgcolor: alpha(theme.palette.primary.main, 0.04),
+              border: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
             }}
           >
-            {busy ? (
-              <CircularProgress
-                size={56}
-                thickness={4}
-                sx={{ color: 'inherit' }}
-              />
-            ) : (
-              <PowerSettingsNewRounded sx={{ fontSize: 72 }} />
-            )}
-          </Button>
-        </Box>
-
-        <Typography
-          variant="h6"
-          sx={{ fontWeight: 600, textAlign: 'center' }}
-          color={connected ? 'success.main' : 'text.secondary'}
-        >
-          {statusLabel}
-        </Typography>
-
-        {/* Node dropdown */}
-        <FormControl fullWidth size="small">
-          <Select
-            displayEmpty
-            value={currentNode}
-            onChange={handleNodeChange}
-            disabled={!globalGroup?.name || nodeOptions.length === 0}
-            renderValue={(selected) =>
-              selected || t('layout.components.connect.labels.noNode')
-            }
-            MenuProps={{
-              PaperProps: { style: { maxHeight: 420 } },
-            }}
-            sx={{ borderRadius: 2 }}
-          >
-            {nodeOptions.map((name) => (
-              <MenuItem key={name} value={name}>
-                {name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
-        {/* Mode selector */}
-        <Box sx={{ width: '100%' }}>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ display: 'block', mb: 1, textAlign: 'center' }}
-          >
-            {t('layout.components.connect.labels.mode')}
-          </Typography>
-          <ButtonGroup fullWidth size="small">
-            <Button
-              variant={mode === 'system' ? 'contained' : 'outlined'}
-              onClick={() => handleModeChange('system')}
+            <Stack spacing={2} alignItems="center">
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                {t('layout.components.connect.empty.title')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {t('layout.components.connect.empty.subtitle')}
+              </Typography>
+              <Stack direction="row" spacing={2} sx={{ pt: 1 }}>
+                <Button variant="contained" onClick={() => navigate('/plans')}>
+                  {t('layout.components.connect.empty.goToPlans')}
+                </Button>
+                <Button
+                  variant="outlined"
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  startIcon={
+                    refreshing ? (
+                      <CircularProgress size={16} />
+                    ) : (
+                      <RefreshRounded />
+                    )
+                  }
+                >
+                  {refreshing
+                    ? t('layout.components.connect.empty.refreshing')
+                    : t('layout.components.connect.empty.refresh')}
+                </Button>
+              </Stack>
+            </Stack>
+          </Paper>
+        ) : (
+          <>
+            {/* Big round button */}
+            <Box
+              sx={{
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
             >
-              {t('layout.components.connect.labels.system')}
-            </Button>
-            <Button
-              variant={mode === 'tun' ? 'contained' : 'outlined'}
-              onClick={() => handleModeChange('tun')}
-            >
-              {t('layout.components.connect.labels.tun')}
-            </Button>
-            <Button
-              variant={mode === 'both' ? 'contained' : 'outlined'}
-              onClick={() => handleModeChange('both')}
-            >
-              {t('layout.components.connect.labels.both')}
-            </Button>
-          </ButtonGroup>
-        </Box>
+              <Button
+                onClick={handleToggle}
+                disabled={busy}
+                sx={{
+                  width: 180,
+                  height: 180,
+                  minWidth: 180,
+                  borderRadius: '50%',
+                  bgcolor: buttonColor,
+                  color: theme.palette.getContrastText(buttonColor),
+                  transition: 'all 0.3s ease-in-out',
+                  boxShadow: connected
+                    ? `0 0 28px 4px ${alpha(theme.palette.success.main, 0.45)}`
+                    : `0 4px 16px ${alpha(theme.palette.common.black, 0.2)}`,
+                  animation: busy ? `${pulse} 1.4s infinite` : 'none',
+                  '&:hover': {
+                    bgcolor: buttonColor,
+                    filter: 'brightness(1.08)',
+                  },
+                  '&.Mui-disabled': {
+                    bgcolor: buttonColor,
+                    color: theme.palette.getContrastText(buttonColor),
+                    opacity: busy ? 0.75 : 0.9,
+                    cursor: busy ? 'wait' : 'default',
+                    animation: busy ? `${pulse} 1.4s infinite` : 'none',
+                  },
+                }}
+              >
+                {busy ? (
+                  <CircularProgress
+                    size={56}
+                    thickness={4}
+                    sx={{ color: 'inherit' }}
+                  />
+                ) : (
+                  <PowerSettingsNewRounded sx={{ fontSize: 72 }} />
+                )}
+              </Button>
+            </Box>
 
-        {/* Traffic */}
-        <Stack
-          direction="row"
-          spacing={3}
-          justifyContent="center"
-          sx={{ width: '100%' }}
-        >
-          <Stack direction="row" alignItems="center" spacing={0.5}>
-            <ArrowUpwardRounded
-              fontSize="small"
-              sx={{ color: theme.palette.secondary.main }}
-            />
-            <Typography variant="body2" fontWeight={600}>
-              {upVal} {upUnit}/s
+            <Typography
+              variant="h6"
+              sx={{ fontWeight: 600, textAlign: 'center' }}
+              color={
+                errorFlash
+                  ? 'error.main'
+                  : connected
+                    ? 'success.main'
+                    : 'text.secondary'
+              }
+            >
+              {statusLabel}
             </Typography>
-          </Stack>
-          <Stack direction="row" alignItems="center" spacing={0.5}>
-            <ArrowDownwardRounded
-              fontSize="small"
-              sx={{ color: theme.palette.primary.main }}
+
+            {/* Node selector (Autocomplete with latency chip) */}
+            <Autocomplete
+              fullWidth
+              size="small"
+              disableClearable
+              options={nodeOptions}
+              value={currentNode || undefined}
+              onChange={handleNodeChange}
+              disabled={!globalGroup?.name || nodeOptions.length === 0}
+              getOptionLabel={(option) => option ?? ''}
+              renderOption={(props, option) => {
+                const delay = latencyMap.get(option)
+                const { key, ...liProps } = props as typeof props & {
+                  key: string
+                }
+                return (
+                  <li key={key ?? option} {...liProps}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        width: '100%',
+                        gap: 1,
+                      }}
+                    >
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {option}
+                      </Typography>
+                      {delay !== undefined && (
+                        <Chip
+                          size="small"
+                          label={`${delay}ms`}
+                          color={getChipColor(delay)}
+                          sx={{ height: 20, fontSize: 11 }}
+                        />
+                      )}
+                    </Box>
+                  </li>
+                )
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  placeholder={t('layout.components.connect.labels.selectNode')}
+                />
+              )}
+              slotProps={{
+                listbox: { style: { maxHeight: 320 } },
+                paper: { sx: { borderRadius: 2 } },
+              }}
+              sx={{ width: '100%' }}
             />
-            <Typography variant="body2" fontWeight={600}>
-              {downVal} {downUnit}/s
-            </Typography>
-          </Stack>
-        </Stack>
+
+            {/* Mode selector */}
+            <Box sx={{ width: '100%' }}>
+              <Stack
+                direction="row"
+                spacing={0.5}
+                alignItems="center"
+                justifyContent="center"
+                sx={{ mb: 1 }}
+              >
+                <Typography variant="caption" color="text.secondary">
+                  {t('layout.components.connect.labels.mode')}
+                </Typography>
+                <Tooltip
+                  title={t('layout.components.connect.modeTooltip')}
+                  arrow
+                  placement="top"
+                >
+                  <InfoOutlineRounded
+                    sx={{
+                      fontSize: 14,
+                      color: 'text.secondary',
+                      cursor: 'help',
+                    }}
+                  />
+                </Tooltip>
+              </Stack>
+              <ButtonGroup fullWidth size="small">
+                <Button
+                  variant={mode === 'system' ? 'contained' : 'outlined'}
+                  onClick={() => handleModeChange('system')}
+                >
+                  {t('layout.components.connect.mode.system')}
+                </Button>
+                <Button
+                  variant={mode === 'tun' ? 'contained' : 'outlined'}
+                  onClick={() => handleModeChange('tun')}
+                >
+                  {t('layout.components.connect.mode.tun')}
+                </Button>
+                <Button
+                  variant={mode === 'both' ? 'contained' : 'outlined'}
+                  onClick={() => handleModeChange('both')}
+                >
+                  {t('layout.components.connect.mode.both')}
+                </Button>
+              </ButtonGroup>
+            </Box>
+
+            {/* Traffic */}
+            <Stack
+              direction="row"
+              spacing={3}
+              justifyContent="center"
+              sx={{ width: '100%' }}
+            >
+              <Stack
+                direction="row"
+                alignItems="center"
+                spacing={0.5}
+                sx={{
+                  minWidth: 96,
+                  fontVariantNumeric: 'tabular-nums',
+                  justifyContent: 'center',
+                }}
+              >
+                <ArrowUpwardRounded
+                  fontSize="small"
+                  sx={{ color: theme.palette.secondary.main }}
+                />
+                <Typography
+                  variant="body2"
+                  fontWeight={600}
+                  sx={{ fontVariantNumeric: 'tabular-nums' }}
+                >
+                  {upVal} {upUnit}/s
+                </Typography>
+              </Stack>
+              <Stack
+                direction="row"
+                alignItems="center"
+                spacing={0.5}
+                sx={{
+                  minWidth: 96,
+                  fontVariantNumeric: 'tabular-nums',
+                  justifyContent: 'center',
+                }}
+              >
+                <ArrowDownwardRounded
+                  fontSize="small"
+                  sx={{ color: theme.palette.primary.main }}
+                />
+                <Typography
+                  variant="body2"
+                  fontWeight={600}
+                  sx={{ fontVariantNumeric: 'tabular-nums' }}
+                >
+                  {downVal} {downUnit}/s
+                </Typography>
+              </Stack>
+            </Stack>
+          </>
+        )}
       </Stack>
     </BasePage>
   )

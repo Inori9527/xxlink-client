@@ -45,7 +45,14 @@
         "emergencyRefreshFailed": "紧急刷新失败: {{message}}"
       }
     },
-    "title": "订阅"
+    "title": "订阅",
+    "empty": {
+      "title": "您还没有订阅",
+      "body": "请购买套餐以使用节点",
+      "goToPlans": "前往套餐",
+      "refresh": "刷新"
+    },
+    "expiringSoon": "即将到期"
   },
   "components": {
     "card": {

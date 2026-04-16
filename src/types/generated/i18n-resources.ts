@@ -182,6 +182,18 @@ export interface TranslationResources {
             connecting: string
             disconnect: string
           }
+          empty: {
+            goToPlans: string
+            refresh: string
+            refreshing: string
+            subtitle: string
+            title: string
+          }
+          feedback: {
+            refreshed: string
+            refreshFailed: string
+            toggleFailed: string
+          }
           labels: {
             both: string
             connected: string
@@ -194,6 +206,12 @@ export interface TranslationResources {
             tun: string
             upload: string
           }
+          mode: {
+            both: string
+            system: string
+            tun: string
+          }
+          modeTooltip: string
           title: string
         }
         navigation: {
@@ -226,7 +244,71 @@ export interface TranslationResources {
         showAscending: string
         showDescending: string
       }
+      empty: {
+        paused: string
+      }
       page: {
+        title: string
+      }
+    }
+    plans: {
+      page: {
+        card: {
+          actions: {
+            current: string
+            processing: string
+            purchase: string
+          }
+          badge: string
+          features: {
+            devices: string
+            devicesValue: string
+            duration: string
+            speed: string
+            speedMbps: string
+            traffic: string
+            unlimited: string
+          }
+        }
+        current: {
+          labels: {
+            expireAt: string
+            startAt: string
+            subUrl: string
+            trafficUsage: string
+          }
+          status: {
+            active: string
+            cancelled: string
+            expired: string
+          }
+          title: string
+          tooltips: {
+            copy: string
+          }
+        }
+        duration: {
+          month: string
+          months: string
+        }
+        feedback: {
+          copied: string
+          errors: {
+            loadFailed: string
+            networkError: string
+            purchaseFailed: string
+            sessionExpired: string
+            unknownError: string
+          }
+        }
+        form: {
+          promoHelp: string
+          promoPlaceholder: string
+        }
+        sections: {
+          available: string
+          promo: string
+        }
         title: string
       }
     }
@@ -383,6 +465,13 @@ export interface TranslationResources {
           }
           title: string
         }
+        empty: {
+          body: string
+          goToPlans: string
+          refresh: string
+          title: string
+        }
+        expiringSoon: string
         feedback: {
           errors: {
             invalidUrl: string
@@ -587,6 +676,13 @@ export interface TranslationResources {
       }
     }
     settings: {
+      actions: {
+        cancel: string
+        confirm: string
+        logout: string
+        logoutConfirmBody: string
+        logoutConfirmTitle: string
+      }
       components: {
         verge: {
           advanced: {
@@ -626,12 +722,16 @@ export interface TranslationResources {
               language: string
               layoutSetting: string
               misc: string
+              showAdvancedSettings: string
               startPage: string
               themeMode: string
               themeSetting: string
               trayClickEvent: string
             }
             title: string
+            tooltips: {
+              showAdvancedSettings: string
+            }
             trayOptions: {
               disable: string
               showMainWindow: string
@@ -1265,9 +1365,21 @@ export interface TranslationResources {
         tableView: string
         upgrade: string
       }
+      auth: {
+        cancelGoogleLogin: string
+        forgotPassword: string
+        registeredSuccess: string
+      }
       editorModes: {
         advanced: string
         visualization: string
+      }
+      errorBoundary: {
+        description: string
+        detailsSummary: string
+        exportLog: string
+        reload: string
+        title: string
       }
       feedback: {
         errors: {
@@ -1342,6 +1454,10 @@ export interface TranslationResources {
         updateTime: string
         uploaded: string
         usedTotal: string
+      }
+      legal: {
+        privacy: string
+        terms: string
       }
       placeholders: {
         filter: string

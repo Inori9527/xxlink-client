@@ -2,17 +2,17 @@
   "components": {
     "navigation": {
       "tabs": {
-        "connect": "连 接",
-        "home": "首 页",
-        "proxies": "代 理",
-        "profiles": "订 阅",
-        "connections": "连 接 列 表",
-        "rules": "规 则",
-        "logs": "日 志",
-        "unlock": "测 试",
-        "plans": "套 餐",
+        "connect": "连接",
+        "home": "首页",
+        "proxies": "代理",
+        "profiles": "订阅",
+        "connections": "连接列表",
+        "rules": "规则",
+        "logs": "日志",
+        "unlock": "解锁测试",
+        "plans": "套餐",
         "apiKeys": "API 密钥",
-        "settings": "设 置"
+        "settings": "设置"
       },
       "menu": {
         "reorderMode": "菜单排序模式",
@@ -43,6 +43,24 @@
         "download": "下载",
         "connected": "已连接",
         "disconnected": "未连接"
+      },
+      "mode": {
+        "system": "仅浏览器",
+        "tun": "全局",
+        "both": "推荐"
+      },
+      "modeTooltip": "仅浏览器：只代理系统浏览器流量。全局：使用 TUN 虚拟网卡接管所有流量（需管理员）。推荐：两者都启用。",
+      "empty": {
+        "title": "暂无可用节点",
+        "subtitle": "请先购买套餐或刷新订阅",
+        "goToPlans": "前往套餐",
+        "refresh": "刷新订阅",
+        "refreshing": "刷新中..."
+      },
+      "feedback": {
+        "toggleFailed": "连接切换失败",
+        "refreshFailed": "刷新订阅失败",
+        "refreshed": "订阅已刷新"
       }
     }
   }

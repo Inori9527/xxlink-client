@@ -1,4 +1,11 @@
 {
+  "actions": {
+    "logout": "退出登录",
+    "logoutConfirmTitle": "退出登录",
+    "logoutConfirmBody": "确定退出登录吗？",
+    "confirm": "确定",
+    "cancel": "取消"
+  },
   "page": {
     "actions": {
       "manual": "使用手册",
@@ -159,6 +166,9 @@
           "showTrayMenu": "显示托盘菜单",
           "disable": "禁用"
         },
+        "tooltips": {
+          "showAdvancedSettings": "显示高级开发者及诊断选项"
+        },
         "fields": {
           "language": "语言设置",
           "themeMode": "主题模式",
@@ -167,7 +177,8 @@
           "themeSetting": "主题设置",
           "layoutSetting": "界面设置",
           "misc": "杂项设置",
-          "hotkeySetting": "热键设置"
+          "hotkeySetting": "热键设置",
+          "showAdvancedSettings": "高级模式"
         }
       },
       "advanced": {

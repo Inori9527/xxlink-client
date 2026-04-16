@@ -130,5 +130,21 @@
       "warn": "WARN",
       "error": "ERROR"
     }
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "description": "The application encountered an unexpected error. You can try reloading, or export the log to report the problem.",
+    "reload": "Reload",
+    "exportLog": "Export log",
+    "detailsSummary": "Error details"
+  },
+  "auth": {
+    "forgotPassword": "Forgot password?",
+    "registeredSuccess": "Registered successfully — please log in",
+    "cancelGoogleLogin": "Cancel Google login"
+  },
+  "legal": {
+    "terms": "Terms of Service",
+    "privacy": "Privacy Policy"
   }
 }
