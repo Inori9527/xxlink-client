@@ -61,7 +61,7 @@ impl IClashTemp {
                     && let Value::String(s) = val
                     && s.is_empty()
                 {
-                    *s = generate_secret().into();
+                    *s = generate_secret();
                 }
 
                 Self(Self::guard(map))

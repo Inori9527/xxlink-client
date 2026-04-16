@@ -344,12 +344,11 @@ pub fn run() {
                 api.prevent_exit();
             }
         }
-        tauri::RunEvent::WindowEvent { label, event, .. } if label == "main" => match event {
-            tauri::WindowEvent::CloseRequested { .. } => {
+        tauri::RunEvent::WindowEvent { label, event, .. } if label == "main" => {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
                 event_handlers::handle_window_close(&event);
             }
-            _ => {}
-        },
+        }
         _ => {}
     });
 }
