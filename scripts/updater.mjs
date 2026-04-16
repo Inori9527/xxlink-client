@@ -165,23 +165,52 @@ async function processRelease(github, options, tag, isAlpha) {
       // darwin url (aarch)
       if (name.endsWith('aarch64.app.tar.gz')) {
         updateData.platforms['darwin-aarch64'].url = browser_download_url
-        // 使linux可以检查更新
-        updateData.platforms.linux.url = browser_download_url
-        updateData.platforms['linux-x86_64'].url = browser_download_url
-        updateData.platforms['linux-x86'].url = browser_download_url
-        updateData.platforms['linux-i686'].url = browser_download_url
-        updateData.platforms['linux-aarch64'].url = browser_download_url
-        updateData.platforms['linux-armv7'].url = browser_download_url
       }
       // darwin signature (aarch)
       if (name.endsWith('aarch64.app.tar.gz.sig')) {
         const sig = await getSignature(browser_download_url)
         updateData.platforms['darwin-aarch64'].signature = sig
-        updateData.platforms.linux.signature = sig
-        updateData.platforms['linux-x86_64'].signature = sig
+      }
+
+      // linux x86_64 url
+      if (name.endsWith('amd64.AppImage') || name.endsWith('x86_64.AppImage')) {
+        updateData.platforms.linux.url = browser_download_url
+        updateData.platforms['linux-x86_64'].url = browser_download_url
         updateData.platforms['linux-x86'].url = browser_download_url
         updateData.platforms['linux-i686'].url = browser_download_url
+      }
+      // linux x86_64 signature
+      if (
+        name.endsWith('amd64.AppImage.sig') ||
+        name.endsWith('x86_64.AppImage.sig')
+      ) {
+        const sig = await getSignature(browser_download_url)
+        updateData.platforms.linux.signature = sig
+        updateData.platforms['linux-x86_64'].signature = sig
+        updateData.platforms['linux-x86'].signature = sig
+        updateData.platforms['linux-i686'].signature = sig
+      }
+
+      // linux aarch64 url
+      if (name.endsWith('aarch64.AppImage')) {
+        updateData.platforms['linux-aarch64'].url = browser_download_url
+      }
+      // linux aarch64 signature
+      if (name.endsWith('aarch64.AppImage.sig')) {
+        const sig = await getSignature(browser_download_url)
         updateData.platforms['linux-aarch64'].signature = sig
+      }
+
+      // linux armv7 url
+      if (name.endsWith('armhf.AppImage') || name.endsWith('armv7.AppImage')) {
+        updateData.platforms['linux-armv7'].url = browser_download_url
+      }
+      // linux armv7 signature
+      if (
+        name.endsWith('armhf.AppImage.sig') ||
+        name.endsWith('armv7.AppImage.sig')
+      ) {
+        const sig = await getSignature(browser_download_url)
         updateData.platforms['linux-armv7'].signature = sig
       }
     })

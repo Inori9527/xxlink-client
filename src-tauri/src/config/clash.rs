@@ -7,9 +7,33 @@ use clash_verge_logging::{Type, logging};
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
 use std::{
+    fmt::Write as _,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     str::FromStr as _,
 };
+
+fn generate_secret() -> std::string::String {
+    let mut secret = std::string::String::with_capacity(32);
+    for byte in &getrandom_bytes() {
+        let _ = write!(secret, "{byte:02x}");
+    }
+    secret
+}
+
+fn getrandom_bytes() -> [u8; 16] {
+    let mut buf = [0u8; 16];
+    getrandom::fill(&mut buf).unwrap_or_else(|_| {
+        // fallback: use current time as poor-man's seed
+        let t = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        for (i, b) in buf.iter_mut().enumerate() {
+            *b = ((t >> (i * 8)) & 0xff) as u8;
+        }
+    });
+    buf
+}
 
 #[derive(Default, Debug, Clone)]
 pub struct IClashTemp(pub Mapping);
@@ -37,7 +61,7 @@ impl IClashTemp {
                     && let Value::String(s) = val
                     && s.is_empty()
                 {
-                    *s = "set-your-secret".into();
+                    *s = generate_secret().into();
                 }
 
                 Self(Self::guard(map))
@@ -103,7 +127,7 @@ impl IClashTemp {
             ]
             .into(),
         );
-        map.insert("secret".into(), "set-your-secret".into());
+        map.insert("secret".into(), generate_secret().into());
         map.insert("external-controller-cors".into(), cors_map.into());
         map.insert("unified-delay".into(), true.into());
         Self(map)

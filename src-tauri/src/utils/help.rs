@@ -124,11 +124,11 @@ pub fn mask_url(url: &str) -> String {
 
     let mut result = scheme_and_host.to_owned();
 
-    // Mask path segments that look like tokens (longer than 16 chars)
+    // Mask path segments that look like tokens (longer than 8 chars)
     if !path.is_empty() {
         let masked: Vec<&str> = path
             .split('/')
-            .map(|seg| if seg.len() > 16 { "***" } else { seg })
+            .map(|seg| if seg.len() > 8 { "***" } else { seg })
             .collect();
         result.push_str(&masked.join("/"));
     }

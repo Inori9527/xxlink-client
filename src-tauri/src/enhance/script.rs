@@ -92,6 +92,13 @@ pub fn use_script(script: String, config: &Mapping, name: &String) -> Result<(Ma
       }}"
     );
 
+    // KNOWN LIMITATION (D1): boa_engine 0.21 does not expose a CPU instruction
+    // counter or execution-time limit API. A malicious or buggy user script
+    // containing an infinite loop will block this thread indefinitely.
+    // Remediation requires either: (a) upgrading to a boa version that exposes
+    // a job-queue or instruction-limit hook, or (b) running the engine in a
+    // separate OS thread and killing it via a timeout (blocked today because
+    // boa_engine::Context is not Send). Track as a follow-up task.
     if let Ok(result) = context.eval(Source::from_bytes(code.as_str())) {
         if !result.is_string() {
             anyhow::bail!("main function should return object");

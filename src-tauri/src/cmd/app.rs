@@ -31,6 +31,9 @@ pub async fn open_logs_dir() -> CmdResult<()> {
 /// 打开网页链接
 #[tauri::command]
 pub fn open_web_url(url: String) -> CmdResult<()> {
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return Err("only http:// and https:// URLs are allowed".into());
+    }
     open::that(url.as_str()).stringify_err()
 }
 

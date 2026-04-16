@@ -6,15 +6,8 @@ import { once } from 'foxts/once'
 
 import { apiRefreshToken } from '@/services/auth'
 import { authStore } from '@/services/auth-store'
+import { BASE_URL } from '@/services/config'
 import { debugLog } from '@/utils/debug'
-
-// ---------------------------------------------------------------------------
-// Backend API client
-// ---------------------------------------------------------------------------
-
-const BASE_URL =
-  (import.meta.env['VITE_API_BASE_URL'] as string | undefined) ??
-  'https://api.xxlink.net/api/v1'
 
 // ---------------------------------------------------------------------------
 // Shared type definitions

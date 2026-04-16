@@ -9,12 +9,12 @@
     "fs:allow-exists",
     {
       "identifier": "fs:scope",
-      "allow": ["$APPDATA/**", "$RESOURCE/../**", "**"]
+      "allow": ["$APPDATA/**", "$RESOURCE/**"]
     },
     "fs:allow-write-file",
     {
       "identifier": "fs:scope",
-      "allow": ["$APPDATA/**", "$RESOURCE/../**", "**"]
+      "allow": ["$APPDATA/**", "$RESOURCE/**"]
     },
     "fs:allow-app-read",
     "fs:allow-app-read-recursive",
@@ -54,19 +54,9 @@
     "core:window:allow-set-cursor-position",
     "core:window:allow-set-ignore-cursor-events",
     "core:window:allow-start-dragging",
-    "core:window:allow-maximize",
     "core:window:allow-toggle-maximize",
-    "core:window:allow-unmaximize",
-    "core:window:allow-minimize",
-    "core:window:allow-unminimize",
-    "core:window:allow-set-maximizable",
-    "core:window:allow-set-minimizable",
     "core:webview:allow-print",
-    "shell:allow-execute",
     "shell:allow-open",
-    "shell:allow-kill",
-    "shell:allow-spawn",
-    "shell:allow-stdin-write",
     "dialog:allow-open",
     "global-shortcut:allow-is-registered",
     "global-shortcut:allow-register",

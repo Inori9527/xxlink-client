@@ -1,3 +1,7 @@
+export const BASE_URL =
+  (import.meta.env['VITE_API_BASE_URL'] as string | undefined) ??
+  'https://api.xxlink.net/api/v1'
+
 const SWR_NOT_SMART = {
   revalidateOnFocus: false,
   revalidateOnReconnect: false,

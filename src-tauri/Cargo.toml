@@ -4,7 +4,7 @@ version = "2.4.8"
 description = "XXLink desktop client"
 authors = ["zzzgydi", "Tunglies", "wonfen", "MystiPanda"]
 license = "GPL-3.0-only"
-repository = "https://github.com/clash-verge-rev/clash-verge-rev.git"
+repository = "https://github.com/Inori9527/xxlink-client.git"
 default-run = "xxlink-client"
 build = "build.rs"
 edition = "2024"
@@ -17,7 +17,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
-verge-dev = ["clash_verge_logger/color"]
+verge-dev = ["clash_verge_logger/color", "tauri/devtools"]
 tauri-dev = []
 tokio-trace = ["console-subscriber"]
 clippy = ["tauri/test"]
@@ -39,7 +39,6 @@ tauri-plugin-clash-verge-sysinfo = { workspace = true }
 tauri-plugin-clipboard-manager = { workspace = true }
 tauri = { workspace = true, features = [
   "protocol-asset",
-  "devtools",
   "tray-icon",
   "image-ico",
   "image-png",

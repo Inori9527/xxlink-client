@@ -45,6 +45,10 @@ pub async fn save_profile_file(index: String, file_data: Option<String>) -> CmdR
 
     let profiles_dir = dirs::app_profiles_dir().stringify_err()?;
     let file_path = profiles_dir.join(rel_path.as_str());
+    let file_path = file_path.canonicalize().unwrap_or(file_path.clone());
+    if !file_path.starts_with(&profiles_dir) {
+        return Err("invalid profile file path".into());
+    }
     let file_path_str = file_path.to_string_lossy().to_string();
 
     // 保存新的配置文件

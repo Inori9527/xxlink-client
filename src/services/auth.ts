@@ -4,9 +4,7 @@
  */
 import { fetch } from '@tauri-apps/plugin-http'
 
-const BASE_URL =
-  (import.meta.env['VITE_API_BASE_URL'] as string | undefined) ??
-  'https://api.xxlink.net/api/v1'
+import { BASE_URL } from '@/services/config'
 
 // ---------------------------------------------------------------------------
 // Types
