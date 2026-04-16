@@ -1,4 +1,4 @@
-use crate::{config::with_encryption, enhance::seq::SeqMap};
+use crate::config::with_encryption;
 use anyhow::{Context as _, Result, anyhow, bail};
 use clash_verge_logging::{Type, logging};
 use nanoid::nanoid;
@@ -49,11 +49,6 @@ pub async fn read_mapping(path: &PathBuf) -> Result<Mapping> {
             bail!("YAML syntax error: {}", err)
         }
     }
-}
-
-/// read mapping from yaml fix #165
-pub async fn read_seq_map(path: &PathBuf) -> Result<SeqMap> {
-    read_yaml(path).await
 }
 
 /// save the data to the file

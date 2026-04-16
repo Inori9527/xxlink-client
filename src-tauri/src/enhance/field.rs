@@ -19,19 +19,6 @@ pub const HANDLE_FIELDS: [&str; 12] = [
 
 pub const DEFAULT_FIELDS: [&str; 5] = ["proxies", "proxy-providers", "proxy-groups", "rule-providers", "rules"];
 
-pub fn use_lowercase(config: &Mapping) -> Mapping {
-    let mut ret = Mapping::new();
-
-    for (key, value) in config.into_iter() {
-        if let Some(key_str) = key.as_str() {
-            let mut key_str = String::from(key_str);
-            key_str.make_ascii_lowercase();
-            ret.insert(Value::from(key_str.as_str()), value.clone());
-        }
-    }
-    ret
-}
-
 pub fn use_sort(config: Mapping) -> Mapping {
     let mut ret = Mapping::new();
     HANDLE_FIELDS.into_iter().for_each(|key| {

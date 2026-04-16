@@ -34,7 +34,6 @@ pub use save_profile::*;
 pub use service::*;
 pub use system::*;
 pub use uwp::*;
-pub use validate::*;
 pub use verge::*;
 
 pub trait StringifyErr<T> {

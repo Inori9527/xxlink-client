@@ -24,8 +24,6 @@ import { useTranslation } from 'react-i18next'
 
 import { ConfirmViewer } from '@/components/profile/confirm-viewer'
 import { EditorViewer } from '@/components/profile/editor-viewer'
-import { GroupsEditorViewer } from '@/components/profile/groups-editor-viewer'
-import { RulesEditorViewer } from '@/components/profile/rules-editor-viewer'
 import { useEditorDocument } from '@/hooks/use-editor-document'
 import {
   viewProfile,
@@ -41,7 +39,6 @@ import { debugLog } from '@/utils/debug'
 import parseTraffic from '@/utils/parse-traffic'
 
 import { ProfileBox } from './profile-box'
-import { ProxiesEditorViewer } from './proxies-editor-viewer'
 const round = keyframes`
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -272,9 +269,6 @@ export const ProfileItem = (props: Props) => {
   }, [forceRefresh, hasUrl, updated])
 
   const [fileOpen, setFileOpen] = useState(false)
-  const [rulesOpen, setRulesOpen] = useState(false)
-  const [proxiesOpen, setProxiesOpen] = useState(false)
-  const [groupsOpen, setGroupsOpen] = useState(false)
   const [mergeOpen, setMergeOpen] = useState(false)
   const [scriptOpen, setScriptOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -315,21 +309,6 @@ export const ProfileItem = (props: Props) => {
   const onEditFile = () => {
     setAnchorEl(null)
     setFileOpen(true)
-  }
-
-  const onEditRules = () => {
-    setAnchorEl(null)
-    setRulesOpen(true)
-  }
-
-  const onEditProxies = () => {
-    setAnchorEl(null)
-    setProxiesOpen(true)
-  }
-
-  const onEditGroups = () => {
-    setAnchorEl(null)
-    setGroupsOpen(true)
   }
 
   const onEditMerge = () => {
@@ -404,9 +383,6 @@ export const ProfileItem = (props: Props) => {
     select: 'profiles.components.menu.select',
     editInfo: 'profiles.components.menu.editInfo',
     editFile: 'profiles.components.menu.editFile',
-    editRules: 'profiles.components.menu.editRules',
-    editProxies: 'profiles.components.menu.editProxies',
-    editGroups: 'profiles.components.menu.editGroups',
     extendConfig: 'profiles.components.menu.extendConfig',
     extendScript: 'profiles.components.menu.extendScript',
     openFile: 'profiles.components.menu.openFile',
@@ -439,21 +415,6 @@ export const ProfileItem = (props: Props) => {
       label: menuLabels.editFile,
       handler: onEditFile,
       disabled: false,
-    },
-    {
-      label: menuLabels.editRules,
-      handler: onEditRules,
-      disabled: !option?.rules,
-    },
-    {
-      label: menuLabels.editProxies,
-      handler: onEditProxies,
-      disabled: !option?.proxies,
-    },
-    {
-      label: menuLabels.editGroups,
-      handler: onEditGroups,
-      disabled: !option?.groups,
     },
     {
       label: menuLabels.extendConfig,
@@ -511,21 +472,6 @@ export const ProfileItem = (props: Props) => {
       label: menuLabels.editFile,
       handler: onEditFile,
       disabled: false,
-    },
-    {
-      label: menuLabels.editRules,
-      handler: onEditRules,
-      disabled: !option?.rules,
-    },
-    {
-      label: menuLabels.editProxies,
-      handler: onEditProxies,
-      disabled: !option?.proxies,
-    },
-    {
-      label: menuLabels.editGroups,
-      handler: onEditGroups,
-      disabled: !option?.groups,
     },
     {
       label: menuLabels.extendConfig,
@@ -895,39 +841,6 @@ export const ProfileItem = (props: Props) => {
           onChange={profileDocument.setValue}
           onSave={handleSaveProfileDocument}
           onClose={() => setFileOpen(false)}
-        />
-      )}
-      {rulesOpen && (
-        <RulesEditorViewer
-          groupsUid={option?.groups ?? ''}
-          mergeUid={option?.merge ?? ''}
-          profileUid={uid}
-          property={option?.rules ?? ''}
-          open={true}
-          onSave={onSave}
-          onClose={() => setRulesOpen(false)}
-        />
-      )}
-      {proxiesOpen && (
-        <ProxiesEditorViewer
-          profileUid={uid}
-          property={option?.proxies ?? ''}
-          open={true}
-          onSave={onSave}
-          onClose={() => setProxiesOpen(false)}
-        />
-      )}
-      {groupsOpen && (
-        <GroupsEditorViewer
-          mergeUid={option?.merge ?? ''}
-          proxiesUid={option?.proxies ?? ''}
-          profileUid={uid}
-          property={option?.groups ?? ''}
-          open={true}
-          onSave={onSave}
-          onClose={() => {
-            setGroupsOpen(false)
-          }}
         />
       )}
       {mergeOpen && (

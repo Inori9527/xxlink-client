@@ -17,13 +17,6 @@ export async function patchProfilesConfig(profiles: IProfilesConfig) {
   return invoke<boolean>('patch_profiles_config', { profiles })
 }
 
-export async function createProfile(
-  item: Partial<IProfileItem>,
-  fileData?: string | null,
-) {
-  return invoke<void>('create_profile', { item, fileData })
-}
-
 export async function viewProfile(index: string) {
   return invoke<void>('view_profile', { index })
 }
@@ -398,14 +391,6 @@ export async function getSystemHostname() {
 
 export async function getNetworkInterfacesInfo() {
   return invoke<INetworkInterface[]>('get_network_interfaces_info')
-}
-
-export async function scriptValidateNotice(status: string, msg: string) {
-  return invoke<void>('script_validate_notice', { status, msg })
-}
-
-export async function validateScriptFile(filePath: string) {
-  return invoke<boolean>('validate_script_file', { filePath })
 }
 
 // 获取当前运行模式
