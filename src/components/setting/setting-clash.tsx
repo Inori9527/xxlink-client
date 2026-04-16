@@ -1,5 +1,5 @@
 import { LanRounded, SettingsRounded } from '@mui/icons-material'
-import { MenuItem, Select, TextField, Typography } from '@mui/material'
+import { MenuItem, Select, TextField } from '@mui/material'
 import { invoke } from '@tauri-apps/api/core'
 import { useLockFn } from 'ahooks'
 import { useRef, useState } from 'react'
@@ -14,7 +14,6 @@ import { invoke_uwp_tool } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
 import getSystem from '@/utils/get-system'
 
-import { ClashCoreViewer } from './mods/clash-core-viewer'
 import { ClashPortViewer } from './mods/clash-port-viewer'
 import { ControllerViewer } from './mods/controller-viewer'
 import { DnsViewer } from './mods/dns-viewer'
@@ -23,7 +22,6 @@ import { GuardState } from './mods/guard-state'
 import { NetworkInterfaceViewer } from './mods/network-interface-viewer'
 import { SettingItem, SettingList } from './mods/setting-comp'
 import { TunnelsViewer } from './mods/tunnels-viewer'
-import { WebUIViewer } from './mods/web-ui-viewer'
 
 const isWIN = getSystem() === 'windows'
 
@@ -34,7 +32,7 @@ interface Props {
 const SettingClash = ({ onError }: Props) => {
   const { t } = useTranslation()
 
-  const { clash, version, mutateClash, patchClash } = useClash()
+  const { clash, mutateClash, patchClash } = useClash()
   const { verge, patchVerge } = useVerge()
   const [, setClashLog] = useClashLog()
 
@@ -52,10 +50,8 @@ const SettingClash = ({ onError }: Props) => {
     return verge?.enable_dns_settings ?? false
   })
 
-  const webRef = useRef<DialogRef>(null)
   const portRef = useRef<DialogRef>(null)
   const ctrlRef = useRef<DialogRef>(null)
-  const coreRef = useRef<DialogRef>(null)
   const networkRef = useRef<DialogRef>(null)
   const dnsRef = useRef<DialogRef>(null)
   const corsRef = useRef<DialogRef>(null)
@@ -93,10 +89,8 @@ const SettingClash = ({ onError }: Props) => {
 
   return (
     <SettingList title={t('settings.sections.clash.title')}>
-      <WebUIViewer ref={webRef} />
       <ClashPortViewer ref={portRef} />
       <ControllerViewer ref={ctrlRef} />
-      <ClashCoreViewer ref={coreRef} />
       <NetworkInterfaceViewer ref={networkRef} />
       <DnsViewer ref={dnsRef} />
       <HeaderConfiguration ref={corsRef} />
@@ -245,23 +239,6 @@ const SettingClash = ({ onError }: Props) => {
           ctrlRef.current?.open()
         }}
       />
-
-      <SettingItem
-        onClick={() => webRef.current?.open()}
-        label={t('settings.sections.clash.form.fields.webUI')}
-      />
-
-      <SettingItem
-        label={t('settings.sections.clash.form.fields.clashCore')}
-        extra={
-          <TooltipIcon
-            icon={SettingsRounded}
-            onClick={() => coreRef.current?.open()}
-          />
-        }
-      >
-        <Typography sx={{ py: '7px', pr: 1 }}>{version}</Typography>
-      </SettingItem>
 
       {isWIN && (
         <SettingItem

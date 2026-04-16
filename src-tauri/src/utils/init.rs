@@ -2,7 +2,6 @@
 use crate::{
     config::{Config, IClashTemp, IProfiles, IVerge},
     constants,
-    core::handle,
     logging,
     process::AsyncHandler,
     utils::{
@@ -16,7 +15,6 @@ use clash_verge_logging::Type;
 #[cfg(target_os = "windows")]
 use std::path::Path;
 use std::{path::PathBuf, str::FromStr as _};
-use tauri_plugin_shell::ShellExt as _;
 use tokio::fs;
 use tokio::fs::DirEntry;
 
@@ -290,14 +288,6 @@ async fn initialize_config_files() -> Result<()> {
 /// Initialize all the config files
 /// before tauri setup
 pub async fn init_config() -> Result<()> {
-    // We do not need init_portable_flag here anymore due to lib.rs will to the things
-    // let _ = dirs::init_portable_flag();
-
-    // We do not need init_log here anymore due to resolve will to the things
-    // if let Err(e) = init_log().await {
-    //     eprintln!("Failed to initialize logging: {}", e);
-    // }
-
     ensure_directories().await?;
 
     initialize_config_files().await?;
@@ -412,44 +402,6 @@ pub const fn init_scheme() -> Result<()> {
 #[cfg(target_os = "linux")]
 const DEEP_LINK_SCHEMES: &[&str] = &["clash", "clash-verge"];
 
-pub async fn startup_script() -> Result<()> {
-    let app_handle = handle::Handle::app_handle();
-    let script_path = {
-        let verge = Config::verge().await;
-        let verge = verge.data_arc();
-        verge.startup_script.clone().unwrap_or_else(|| "".into())
-    };
-
-    if script_path.is_empty() {
-        return Ok(());
-    }
-
-    let shell_type = if script_path.ends_with(".sh") {
-        "bash"
-    } else if script_path.ends_with(".ps1") || script_path.ends_with(".bat") {
-        "powershell"
-    } else {
-        return Err(anyhow::anyhow!("unsupported script extension: {}", script_path));
-    };
-
-    let script_dir = PathBuf::from(script_path.as_str());
-    if !script_dir.exists() {
-        return Err(anyhow::anyhow!("script not found: {}", script_path));
-    }
-
-    let parent_dir = script_dir.parent();
-    let working_dir = parent_dir.unwrap_or_else(|| script_dir.as_ref());
-
-    app_handle
-        .shell()
-        .command(shell_type)
-        .current_dir(working_dir)
-        .args([script_path.as_str()])
-        .output()
-        .await?;
-
-    Ok(())
-}
 
 async fn handle_copy(src: &PathBuf, dest: &PathBuf, file: &str) {
     match fs::copy(src, dest).await {

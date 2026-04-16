@@ -49,7 +49,6 @@ tray:
   tunMode: وضع TUN
   closeAllConnections: إغلاق كل الاتصالات
   lightweightMode: الوضع الخفيف
-  copyEnv: نسخ متغيرات البيئة
   confDir: دليل الإعدادات
   coreDir: دليل النواة
   logsDir: دليل السجلات

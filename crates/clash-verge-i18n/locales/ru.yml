@@ -49,7 +49,6 @@ tray:
   tunMode: Режим TUN
   closeAllConnections: Закрыть все соединения
   lightweightMode: Легкий режим
-  copyEnv: Копировать переменные среды
   confDir: Каталог конфигурации
   coreDir: Каталог ядра
   logsDir: Каталог журналов

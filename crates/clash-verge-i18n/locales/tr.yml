@@ -49,7 +49,6 @@ tray:
   tunMode: TUN Modu
   closeAllConnections: Tüm Bağlantıları Kapat
   lightweightMode: Hafif Mod
-  copyEnv: Ortam Değişkenlerini Kopyala
   confDir: Yapılandırma Dizini
   coreDir: Çekirdek Dizini
   logsDir: Günlük Dizini

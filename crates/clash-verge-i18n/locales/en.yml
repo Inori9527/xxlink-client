@@ -49,7 +49,6 @@ tray:
   tunMode: TUN Mode
   closeAllConnections: Close All Connections
   lightweightMode: Lightweight Mode
-  copyEnv: Copy Environment Variables
   confDir: Configuration Directory
   coreDir: Core Directory
   logsDir: Log Directory

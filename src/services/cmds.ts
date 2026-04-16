@@ -5,10 +5,6 @@ import { getProxies, getProxyProviders } from 'tauri-plugin-mihomo-api'
 import { showNotice } from '@/services/notice-service'
 import { debugLog } from '@/utils/debug'
 
-export async function copyClashEnv() {
-  return invoke<void>('copy_clash_env')
-}
-
 export async function getProfiles() {
   return invoke<IProfilesConfig>('get_profiles')
 }
@@ -376,10 +372,6 @@ export async function invoke_uwp_tool() {
   )
 }
 
-export async function getPortableFlag() {
-  return invoke<boolean>('get_portable_flag')
-}
-
 export async function openDevTools() {
   return invoke('open_devtools')
 }
@@ -429,62 +421,6 @@ export async function getSystemHostname() {
 
 export async function getNetworkInterfacesInfo() {
   return invoke<INetworkInterface[]>('get_network_interfaces_info')
-}
-
-export async function createWebdavBackup() {
-  return invoke<void>('create_webdav_backup')
-}
-
-export async function createLocalBackup() {
-  return invoke<void>('create_local_backup')
-}
-
-export async function deleteWebdavBackup(filename: string) {
-  return invoke<void>('delete_webdav_backup', { filename })
-}
-
-export async function deleteLocalBackup(filename: string) {
-  return invoke<void>('delete_local_backup', { filename })
-}
-
-export async function restoreWebDavBackup(filename: string) {
-  return invoke<void>('restore_webdav_backup', { filename })
-}
-
-export async function restoreLocalBackup(filename: string) {
-  return invoke<void>('restore_local_backup', { filename })
-}
-
-export async function importLocalBackup(source: string) {
-  return invoke<string>('import_local_backup', { source })
-}
-
-export async function exportLocalBackup(filename: string, destination: string) {
-  return invoke<void>('export_local_backup', { filename, destination })
-}
-
-export async function saveWebdavConfig(
-  url: string,
-  username: string,
-  password: string,
-) {
-  return invoke<void>('save_webdav_config', {
-    url,
-    username,
-    password,
-  })
-}
-
-export async function listWebDavBackup() {
-  const list: IWebDavFile[] = await invoke<IWebDavFile[]>('list_webdav_backup')
-  list.map((item) => {
-    item.filename = item.href.split('/').pop() as string
-  })
-  return list
-}
-
-export async function listLocalBackup() {
-  return invoke<ILocalBackupFile[]>('list_local_backup')
 }
 
 export async function scriptValidateNotice(status: string, msg: string) {

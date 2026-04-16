@@ -5,7 +5,6 @@ pub type CmdResult<T = ()> = Result<T, String>;
 
 // Command modules
 pub mod app;
-pub mod backup;
 pub mod clash;
 pub mod lightweight;
 pub mod media_unlock_checker;
@@ -20,11 +19,9 @@ pub mod system;
 pub mod uwp;
 pub mod validate;
 pub mod verge;
-pub mod webdav;
 
 // Re-export all command functions for backwards compatibility
 pub use app::*;
-pub use backup::*;
 pub use clash::*;
 pub use lightweight::*;
 pub use media_unlock_checker::*;
@@ -39,7 +36,6 @@ pub use system::*;
 pub use uwp::*;
 pub use validate::*;
 pub use verge::*;
-pub use webdav::*;
 
 pub trait StringifyErr<T> {
     fn stringify_err(self) -> CmdResult<T>;

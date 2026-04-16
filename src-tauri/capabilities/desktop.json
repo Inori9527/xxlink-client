@@ -25,11 +25,6 @@
       "allow": [
         { "url": "https://api.xxlink.net/**" },
         { "url": "https://api.ip.sb/**" },
-        { "url": "https://ipapi.co/**" },
-        { "url": "https://api.ipapi.is/**" },
-        { "url": "https://ipwho.is/**" },
-        { "url": "https://ip.api.skk.moe/**" },
-        { "url": "https://get.geojs.io/**" },
         { "url": "http://localhost/**" },
         { "url": "http://127.0.0.1/**" }
       ]

@@ -49,7 +49,6 @@ tray:
   tunMode: Mode TUN
   closeAllConnections: Tutup Semua Koneksi
   lightweightMode: Mode Ringan
-  copyEnv: Salin Variabel Lingkungan
   confDir: Direktori Konfigurasi
   coreDir: Direktori Core
   logsDir: Direktori Log

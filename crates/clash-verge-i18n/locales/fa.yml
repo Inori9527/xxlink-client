@@ -49,7 +49,6 @@ tray:
   tunMode: حالت TUN
   closeAllConnections: بستن همه اتصال‌ها
   lightweightMode: حالت سبک
-  copyEnv: کپی متغیرهای محیطی
   confDir: پوشه پیکربندی
   coreDir: پوشه هسته
   logsDir: پوشه گزارش‌ها

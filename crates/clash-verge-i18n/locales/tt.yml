@@ -49,7 +49,6 @@ tray:
   tunMode: TUN режимы
   closeAllConnections: Барлык тоташуларны ябу
   lightweightMode: Җиңел режим
-  copyEnv: Мохит үзгәрүчәннәрен күчерү
   confDir: Конфигурация каталогы
   coreDir: Ядро каталогы
   logsDir: Журнал каталогы

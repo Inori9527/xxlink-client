@@ -599,13 +599,11 @@ export interface TranslationResources {
               browse: string
             }
             fields: {
-              copyEnvType: string
               hotkeySetting: string
               language: string
               layoutSetting: string
               misc: string
               startPage: string
-              startupScript: string
               themeMode: string
               themeSetting: string
               trayClickEvent: string

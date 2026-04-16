@@ -49,7 +49,6 @@ tray:
   tunMode: TUN 模式
   closeAllConnections: 关闭所有连接
   lightweightMode: 轻量模式
-  copyEnv: 复制环境变量
   confDir: 配置目录
   coreDir: 内核目录
   logsDir: 日志目录

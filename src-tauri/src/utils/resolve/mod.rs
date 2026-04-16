@@ -13,7 +13,7 @@ use crate::{
         tray::Tray,
     },
     feat,
-    module::{auto_backup::AutoBackupManager, lightweight::auto_lightweight_boot},
+    module::lightweight::auto_lightweight_boot,
     process::AsyncHandler,
     utils::{init, server, window_manager::WindowManager},
 };
@@ -50,7 +50,6 @@ pub fn resolve_setup_async() {
     AsyncHandler::spawn(|| async {
         logging!(info, Type::ClashVergeRev, "Version: {}", env!("CARGO_PKG_VERSION"));
 
-        init_startup_script().await;
         init_verge_config().await;
         Config::verify_config_initialization().await;
         init_window().await;
@@ -73,7 +72,6 @@ pub fn resolve_setup_async() {
             init_timer(),
             init_hotkey(),
             init_auto_lightweight_boot(),
-            init_auto_backup(),
             init_silent_updater(),
         );
 
@@ -111,10 +109,6 @@ pub(super) async fn init_resources() {
     logging_error!(Type::Setup, init::init_resources().await);
 }
 
-pub(super) async fn init_startup_script() {
-    logging_error!(Type::Setup, init::startup_script().await);
-}
-
 pub(super) async fn init_timer() {
     logging_error!(Type::Setup, Timer::global().init().await);
 }
@@ -127,10 +121,6 @@ pub(super) async fn init_hotkey() {
 
 pub(super) async fn init_auto_lightweight_boot() {
     logging_error!(Type::Setup, auto_lightweight_boot().await);
-}
-
-pub(super) async fn init_auto_backup() {
-    logging_error!(Type::Setup, AutoBackupManager::global().init().await);
 }
 
 async fn init_silent_updater() {

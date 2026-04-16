@@ -3,7 +3,6 @@ use crate::{
     cmd::StringifyErr as _,
     config::{Config, PrfItem},
     core::{CoreManager, handle, validate::CoreConfigValidator},
-    module::auto_backup::{AutoBackupManager, AutoBackupTrigger},
     utils::dirs,
 };
 use clash_verge_logging::{Type, logging};
@@ -16,12 +15,6 @@ pub async fn save_profile_file(index: String, file_data: Option<String>) -> CmdR
     let file_data = match file_data {
         Some(d) => d,
         None => return Ok(()),
-    };
-
-    let backup_trigger = match index.as_str() {
-        "Merge" => Some(AutoBackupTrigger::GlobalMerge),
-        "Script" => Some(AutoBackupTrigger::GlobalScript),
-        _ => None,
     };
 
     // 在异步操作前获取必要元数据并释放锁
@@ -68,9 +61,7 @@ pub async fn save_profile_file(index: String, file_data: Option<String>) -> CmdR
         handle_full_validation(&file_path_str, &file_path, &original_content).await?
     };
 
-    if changes_applied && let Some(trigger) = backup_trigger {
-        AutoBackupManager::trigger_backup(trigger);
-    }
+    let _ = changes_applied;
 
     Ok(())
 }

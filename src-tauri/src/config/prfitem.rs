@@ -12,8 +12,7 @@ use serde_yaml_ng::Mapping;
 use smartstring::alias::String;
 use std::time::Duration;
 use tokio::fs;
-// TODO, use other re-export
-use reqwest_dav::re_exports::url::form_urlencoded;
+use url::form_urlencoded;
 use tauri::Url;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]

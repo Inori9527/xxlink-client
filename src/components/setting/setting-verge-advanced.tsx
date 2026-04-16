@@ -17,7 +17,6 @@ import { showNotice } from '@/services/notice-service'
 import { checkUpdateSafe as checkUpdate } from '@/services/update'
 import { version } from '@root/package.json'
 
-import { BackupViewer } from './mods/backup-viewer'
 import { ConfigViewer } from './mods/config-viewer'
 import { HotkeyViewer } from './mods/hotkey-viewer'
 import { LayoutViewer } from './mods/layout-viewer'
@@ -40,7 +39,6 @@ const SettingVergeAdvanced = ({ onError: _ }: Props) => {
   const themeRef = useRef<DialogRef>(null)
   const layoutRef = useRef<DialogRef>(null)
   const updateRef = useRef<DialogRef>(null)
-  const backupRef = useRef<DialogRef>(null)
   const liteModeRef = useRef<DialogRef>(null)
 
   const onCheckUpdate = async () => {
@@ -81,19 +79,7 @@ const SettingVergeAdvanced = ({ onError: _ }: Props) => {
       <MiscViewer ref={miscRef} />
       <LayoutViewer ref={layoutRef} />
       <UpdateViewer ref={updateRef} />
-      <BackupViewer ref={backupRef} />
       <LiteModeViewer ref={liteModeRef} />
-
-      <SettingItem
-        onClick={() => backupRef.current?.open()}
-        label={t('settings.components.verge.advanced.fields.backupSetting')}
-        extra={
-          <TooltipIcon
-            title={t('settings.components.verge.advanced.tooltips.backupInfo')}
-            sx={{ opacity: '0.7' }}
-          />
-        }
-      />
 
       <SettingItem
         onClick={() => configRef.current?.open()}

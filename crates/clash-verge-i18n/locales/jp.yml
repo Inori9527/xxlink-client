@@ -49,7 +49,6 @@ tray:
   tunMode: TUN モード
   closeAllConnections: すべての接続を閉じる
   lightweightMode: 軽量モード
-  copyEnv: 環境変数をコピー
   confDir: 設定ディレクトリ
   coreDir: コアディレクトリ
   logsDir: ログディレクトリ

@@ -142,7 +142,6 @@ mod app_init {
             cmd::open_core_dir,
             cmd::open_app_log,
             cmd::open_core_log,
-            cmd::get_portable_flag,
             cmd::get_network_interfaces,
             cmd::get_system_hostname,
             cmd::restart_app,
@@ -171,7 +170,6 @@ mod app_init {
             cmd::get_runtime_proxy_chain_config,
             cmd::update_proxy_chain_config_in_runtime,
             cmd::invoke_uwp_tool,
-            cmd::copy_clash_env,
             cmd::sync_tray_proxy_selection,
             cmd::save_dns_config,
             cmd::apply_dns_config,
@@ -203,17 +201,6 @@ mod app_init {
             cmd::get_next_update_time,
             cmd::script_validate_notice,
             cmd::validate_script_file,
-            cmd::create_local_backup,
-            cmd::list_local_backup,
-            cmd::delete_local_backup,
-            cmd::restore_local_backup,
-            cmd::import_local_backup,
-            cmd::export_local_backup,
-            cmd::create_webdav_backup,
-            cmd::save_webdav_config,
-            cmd::list_webdav_backup,
-            cmd::delete_webdav_backup,
-            cmd::restore_webdav_backup,
             cmd::get_unlock_items,
             cmd::check_media_unlock,
             cmd::open_oauth_window,
@@ -228,8 +215,6 @@ pub fn run() {
 
     #[cfg(target_os = "linux")]
     utils::linux::workarounds::apply_nvidia_dmabuf_renderer_workaround();
-
-    let _ = utils::dirs::init_portable_flag();
 
     let builder = app_init::setup_plugins(tauri::Builder::default())
         .setup(|app| {

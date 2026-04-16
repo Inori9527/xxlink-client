@@ -82,12 +82,6 @@ pub async fn restart_app() -> CmdResult<()> {
     Ok(())
 }
 
-/// 获取便携版标识
-#[tauri::command]
-pub fn get_portable_flag() -> bool {
-    *dirs::PORTABLE_FLAG.get().unwrap_or(&false)
-}
-
 /// 获取应用目录
 #[tauri::command]
 pub fn get_app_dir() -> CmdResult<String> {

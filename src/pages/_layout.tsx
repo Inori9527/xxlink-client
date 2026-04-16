@@ -57,8 +57,6 @@ import LogsPage from './logs'
 import 'dayjs/locale/ru'
 import 'dayjs/locale/zh-cn'
 
-export const portableFlag = false
-
 type NavItem = (typeof navItems)[number]
 
 type MenuContextPosition = { top: number; left: number }

@@ -13,13 +13,6 @@ use serde_yaml_ng::Mapping;
 use smartstring::alias::String;
 use tokio::fs;
 
-/// 复制Clash环境变量
-#[tauri::command]
-pub async fn copy_clash_env() -> CmdResult {
-    feat::copy_clash_env().await;
-    Ok(())
-}
-
 /// 获取Clash信息
 #[tauri::command]
 pub async fn get_clash_info() -> CmdResult<ClashInfo> {

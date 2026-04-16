@@ -49,7 +49,6 @@ tray:
   tunMode: Modo TUN
   closeAllConnections: Cerrar todas las conexiones
   lightweightMode: Modo ligero
-  copyEnv: Copiar variables de entorno
   confDir: Directorio de configuración
   coreDir: Directorio del núcleo
   logsDir: Directorio de registros

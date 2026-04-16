@@ -49,7 +49,6 @@ tray:
   tunMode: 虛擬網路介面卡模式
   closeAllConnections: 關閉所有連線
   lightweightMode: 輕量模式
-  copyEnv: 複製環境變數
   confDir: 設定目錄
   coreDir: 核心目錄
   logsDir: 日誌目錄

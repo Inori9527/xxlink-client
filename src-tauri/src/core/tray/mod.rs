@@ -744,8 +744,6 @@ async fn create_tray_menu(
         hotkeys.get("entry_lightweight_mode").map(|s| s.as_str()),
     )?;
 
-    let copy_env = &MenuItem::with_id(app_handle, MenuIds::COPY_ENV, &texts.copy_env, true, None::<&str>)?;
-
     let open_app_dir = &MenuItem::with_id(app_handle, MenuIds::CONF_DIR, &texts.conf_dir, true, None::<&str>)?;
 
     let open_core_dir = &MenuItem::with_id(app_handle, MenuIds::CORE_DIR, &texts.core_dir, true, None::<&str>)?;
@@ -788,8 +786,7 @@ async fn create_tray_menu(
         &texts.more,
         true,
         &[
-            copy_env as &dyn IsMenuItem<Wry>,
-            close_all_connections,
+            close_all_connections as &dyn IsMenuItem<Wry>,
             restart_clash,
             restart_app,
             app_version,
@@ -927,7 +924,6 @@ fn on_menu_event(_: &AppHandle, event: MenuEvent) {
                     logging!(error, Type::Tray, "Failed to close all connections from tray: {err}");
                 }
             }
-            MenuIds::COPY_ENV => feat::copy_clash_env().await,
             MenuIds::CONF_DIR => {
                 let _ = cmd::open_app_dir().await;
             }
