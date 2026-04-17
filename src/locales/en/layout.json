@@ -35,6 +35,7 @@
       "labels": {
         "selectNode": "Select Node",
         "noNode": "No node available",
+        "disconnectFirst": "Connected — disconnect first to switch nodes",
         "mode": "Mode",
         "system": "System Proxy",
         "tun": "TUN",

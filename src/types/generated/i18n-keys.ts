@@ -120,6 +120,7 @@ export const translationKeys = [
   'layout.components.connect.actions.clickToDisconnect',
   'layout.components.connect.labels.selectNode',
   'layout.components.connect.labels.noNode',
+  'layout.components.connect.labels.disconnectFirst',
   'layout.components.connect.labels.mode',
   'layout.components.connect.labels.system',
   'layout.components.connect.labels.tun',

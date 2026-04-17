@@ -397,7 +397,12 @@ const ConnectPage = () => {
               options={nodeOptions}
               value={currentNode || undefined}
               onChange={handleNodeChange}
-              disabled={!globalGroup?.name || nodeOptions.length === 0}
+              disabled={
+                !globalGroup?.name ||
+                nodeOptions.length === 0 ||
+                connected ||
+                busy
+              }
               getOptionLabel={(option) => option ?? ''}
               renderOption={(props, option) => {
                 const delay = latencyMap.get(option)
@@ -441,6 +446,11 @@ const ConnectPage = () => {
                 <TextField
                   {...params}
                   placeholder={t('layout.components.connect.labels.selectNode')}
+                  helperText={
+                    connected
+                      ? t('layout.components.connect.labels.disconnectFirst')
+                      : undefined
+                  }
                 />
               )}
               slotProps={{

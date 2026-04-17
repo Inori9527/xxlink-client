@@ -262,11 +262,12 @@ impl IVerge {
         match dirs::verge_path() {
             Ok(path) => match help::read_yaml::<Self>(&path).await {
                 Ok(mut config) => {
-                    // compatibility
+                    // compatibility: force landing on Connect for legacy
+                    // configs that point at the old Home / root paths.
                     if let Some(start_page) = config.start_page.clone()
-                        && start_page == "/home"
+                        && (start_page == "/home" || start_page == "/")
                     {
-                        config.start_page = Some(String::from("/"));
+                        config.start_page = Some(String::from("/connect"));
                     }
                     config
                 }
@@ -289,7 +290,7 @@ impl IVerge {
             clash_core: Some("verge-mihomo".into()),
             language: Some(clash_verge_i18n::system_language().into()),
             theme_mode: Some("system".into()),
-            start_page: Some("/".into()),
+            start_page: Some("/connect".into()),
             traffic_graph: Some(true),
             enable_memory_usage: Some(true),
             enable_group_icon: Some(true),

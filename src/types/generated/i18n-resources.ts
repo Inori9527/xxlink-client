@@ -198,6 +198,7 @@ export interface TranslationResources {
             both: string
             connected: string
             disconnected: string
+            disconnectFirst: string
             download: string
             mode: string
             noNode: string

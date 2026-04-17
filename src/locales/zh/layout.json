@@ -35,6 +35,7 @@
       "labels": {
         "selectNode": "选择节点",
         "noNode": "暂无节点",
+        "disconnectFirst": "已连接，请先断开再切换节点",
         "mode": "模式",
         "system": "系统代理",
         "tun": "TUN",
