@@ -1,6 +1,6 @@
 [package]
 name = "xxlink-client"
-version = "2.4.8"
+version = "1.0.1"
 description = "XXLink desktop client"
 authors = ["zzzgydi", "Tunglies", "wonfen", "MystiPanda"]
 license = "GPL-3.0-only"

@@ -11,7 +11,6 @@ import {
   Paper,
 } from '@mui/material'
 import { useState, type FormEvent, type ReactNode, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useNavigate, Link as RouterLink } from 'react-router'
 
 import { apiRegister, AuthError } from '@/services/auth'
@@ -19,7 +18,6 @@ import { useAuth } from '@/services/auth-store'
 
 export default function RegisterPage(): ReactNode {
   const navigate = useNavigate()
-  const { t } = useTranslation()
   const { isAuthenticated } = useAuth()
 
   const [email, setEmail] = useState('')
@@ -42,11 +40,11 @@ export default function RegisterPage(): ReactNode {
     setError('')
 
     if (password !== confirm) {
-      setError(t('shared.auth.validation.passwordMismatch'))
+      setError('两次输入的密码不一致')
       return
     }
     if (password.length < 8) {
-      setError(t('shared.auth.validation.passwordTooShort'))
+      setError('密码至少需要 8 位字符')
       return
     }
 
@@ -59,9 +57,7 @@ export default function RegisterPage(): ReactNode {
       setError(
         err instanceof AuthError
           ? err.message
-          : t('shared.auth.errors.registerFailed', {
-              error: err instanceof Error ? err.message : String(err),
-            }),
+          : `注册失败: ${err instanceof Error ? err.message : String(err)}`,
       )
     } finally {
       setLoading(false)
@@ -81,30 +77,38 @@ export default function RegisterPage(): ReactNode {
     >
       <Paper
         elevation={3}
-        sx={{ width: '100%', maxWidth: 420, p: 4, borderRadius: 3 }}
+        sx={{
+          width: '100%',
+          maxWidth: 420,
+          p: 4,
+          borderRadius: 3,
+        }}
       >
+        {/* Header */}
         <Box sx={{ textAlign: 'center', mb: 3 }}>
           <Typography
             variant="h5"
             fontWeight={700}
             sx={{ color: '#4f46e5', letterSpacing: 1 }}
           >
-            {t('shared.auth.brand')}
+            XXLink
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {t('shared.auth.register.subtitle')}
+            创建新账号
           </Typography>
         </Box>
 
+        {/* Error alert */}
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
           </Alert>
         )}
 
+        {/* Register form */}
         <Box component="form" onSubmit={handleSubmit} noValidate>
           <TextField
-            label={t('shared.auth.form.email')}
+            label="邮箱"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -116,11 +120,11 @@ export default function RegisterPage(): ReactNode {
             sx={{ mb: 2 }}
           />
           <TextField
-            label={t('shared.auth.form.password')}
+            label="密码"
             type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder={t('shared.auth.register.passwordPlaceholder')}
+            placeholder="至少 8 位字符"
             required
             fullWidth
             disabled={loading}
@@ -133,11 +137,7 @@ export default function RegisterPage(): ReactNode {
                       onClick={() => setShowPassword((v) => !v)}
                       edge="end"
                       tabIndex={-1}
-                      aria-label={
-                        showPassword
-                          ? t('shared.auth.form.hidePassword')
-                          : t('shared.auth.form.showPassword')
-                      }
+                      aria-label={showPassword ? '隐藏密码' : '显示密码'}
                     >
                       {showPassword ? <VisibilityOff /> : <Visibility />}
                     </IconButton>
@@ -147,7 +147,7 @@ export default function RegisterPage(): ReactNode {
             }}
           />
           <TextField
-            label={t('shared.auth.form.confirmPassword')}
+            label="确认密码"
             type={showConfirm ? 'text' : 'password'}
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
@@ -164,11 +164,7 @@ export default function RegisterPage(): ReactNode {
                       onClick={() => setShowConfirm((v) => !v)}
                       edge="end"
                       tabIndex={-1}
-                      aria-label={
-                        showConfirm
-                          ? t('shared.auth.form.hidePassword')
-                          : t('shared.auth.form.showPassword')
-                      }
+                      aria-label={showConfirm ? '隐藏密码' : '显示密码'}
                     >
                       {showConfirm ? <VisibilityOff /> : <Visibility />}
                     </IconButton>
@@ -193,18 +189,19 @@ export default function RegisterPage(): ReactNode {
             {loading ? (
               <CircularProgress size={22} color="inherit" />
             ) : (
-              t('shared.auth.register.submit')
+              '创建账号'
             )}
           </Button>
         </Box>
 
+        {/* Footer link */}
         <Typography
           variant="body2"
           textAlign="center"
           sx={{ mt: 3 }}
           color="text.secondary"
         >
-          {t('shared.auth.register.hasAccount')}{' '}
+          已有账号？{' '}
           <RouterLink
             to="/login"
             style={{
@@ -213,7 +210,7 @@ export default function RegisterPage(): ReactNode {
               textDecoration: 'none',
             }}
           >
-            {t('shared.auth.register.goLogin')}
+            立即登录
           </RouterLink>
         </Typography>
       </Paper>

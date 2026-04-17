@@ -10,24 +10,14 @@ import {
   InputAdornment,
   IconButton,
   Paper,
-  Link as MuiLink,
-  Stack,
 } from '@mui/material'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
-import {
-  useState,
-  useRef,
-  type FormEvent,
-  type ReactNode,
-  useEffect,
-} from 'react'
-import { useTranslation } from 'react-i18next'
-import { useNavigate, useLocation, Link as RouterLink } from 'react-router'
+import { useState, type FormEvent, type ReactNode, useEffect } from 'react'
+import { useNavigate, Link as RouterLink } from 'react-router'
 
 import { apiLogin, apiGoogleOAuthCallback, AuthError } from '@/services/auth'
 import { useAuth } from '@/services/auth-store'
-import { openWebUrl } from '@/services/cmds'
 import { syncSubscription } from '@/services/subscription-sync'
 
 // ---------------------------------------------------------------------------
@@ -50,8 +40,6 @@ interface OAuthCallbackPayload {
 
 export default function LoginPage(): ReactNode {
   const navigate = useNavigate()
-  const location = useLocation()
-  const { t } = useTranslation()
   const { setAuth, isAuthenticated } = useAuth()
 
   const [email, setEmail] = useState('')
@@ -60,26 +48,6 @@ export default function LoginPage(): ReactNode {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
-
-  // Show a success banner when redirected from the register page.
-  const registeredStateRef = useRef(
-    Boolean((location.state as { registered?: boolean } | null)?.registered),
-  )
-  const [showRegistered, setShowRegistered] = useState(
-    registeredStateRef.current,
-  )
-
-  // Track cancellation of an in-flight Google OAuth so the stale callback
-  // never mutates auth state after the user aborted.
-  const oauthCancelledRef = useRef(false)
-
-  // Clear the router state after we've consumed it so a refresh/back-nav
-  // does not re-show the banner.
-  useEffect(() => {
-    if (registeredStateRef.current) {
-      window.history.replaceState({}, '')
-    }
-  }, [])
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -91,72 +59,50 @@ export default function LoginPage(): ReactNode {
   // Listen for OAuth callback from the Rust side
   useEffect(() => {
     let unlisten: UnlistenFn | null = null
-    let mounted = true
 
     listen<OAuthCallbackPayload>('oauth-callback', async (event) => {
       const { code, error: oauthError, redirectUri } = event.payload
 
-      // If the user cancelled, ignore whatever the listener emits.
-      if (oauthCancelledRef.current) {
-        setGoogleLoading(false)
-        return
-      }
-
       if (oauthError) {
         setError(
           oauthError === 'access_denied'
-            ? t('shared.auth.google.accessDenied')
-            : t('shared.auth.google.authFailed', { error: oauthError }),
+            ? '您取消了授权，请重试'
+            : `Google 授权失败: ${oauthError}`,
         )
         setGoogleLoading(false)
         return
       }
 
       if (!code || !redirectUri) {
-        setError(t('shared.auth.google.missingCode'))
+        setError('Google 授权失败：未收到授权码')
         setGoogleLoading(false)
         return
       }
 
       try {
         const result = await apiGoogleOAuthCallback(code, redirectUri)
-        if (oauthCancelledRef.current) {
-          return
-        }
         setAuth(result.user, result.accessToken, result.refreshToken)
         syncSubscription().catch(console.error)
         void navigate('/')
       } catch (err) {
-        if (oauthCancelledRef.current) {
-          return
-        }
         setError(
           err instanceof AuthError
             ? err.message
-            : t('shared.auth.google.loginFailed', {
-                error: err instanceof Error ? err.message : String(err),
-              }),
+            : `Google 登录失败: ${err instanceof Error ? err.message : String(err)}`,
         )
       } finally {
         setGoogleLoading(false)
       }
     })
       .then((fn) => {
-        // If the component unmounted before the listener registered,
-        // tear it down immediately to avoid a leak + duplicate handlers.
-        if (!mounted) {
-          fn()
-          return
-        }
         unlisten = fn
       })
       .catch(console.error)
 
     return () => {
-      mounted = false
-      if (unlisten) unlisten()
+      unlisten?.()
     }
-  }, [setAuth, navigate, t])
+  }, [setAuth, navigate])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -171,9 +117,7 @@ export default function LoginPage(): ReactNode {
       setError(
         err instanceof AuthError
           ? err.message
-          : t('shared.auth.errors.loginFailed', {
-              error: err instanceof Error ? err.message : String(err),
-            }),
+          : `登录失败: ${err instanceof Error ? err.message : String(err)}`,
       )
     } finally {
       setLoading(false)
@@ -182,11 +126,10 @@ export default function LoginPage(): ReactNode {
 
   const handleGoogleLogin = async () => {
     if (!GOOGLE_CLIENT_ID) {
-      setError(t('shared.auth.google.notConfigured'))
+      setError('Google 登录未配置，请联系管理员')
       return
     }
     setError('')
-    oauthCancelledRef.current = false
     setGoogleLoading(true)
     // Use a placeholder redirect_uri — the Rust command will replace it
     // with the actual local server address (http://127.0.0.1:{port})
@@ -209,32 +152,10 @@ export default function LoginPage(): ReactNode {
       })
     } catch (err) {
       setError(
-        t('shared.auth.errors.openBrowser', {
-          error: err instanceof Error ? err.message : String(err),
-        }),
+        `无法打开浏览器: ${err instanceof Error ? err.message : String(err)}`,
       )
       setGoogleLoading(false)
     }
-  }
-
-  const handleCancelGoogleLogin = () => {
-    oauthCancelledRef.current = true
-    setGoogleLoading(false)
-    // TODO: no Rust-side command currently exists to close the OAuth
-    // listener window / abort the local HTTP listener. The ref-based
-    // guard above prevents any stale callback from mutating auth state.
-  }
-
-  const handleForgotPassword = () => {
-    void openWebUrl('https://xxlink.dev/forgot-password')
-  }
-
-  const handleOpenTerms = () => {
-    void openWebUrl('https://xxlink.dev/terms')
-  }
-
-  const handleOpenPrivacy = () => {
-    void openWebUrl('https://xxlink.dev/privacy')
   }
 
   const anyLoading = loading || googleLoading
@@ -252,40 +173,38 @@ export default function LoginPage(): ReactNode {
     >
       <Paper
         elevation={3}
-        sx={{ width: '100%', maxWidth: 420, p: 4, borderRadius: 3 }}
+        sx={{
+          width: '100%',
+          maxWidth: 420,
+          p: 4,
+          borderRadius: 3,
+        }}
       >
+        {/* Header */}
         <Box sx={{ textAlign: 'center', mb: 3 }}>
           <Typography
             variant="h5"
             fontWeight={700}
             sx={{ color: '#4f46e5', letterSpacing: 1 }}
           >
-            {t('shared.auth.brand')}
+            XXLink
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {t('shared.auth.login.subtitle')}
+            登录以继续使用
           </Typography>
         </Box>
 
-        {showRegistered && (
-          <Alert
-            severity="success"
-            sx={{ mb: 2 }}
-            onClose={() => setShowRegistered(false)}
-          >
-            {t('shared.auth.registeredSuccess')}
-          </Alert>
-        )}
-
+        {/* Error alert */}
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
           </Alert>
         )}
 
+        {/* Login form */}
         <Box component="form" onSubmit={handleSubmit} noValidate>
           <TextField
-            label={t('shared.auth.form.email')}
+            label="邮箱"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -297,7 +216,7 @@ export default function LoginPage(): ReactNode {
             sx={{ mb: 2 }}
           />
           <TextField
-            label={t('shared.auth.form.password')}
+            label="密码"
             type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -305,7 +224,7 @@ export default function LoginPage(): ReactNode {
             required
             fullWidth
             disabled={anyLoading}
-            sx={{ mb: 1 }}
+            sx={{ mb: 3 }}
             slotProps={{
               input: {
                 endAdornment: (
@@ -314,11 +233,7 @@ export default function LoginPage(): ReactNode {
                       onClick={() => setShowPassword((v) => !v)}
                       edge="end"
                       tabIndex={-1}
-                      aria-label={
-                        showPassword
-                          ? t('shared.auth.form.hidePassword')
-                          : t('shared.auth.form.showPassword')
-                      }
+                      aria-label={showPassword ? '隐藏密码' : '显示密码'}
                     >
                       {showPassword ? <VisibilityOff /> : <Visibility />}
                     </IconButton>
@@ -327,22 +242,6 @@ export default function LoginPage(): ReactNode {
               },
             }}
           />
-          <Box sx={{ textAlign: 'right', mb: 2 }}>
-            <MuiLink
-              component="button"
-              type="button"
-              variant="body2"
-              onClick={handleForgotPassword}
-              sx={{
-                color: '#4f46e5',
-                fontWeight: 500,
-                textDecoration: 'none',
-                '&:hover': { textDecoration: 'underline' },
-              }}
-            >
-              {t('shared.auth.forgotPassword')}
-            </MuiLink>
-          </Box>
           <Button
             type="submit"
             variant="contained"
@@ -356,61 +255,61 @@ export default function LoginPage(): ReactNode {
               fontSize: 15,
             }}
           >
-            {loading ? (
-              <CircularProgress size={22} color="inherit" />
-            ) : (
-              t('shared.auth.login.submit')
-            )}
+            {loading ? <CircularProgress size={22} color="inherit" /> : '登录'}
           </Button>
         </Box>
 
-        <Divider sx={{ my: 2.5 }}>
-          <Typography variant="caption" color="text.secondary">
-            {t('shared.auth.login.dividerText')}
-          </Typography>
-        </Divider>
-        {googleLoading ? (
-          <Button
-            variant="outlined"
-            fullWidth
-            onClick={handleCancelGoogleLogin}
-            startIcon={<CircularProgress size={18} />}
-            sx={{
-              py: 1.2,
-              borderColor: '#ef4444',
-              color: '#ef4444',
-              fontWeight: 500,
-              '&:hover': { borderColor: '#dc2626', bgcolor: '#fef2f2' },
-            }}
-          >
-            {t('shared.auth.cancelGoogleLogin')}
-          </Button>
-        ) : (
-          <Button
-            variant="outlined"
-            fullWidth
-            onClick={handleGoogleLogin}
-            disabled={loading}
-            startIcon={<GoogleIcon />}
-            sx={{
-              py: 1.2,
-              borderColor: '#d1d5db',
-              color: 'text.primary',
-              fontWeight: 500,
-              '&:hover': { borderColor: '#9ca3af', bgcolor: '#f9fafb' },
-            }}
-          >
-            {t('shared.auth.google.signIn')}
-          </Button>
-        )}
+        {/* Google OAuth */}
+        <>
+          <Divider sx={{ my: 2.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              或使用以下方式登录
+            </Typography>
+          </Divider>
+          {googleLoading ? (
+            <Button
+              variant="outlined"
+              fullWidth
+              onClick={() => setGoogleLoading(false)}
+              startIcon={<CircularProgress size={18} />}
+              sx={{
+                py: 1.2,
+                borderColor: '#ef4444',
+                color: '#ef4444',
+                fontWeight: 500,
+                '&:hover': { borderColor: '#dc2626', bgcolor: '#fef2f2' },
+              }}
+            >
+              取消 Google 登录
+            </Button>
+          ) : (
+            <Button
+              variant="outlined"
+              fullWidth
+              onClick={handleGoogleLogin}
+              disabled={loading}
+              startIcon={<GoogleIcon />}
+              sx={{
+                py: 1.2,
+                borderColor: '#d1d5db',
+                color: 'text.primary',
+                fontWeight: 500,
+                '&:hover': { borderColor: '#9ca3af', bgcolor: '#f9fafb' },
+              }}
+            >
+              使用 Google 登录
+            </Button>
+          )}
+        </>
 
+        {/* Footer link */}
         <Typography
           variant="body2"
           textAlign="center"
           sx={{ mt: 3 }}
           color="text.secondary"
         >
-          {t('shared.auth.login.noAccount')}{' '}
+          还没有账号？{' '}
           <RouterLink
             to="/register"
             style={{
@@ -419,43 +318,9 @@ export default function LoginPage(): ReactNode {
               textDecoration: 'none',
             }}
           >
-            {t('shared.auth.login.goRegister')}
+            立即注册
           </RouterLink>
         </Typography>
-
-        <Stack
-          direction="row"
-          spacing={2}
-          justifyContent="center"
-          sx={{ mt: 2 }}
-        >
-          <MuiLink
-            component="button"
-            type="button"
-            variant="caption"
-            onClick={handleOpenTerms}
-            sx={{
-              color: 'text.secondary',
-              textDecoration: 'none',
-              '&:hover': { textDecoration: 'underline' },
-            }}
-          >
-            {t('shared.legal.terms')}
-          </MuiLink>
-          <MuiLink
-            component="button"
-            type="button"
-            variant="caption"
-            onClick={handleOpenPrivacy}
-            sx={{
-              color: 'text.secondary',
-              textDecoration: 'none',
-              '&:hover': { textDecoration: 'underline' },
-            }}
-          >
-            {t('shared.legal.privacy')}
-          </MuiLink>
-        </Stack>
       </Paper>
     </Box>
   )

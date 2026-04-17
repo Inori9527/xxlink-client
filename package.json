@@ -1,6 +1,6 @@
 {
   "name": "xxlink-client",
-  "version": "2.4.8",
+  "version": "1.0.1",
   "license": "GPL-3.0-only",
   "scripts": {
     "prepare": "husky || true",
