@@ -9,22 +9,13 @@ import {
   InputAdornment,
   IconButton,
   Paper,
-  ThemeProvider,
-  createTheme,
 } from '@mui/material'
-import {
-  useState,
-  useMemo,
-  type FormEvent,
-  type ReactNode,
-  useEffect,
-} from 'react'
+import { useState, type FormEvent, type ReactNode, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, Link as RouterLink } from 'react-router'
 
 import { apiRegister, AuthError } from '@/services/auth'
 import { useAuth } from '@/services/auth-store'
-import { getPreloadConfig, resolveThemeMode } from '@/services/preload'
 
 export default function RegisterPage(): ReactNode {
   const navigate = useNavigate()
@@ -38,15 +29,6 @@ export default function RegisterPage(): ReactNode {
   const [showConfirm, setShowConfirm] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-
-  // Theme mode — mirrors login.tsx so the pre-auth pages honor the user's
-  // preference instead of the hardcoded light background.
-  const mode = useMemo<'light' | 'dark'>(
-    () => resolveThemeMode(getPreloadConfig()),
-    [],
-  )
-  const theme = useMemo(() => createTheme({ palette: { mode } }), [mode])
-  const isDark = mode === 'dark'
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -87,169 +69,154 @@ export default function RegisterPage(): ReactNode {
   }
 
   return (
-    <ThemeProvider theme={theme}>
-      <Box
-        sx={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          bgcolor: isDark ? '#1a1d2a' : '#f0f2ff',
-          color: 'text.primary',
-          p: 2,
-        }}
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        bgcolor: '#f0f2ff',
+        p: 2,
+      }}
+    >
+      <Paper
+        elevation={3}
+        sx={{ width: '100%', maxWidth: 420, p: 4, borderRadius: 3 }}
       >
-        <Paper
-          elevation={3}
-          sx={{
-            width: '100%',
-            maxWidth: 420,
-            p: 4,
-            borderRadius: 3,
-          }}
-        >
-          {/* Header */}
-          <Box sx={{ textAlign: 'center', mb: 3 }}>
-            <Typography
-              variant="h5"
-              fontWeight={700}
-              sx={{
-                color: isDark ? '#818cf8' : '#4f46e5',
-                letterSpacing: 1,
-              }}
-            >
-              {t('shared.auth.brand')}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              {t('shared.auth.register.subtitle')}
-            </Typography>
-          </Box>
-
-          {/* Error alert */}
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
-
-          {/* Register form */}
-          <Box component="form" onSubmit={handleSubmit} noValidate>
-            <TextField
-              label={t('shared.auth.form.email')}
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              required
-              fullWidth
-              autoFocus
-              disabled={loading}
-              sx={{ mb: 2 }}
-            />
-            <TextField
-              label={t('shared.auth.form.password')}
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={t('shared.auth.register.passwordPlaceholder')}
-              required
-              fullWidth
-              disabled={loading}
-              sx={{ mb: 2 }}
-              slotProps={{
-                input: {
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        onClick={() => setShowPassword((v) => !v)}
-                        edge="end"
-                        tabIndex={-1}
-                        aria-label={
-                          showPassword
-                            ? t('shared.auth.form.hidePassword')
-                            : t('shared.auth.form.showPassword')
-                        }
-                      >
-                        {showPassword ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-            <TextField
-              label={t('shared.auth.form.confirmPassword')}
-              type={showConfirm ? 'text' : 'password'}
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              placeholder="••••••••"
-              required
-              fullWidth
-              disabled={loading}
-              sx={{ mb: 3 }}
-              slotProps={{
-                input: {
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        onClick={() => setShowConfirm((v) => !v)}
-                        edge="end"
-                        tabIndex={-1}
-                        aria-label={
-                          showConfirm
-                            ? t('shared.auth.form.hidePassword')
-                            : t('shared.auth.form.showPassword')
-                        }
-                      >
-                        {showConfirm ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-            <Button
-              type="submit"
-              variant="contained"
-              fullWidth
-              disabled={loading}
-              sx={{
-                py: 1.2,
-                bgcolor: '#4f46e5',
-                '&:hover': { bgcolor: '#4338ca' },
-                fontWeight: 600,
-                fontSize: 15,
-              }}
-            >
-              {loading ? (
-                <CircularProgress size={22} color="inherit" />
-              ) : (
-                t('shared.auth.register.submit')
-              )}
-            </Button>
-          </Box>
-
-          {/* Footer link */}
+        <Box sx={{ textAlign: 'center', mb: 3 }}>
           <Typography
-            variant="body2"
-            textAlign="center"
-            sx={{ mt: 3 }}
-            color="text.secondary"
+            variant="h5"
+            fontWeight={700}
+            sx={{ color: '#4f46e5', letterSpacing: 1 }}
           >
-            {t('shared.auth.register.hasAccount')}{' '}
-            <RouterLink
-              to="/login"
-              style={{
-                color: isDark ? '#818cf8' : '#4f46e5',
-                fontWeight: 600,
-                textDecoration: 'none',
-              }}
-            >
-              {t('shared.auth.register.goLogin')}
-            </RouterLink>
+            {t('shared.auth.brand')}
           </Typography>
-        </Paper>
-      </Box>
-    </ThemeProvider>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            {t('shared.auth.register.subtitle')}
+          </Typography>
+        </Box>
+
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        <Box component="form" onSubmit={handleSubmit} noValidate>
+          <TextField
+            label={t('shared.auth.form.email')}
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            required
+            fullWidth
+            autoFocus
+            disabled={loading}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            label={t('shared.auth.form.password')}
+            type={showPassword ? 'text' : 'password'}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder={t('shared.auth.register.passwordPlaceholder')}
+            required
+            fullWidth
+            disabled={loading}
+            sx={{ mb: 2 }}
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={() => setShowPassword((v) => !v)}
+                      edge="end"
+                      tabIndex={-1}
+                      aria-label={
+                        showPassword
+                          ? t('shared.auth.form.hidePassword')
+                          : t('shared.auth.form.showPassword')
+                      }
+                    >
+                      {showPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
+          <TextField
+            label={t('shared.auth.form.confirmPassword')}
+            type={showConfirm ? 'text' : 'password'}
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            placeholder="••••••••"
+            required
+            fullWidth
+            disabled={loading}
+            sx={{ mb: 3 }}
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={() => setShowConfirm((v) => !v)}
+                      edge="end"
+                      tabIndex={-1}
+                      aria-label={
+                        showConfirm
+                          ? t('shared.auth.form.hidePassword')
+                          : t('shared.auth.form.showPassword')
+                      }
+                    >
+                      {showConfirm ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
+          <Button
+            type="submit"
+            variant="contained"
+            fullWidth
+            disabled={loading}
+            sx={{
+              py: 1.2,
+              bgcolor: '#4f46e5',
+              '&:hover': { bgcolor: '#4338ca' },
+              fontWeight: 600,
+              fontSize: 15,
+            }}
+          >
+            {loading ? (
+              <CircularProgress size={22} color="inherit" />
+            ) : (
+              t('shared.auth.register.submit')
+            )}
+          </Button>
+        </Box>
+
+        <Typography
+          variant="body2"
+          textAlign="center"
+          sx={{ mt: 3 }}
+          color="text.secondary"
+        >
+          {t('shared.auth.register.hasAccount')}{' '}
+          <RouterLink
+            to="/login"
+            style={{
+              color: '#4f46e5',
+              fontWeight: 600,
+              textDecoration: 'none',
+            }}
+          >
+            {t('shared.auth.register.goLogin')}
+          </RouterLink>
+        </Typography>
+      </Paper>
+    </Box>
   )
 }

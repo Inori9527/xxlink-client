@@ -12,15 +12,12 @@ import {
   Paper,
   Link as MuiLink,
   Stack,
-  ThemeProvider,
-  createTheme,
 } from '@mui/material'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import {
   useState,
   useRef,
-  useMemo,
   type FormEvent,
   type ReactNode,
   useEffect,
@@ -31,7 +28,6 @@ import { useNavigate, useLocation, Link as RouterLink } from 'react-router'
 import { apiLogin, apiGoogleOAuthCallback, AuthError } from '@/services/auth'
 import { useAuth } from '@/services/auth-store'
 import { openWebUrl } from '@/services/cmds'
-import { getPreloadConfig, resolveThemeMode } from '@/services/preload'
 import { syncSubscription } from '@/services/subscription-sync'
 
 // ---------------------------------------------------------------------------
@@ -84,17 +80,6 @@ export default function LoginPage(): ReactNode {
       window.history.replaceState({}, '')
     }
   }, [])
-
-  // Resolve the theme mode once on mount. Login is shown pre-auth so the
-  // app-level ThemeModeProvider has not necessarily wired the MUI theme to
-  // this tree yet; wrap with a minimal ThemeProvider so colors respect the
-  // user's preference instead of hardcoded light values.
-  const mode = useMemo<'light' | 'dark'>(
-    () => resolveThemeMode(getPreloadConfig()),
-    [],
-  )
-  const theme = useMemo(() => createTheme({ palette: { mode } }), [mode])
-  const isDark = mode === 'dark'
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -255,248 +240,224 @@ export default function LoginPage(): ReactNode {
   const anyLoading = loading || googleLoading
 
   return (
-    <ThemeProvider theme={theme}>
-      <Box
-        sx={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          bgcolor: isDark ? '#1a1d2a' : '#f0f2ff',
-          color: 'text.primary',
-          p: 2,
-        }}
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        bgcolor: '#f0f2ff',
+        p: 2,
+      }}
+    >
+      <Paper
+        elevation={3}
+        sx={{ width: '100%', maxWidth: 420, p: 4, borderRadius: 3 }}
       >
-        <Paper
-          elevation={3}
-          sx={{
-            width: '100%',
-            maxWidth: 420,
-            p: 4,
-            borderRadius: 3,
-          }}
-        >
-          {/* Header */}
-          <Box sx={{ textAlign: 'center', mb: 3 }}>
-            <Typography
-              variant="h5"
-              fontWeight={700}
-              sx={{
-                color: isDark ? '#818cf8' : '#4f46e5',
-                letterSpacing: 1,
-              }}
-            >
-              {t('shared.auth.brand')}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              {t('shared.auth.login.subtitle')}
-            </Typography>
-          </Box>
-
-          {/* Registered success banner */}
-          {showRegistered && (
-            <Alert
-              severity="success"
-              sx={{ mb: 2 }}
-              onClose={() => setShowRegistered(false)}
-            >
-              {t('shared.auth.registeredSuccess')}
-            </Alert>
-          )}
-
-          {/* Error alert */}
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
-
-          {/* Login form */}
-          <Box component="form" onSubmit={handleSubmit} noValidate>
-            <TextField
-              label={t('shared.auth.form.email')}
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              required
-              fullWidth
-              autoFocus
-              disabled={anyLoading}
-              sx={{ mb: 2 }}
-            />
-            <TextField
-              label={t('shared.auth.form.password')}
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              fullWidth
-              disabled={anyLoading}
-              sx={{ mb: 1 }}
-              slotProps={{
-                input: {
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        onClick={() => setShowPassword((v) => !v)}
-                        edge="end"
-                        tabIndex={-1}
-                        aria-label={
-                          showPassword
-                            ? t('shared.auth.form.hidePassword')
-                            : t('shared.auth.form.showPassword')
-                        }
-                      >
-                        {showPassword ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-            {/* Forgot password link */}
-            <Box sx={{ textAlign: 'right', mb: 2 }}>
-              <MuiLink
-                component="button"
-                type="button"
-                variant="body2"
-                onClick={handleForgotPassword}
-                sx={{
-                  color: isDark ? '#818cf8' : '#4f46e5',
-                  fontWeight: 500,
-                  textDecoration: 'none',
-                  '&:hover': { textDecoration: 'underline' },
-                }}
-              >
-                {t('shared.auth.forgotPassword')}
-              </MuiLink>
-            </Box>
-            <Button
-              type="submit"
-              variant="contained"
-              fullWidth
-              disabled={anyLoading}
-              sx={{
-                py: 1.2,
-                bgcolor: '#4f46e5',
-                '&:hover': { bgcolor: '#4338ca' },
-                fontWeight: 600,
-                fontSize: 15,
-              }}
-            >
-              {loading ? (
-                <CircularProgress size={22} color="inherit" />
-              ) : (
-                t('shared.auth.login.submit')
-              )}
-            </Button>
-          </Box>
-
-          {/* Google OAuth */}
-          <>
-            <Divider sx={{ my: 2.5 }}>
-              <Typography variant="caption" color="text.secondary">
-                {t('shared.auth.login.dividerText')}
-              </Typography>
-            </Divider>
-            {googleLoading ? (
-              <Button
-                variant="outlined"
-                fullWidth
-                onClick={handleCancelGoogleLogin}
-                startIcon={<CircularProgress size={18} />}
-                sx={{
-                  py: 1.2,
-                  borderColor: '#ef4444',
-                  color: '#ef4444',
-                  fontWeight: 500,
-                  '&:hover': { borderColor: '#dc2626', bgcolor: '#fef2f2' },
-                }}
-              >
-                {t('shared.auth.cancelGoogleLogin')}
-              </Button>
-            ) : (
-              <Button
-                variant="outlined"
-                fullWidth
-                onClick={handleGoogleLogin}
-                disabled={loading}
-                startIcon={<GoogleIcon />}
-                sx={{
-                  py: 1.2,
-                  borderColor: isDark ? '#4b5563' : '#d1d5db',
-                  color: 'text.primary',
-                  fontWeight: 500,
-                  '&:hover': {
-                    borderColor: isDark ? '#6b7280' : '#9ca3af',
-                    bgcolor: isDark ? 'rgba(255,255,255,0.04)' : '#f9fafb',
-                  },
-                }}
-              >
-                {t('shared.auth.google.signIn')}
-              </Button>
-            )}
-          </>
-
-          {/* Footer link */}
+        <Box sx={{ textAlign: 'center', mb: 3 }}>
           <Typography
-            variant="body2"
-            textAlign="center"
-            sx={{ mt: 3 }}
-            color="text.secondary"
+            variant="h5"
+            fontWeight={700}
+            sx={{ color: '#4f46e5', letterSpacing: 1 }}
           >
-            {t('shared.auth.login.noAccount')}{' '}
-            <RouterLink
-              to="/register"
-              style={{
-                color: isDark ? '#818cf8' : '#4f46e5',
-                fontWeight: 600,
-                textDecoration: 'none',
-              }}
-            >
-              {t('shared.auth.login.goRegister')}
-            </RouterLink>
+            {t('shared.auth.brand')}
           </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            {t('shared.auth.login.subtitle')}
+          </Typography>
+        </Box>
 
-          {/* Legal links */}
-          <Stack
-            direction="row"
-            spacing={2}
-            justifyContent="center"
-            sx={{ mt: 2 }}
+        {showRegistered && (
+          <Alert
+            severity="success"
+            sx={{ mb: 2 }}
+            onClose={() => setShowRegistered(false)}
           >
+            {t('shared.auth.registeredSuccess')}
+          </Alert>
+        )}
+
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        <Box component="form" onSubmit={handleSubmit} noValidate>
+          <TextField
+            label={t('shared.auth.form.email')}
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            required
+            fullWidth
+            autoFocus
+            disabled={anyLoading}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            label={t('shared.auth.form.password')}
+            type={showPassword ? 'text' : 'password'}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            required
+            fullWidth
+            disabled={anyLoading}
+            sx={{ mb: 1 }}
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={() => setShowPassword((v) => !v)}
+                      edge="end"
+                      tabIndex={-1}
+                      aria-label={
+                        showPassword
+                          ? t('shared.auth.form.hidePassword')
+                          : t('shared.auth.form.showPassword')
+                      }
+                    >
+                      {showPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
+          <Box sx={{ textAlign: 'right', mb: 2 }}>
             <MuiLink
               component="button"
               type="button"
-              variant="caption"
-              onClick={handleOpenTerms}
+              variant="body2"
+              onClick={handleForgotPassword}
               sx={{
-                color: 'text.secondary',
+                color: '#4f46e5',
+                fontWeight: 500,
                 textDecoration: 'none',
                 '&:hover': { textDecoration: 'underline' },
               }}
             >
-              {t('shared.legal.terms')}
+              {t('shared.auth.forgotPassword')}
             </MuiLink>
-            <MuiLink
-              component="button"
-              type="button"
-              variant="caption"
-              onClick={handleOpenPrivacy}
-              sx={{
-                color: 'text.secondary',
-                textDecoration: 'none',
-                '&:hover': { textDecoration: 'underline' },
-              }}
-            >
-              {t('shared.legal.privacy')}
-            </MuiLink>
-          </Stack>
-        </Paper>
-      </Box>
-    </ThemeProvider>
+          </Box>
+          <Button
+            type="submit"
+            variant="contained"
+            fullWidth
+            disabled={anyLoading}
+            sx={{
+              py: 1.2,
+              bgcolor: '#4f46e5',
+              '&:hover': { bgcolor: '#4338ca' },
+              fontWeight: 600,
+              fontSize: 15,
+            }}
+          >
+            {loading ? (
+              <CircularProgress size={22} color="inherit" />
+            ) : (
+              t('shared.auth.login.submit')
+            )}
+          </Button>
+        </Box>
+
+        <Divider sx={{ my: 2.5 }}>
+          <Typography variant="caption" color="text.secondary">
+            {t('shared.auth.login.dividerText')}
+          </Typography>
+        </Divider>
+        {googleLoading ? (
+          <Button
+            variant="outlined"
+            fullWidth
+            onClick={handleCancelGoogleLogin}
+            startIcon={<CircularProgress size={18} />}
+            sx={{
+              py: 1.2,
+              borderColor: '#ef4444',
+              color: '#ef4444',
+              fontWeight: 500,
+              '&:hover': { borderColor: '#dc2626', bgcolor: '#fef2f2' },
+            }}
+          >
+            {t('shared.auth.cancelGoogleLogin')}
+          </Button>
+        ) : (
+          <Button
+            variant="outlined"
+            fullWidth
+            onClick={handleGoogleLogin}
+            disabled={loading}
+            startIcon={<GoogleIcon />}
+            sx={{
+              py: 1.2,
+              borderColor: '#d1d5db',
+              color: 'text.primary',
+              fontWeight: 500,
+              '&:hover': { borderColor: '#9ca3af', bgcolor: '#f9fafb' },
+            }}
+          >
+            {t('shared.auth.google.signIn')}
+          </Button>
+        )}
+
+        <Typography
+          variant="body2"
+          textAlign="center"
+          sx={{ mt: 3 }}
+          color="text.secondary"
+        >
+          {t('shared.auth.login.noAccount')}{' '}
+          <RouterLink
+            to="/register"
+            style={{
+              color: '#4f46e5',
+              fontWeight: 600,
+              textDecoration: 'none',
+            }}
+          >
+            {t('shared.auth.login.goRegister')}
+          </RouterLink>
+        </Typography>
+
+        <Stack
+          direction="row"
+          spacing={2}
+          justifyContent="center"
+          sx={{ mt: 2 }}
+        >
+          <MuiLink
+            component="button"
+            type="button"
+            variant="caption"
+            onClick={handleOpenTerms}
+            sx={{
+              color: 'text.secondary',
+              textDecoration: 'none',
+              '&:hover': { textDecoration: 'underline' },
+            }}
+          >
+            {t('shared.legal.terms')}
+          </MuiLink>
+          <MuiLink
+            component="button"
+            type="button"
+            variant="caption"
+            onClick={handleOpenPrivacy}
+            sx={{
+              color: 'text.secondary',
+              textDecoration: 'none',
+              '&:hover': { textDecoration: 'underline' },
+            }}
+          >
+            {t('shared.legal.privacy')}
+          </MuiLink>
+        </Stack>
+      </Paper>
+    </Box>
   )
 }
 
