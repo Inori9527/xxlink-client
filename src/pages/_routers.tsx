@@ -2,6 +2,7 @@ import AssignmentRoundedIcon from '@mui/icons-material/AssignmentRounded'
 import DnsRoundedIcon from '@mui/icons-material/DnsRounded'
 import HomeRoundedIcon from '@mui/icons-material/HomeRounded'
 import LanguageRoundedIcon from '@mui/icons-material/LanguageRounded'
+import LockOpenRoundedIcon from '@mui/icons-material/LockOpenRounded'
 import PowerSettingsNewRoundedIcon from '@mui/icons-material/PowerSettingsNewRounded'
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded'
 import WifiRoundedIcon from '@mui/icons-material/WifiRounded'
@@ -32,7 +33,7 @@ import UnlockPage from './unlock'
 /**
  * navItems drives both the sidebar navigation and the router.
  *
- * Rules, Logs, Unlock (Test), and API Keys are intentionally excluded from
+ * Rules, Logs, and API Keys are intentionally excluded from
  * this list so they do not appear in the navigation bar. Their routes are
  * still registered below via hiddenRoutes so the pages remain reachable if
  * needed.
@@ -72,6 +73,15 @@ export const navItems = [
     Component: ConnectionsPage,
   },
   {
+    label: 'layout.components.navigation.tabs.unlock',
+    path: '/unlock',
+    icon: [
+      <LockOpenRoundedIcon key="mui" />,
+      <LockOpenRoundedIcon key="svg" />,
+    ],
+    Component: UnlockPage,
+  },
+  {
     label: 'layout.components.navigation.tabs.plans',
     path: '/plans',
     icon: [
@@ -95,7 +105,6 @@ const hiddenRoutes: RouteObject[] = [
     path: '/logs',
     Component: () => null /* KeepAlive: real LogsPage rendered in Layout */,
   },
-  { path: '/unlock', Component: UnlockPage },
   { path: '/api-keys', Component: ApiKeysPage },
 ]
 

@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next'
 
 import { BasePage } from '@/components/base'
 import { ClashModeCard } from '@/components/home/clash-mode-card'
+import { CurrentProxyCard } from '@/components/home/current-proxy-card'
 import { EnhancedCard } from '@/components/home/enhanced-card'
 import { EnhancedTrafficStats } from '@/components/home/enhanced-traffic-stats'
 import { HomeProfileCard } from '@/components/home/home-profile-card'
@@ -109,6 +110,15 @@ const HomeSettingsDialog = ({
           <FormControlLabel
             control={
               <Checkbox
+                checked={cards.proxy || false}
+                onChange={() => handleToggle('proxy')}
+              />
+            }
+            label={t('home.page.settings.cards.currentProxy')}
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
                 checked={cards.profile || false}
                 onChange={() => handleToggle('profile')}
               />
@@ -185,13 +195,14 @@ const HomePage = () => {
   } | null>(null)
 
   // Default card visibility state
-  // `proxy` (CurrentProxyCard) and `network` (NetworkSettingsCard) are
-  // hidden by default — end users manage these via the Connect page.
+  // Subscription (profile) and network-settings cards are hidden by default —
+  // users manage their subscription on the Profiles page and network via
+  // the Connect page. The current-proxy card takes the primary slot.
   const defaultCards = useMemo<HomeCardsSettings>(
     () => ({
       info: false,
-      profile: true,
-      proxy: false,
+      profile: false,
+      proxy: true,
       network: false,
       mode: true,
       traffic: true,
@@ -251,6 +262,7 @@ const HomePage = () => {
 
   const criticalCards = useMemo(
     () => [
+      renderCard('proxy', <CurrentProxyCard />),
       renderCard(
         'profile',
         <HomeProfileCard current={current} onProfileUpdated={mutateProfiles} />,
