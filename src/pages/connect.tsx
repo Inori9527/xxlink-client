@@ -42,7 +42,7 @@ import parseTraffic from '@/utils/parse-traffic'
 const STARTUP_SYNC_ERROR_KEY = 'xxlink:last-sync-error'
 const STARTUP_SYNC_ERROR_TTL_MS = 5 * 60 * 1000
 
-type ConnectMode = 'system' | 'tun' | 'both'
+type ConnectMode = 'system' | 'both'
 
 const MODE_STORAGE_KEY = 'xxlink:connect-mode'
 const DEFAULT_MODE: ConnectMode = 'both'
@@ -55,9 +55,11 @@ const HIDDEN_NODES: ReadonlySet<string> = new Set(['direct', 'reject', 'proxy'])
 const loadMode = (): ConnectMode => {
   try {
     const saved = localStorage.getItem(MODE_STORAGE_KEY)
-    if (saved === 'system' || saved === 'tun' || saved === 'both') {
+    if (saved === 'system' || saved === 'both') {
       return saved
     }
+    // Legacy 'tun' mode was removed — coerce to recommended default.
+    if (saved === 'tun') return 'both'
   } catch {
     /* ignore */
   }
@@ -166,8 +168,6 @@ const ConnectPage = () => {
   // Connected state per selected mode
   const connected = useMemo(() => {
     switch (mode) {
-      case 'tun':
-        return tunEnabled
       case 'system':
         return sysEnabled
       case 'both':
@@ -263,14 +263,11 @@ const ConnectPage = () => {
     try {
       const next = !connected
       const payload: Partial<IVergeConfig> = {}
-      if (mode === 'tun') {
-        payload.enable_tun_mode = next
-        payload.enable_system_proxy = false
-      } else if (mode === 'system') {
+      if (mode === 'system') {
         payload.enable_tun_mode = false
         payload.enable_system_proxy = next
       } else {
-        // both
+        // both (recommended)
         payload.enable_tun_mode = next
         payload.enable_system_proxy = next
       }
@@ -627,12 +624,6 @@ const ConnectPage = () => {
                   onClick={() => handleModeChange('system')}
                 >
                   {t('layout.components.connect.mode.system')}
-                </Button>
-                <Button
-                  variant={mode === 'tun' ? 'contained' : 'outlined'}
-                  onClick={() => handleModeChange('tun')}
-                >
-                  {t('layout.components.connect.mode.tun')}
                 </Button>
                 <Button
                   variant={mode === 'both' ? 'contained' : 'outlined'}

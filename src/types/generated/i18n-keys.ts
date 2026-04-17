@@ -132,7 +132,6 @@ export const translationKeys = [
   'layout.components.connect.labels.connected',
   'layout.components.connect.labels.disconnected',
   'layout.components.connect.mode.system',
-  'layout.components.connect.mode.tun',
   'layout.components.connect.mode.both',
   'layout.components.connect.modeTooltip',
   'layout.components.connect.empty.title',

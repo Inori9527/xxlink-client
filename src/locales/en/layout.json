@@ -46,11 +46,10 @@
         "disconnected": "Disconnected"
       },
       "mode": {
-        "system": "Browser only",
-        "tun": "All Traffic",
-        "both": "Recommended"
+        "system": "Browser",
+        "both": "Full VPN"
       },
-      "modeTooltip": "Browser only: proxy system browser traffic only. All Traffic: use TUN virtual adapter for all traffic (admin required). Recommended: enable both.",
+      "modeTooltip": "Browser: proxy only browser and apps honoring the system proxy. Full VPN: route all system traffic through an encrypted tunnel (recommended).",
       "empty": {
         "title": "No nodes available",
         "subtitle": "Please purchase a plan or refresh your subscription",

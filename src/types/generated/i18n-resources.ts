@@ -215,7 +215,6 @@ export interface TranslationResources {
           mode: {
             both: string
             system: string
-            tun: string
           }
           modeTooltip: string
           startupSyncFailed: string
