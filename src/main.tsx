@@ -152,6 +152,9 @@ const bootstrap = async () => {
         // Clear any stale error flag from a previous failed startup
         try {
           localStorage.removeItem('xxlink:last-sync-error')
+          window.dispatchEvent(
+            new CustomEvent('xxlink:last-sync-error-changed'),
+          )
         } catch {
           /* ignore */
         }
@@ -165,6 +168,9 @@ const bootstrap = async () => {
               message: error instanceof Error ? error.message : String(error),
               ts: Date.now(),
             }),
+          )
+          window.dispatchEvent(
+            new CustomEvent('xxlink:last-sync-error-changed'),
           )
         } catch {
           /* ignore */

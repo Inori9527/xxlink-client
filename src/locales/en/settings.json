@@ -168,14 +168,14 @@
         },
         "tooltips": {
           "showAdvancedSettings": "Show advanced developer and diagnostic options",
-          "autoConnectOnLaunch": "When on, restore your last connection state when the app starts"
+          "autoConnectOnLaunch": "When on, restore the connection state (on or off) you had at last exit"
         },
         "fields": {
           "language": "Language",
           "themeMode": "Theme Mode",
           "trayClickEvent": "Tray Click Event",
           "startPage": "Start Page",
-          "autoConnectOnLaunch": "Auto-connect on launch",
+          "autoConnectOnLaunch": "Remember connection state",
           "themeSetting": "Theme Setting",
           "layoutSetting": "Layout Setting",
           "misc": "Miscellaneous",

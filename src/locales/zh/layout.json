@@ -59,7 +59,7 @@
         "refreshing": "刷新中...",
         "noSubscription": "您还没有订阅"
       },
-      "startupSyncFailed": "启动时刷新订阅失败，点击重试",
+      "startupSyncFailed": "订阅同步失败，点击重试",
       "feedback": {
         "toggleFailed": "连接切换失败",
         "refreshFailed": "刷新订阅失败",

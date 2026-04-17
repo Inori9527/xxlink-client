@@ -106,6 +106,7 @@ export default function LoginPage(): ReactNode {
   // Listen for OAuth callback from the Rust side
   useEffect(() => {
     let unlisten: UnlistenFn | null = null
+    let mounted = true
 
     listen<OAuthCallbackPayload>('oauth-callback', async (event) => {
       const { code, error: oauthError, redirectUri } = event.payload
@@ -156,12 +157,19 @@ export default function LoginPage(): ReactNode {
       }
     })
       .then((fn) => {
+        // If the component unmounted before the listener registered,
+        // tear it down immediately to avoid a leak + duplicate handlers.
+        if (!mounted) {
+          fn()
+          return
+        }
         unlisten = fn
       })
       .catch(console.error)
 
     return () => {
-      unlisten?.()
+      mounted = false
+      if (unlisten) unlisten()
     }
   }, [setAuth, navigate, t])
 

@@ -178,6 +178,7 @@ pub(super) async fn apply_auto_connect_on_launch() {
         d.enable_system_proxy = Some(false);
     });
     verge.apply();
+    logging_error!(Type::Config, verge.data_arc().save_file().await);
 }
 
 pub(super) async fn init_service_manager() {

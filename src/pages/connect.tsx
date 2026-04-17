@@ -113,9 +113,12 @@ const ConnectPage = () => {
   })
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Probe current subscription status once on mount. Failure => treat as
-  // "no subscription" (safer default — hide the refresh button).
+  // Probe current subscription status every time the page becomes visible.
+  // This ensures users who buy a plan on /plans and return to Connect see
+  // the refresh button appear. Failure => treat as "no subscription"
+  // (safer default — hide the refresh button).
   useEffect(() => {
+    if (!pageVisible) return
     let cancelled = false
     api.subscription
       .current()
@@ -128,6 +131,30 @@ const ConnectPage = () => {
       })
     return () => {
       cancelled = true
+    }
+  }, [pageVisible])
+
+  // Listen for startup-sync-error changes (written async by main.tsx or
+  // cleared by subscription-sync success). Keeps the Alert in sync with
+  // localStorage across async writes and cross-tab updates.
+  useEffect(() => {
+    const readStartupSyncError = () => {
+      try {
+        const raw = localStorage.getItem(STARTUP_SYNC_ERROR_KEY)
+        if (!raw) return false
+        const parsed = JSON.parse(raw) as { ts?: number }
+        if (typeof parsed?.ts !== 'number') return false
+        return Date.now() - parsed.ts < STARTUP_SYNC_ERROR_TTL_MS
+      } catch {
+        return false
+      }
+    }
+    const handler = () => setStartupSyncError(readStartupSyncError())
+    window.addEventListener('xxlink:last-sync-error-changed', handler)
+    window.addEventListener('storage', handler)
+    return () => {
+      window.removeEventListener('xxlink:last-sync-error-changed', handler)
+      window.removeEventListener('storage', handler)
     }
   }, [])
 
@@ -269,6 +296,14 @@ const ConnectPage = () => {
     try {
       await syncSubscription()
       await refreshProxy()
+      // Re-probe subscription status in case the user just bought a plan
+      // outside the app (e.g. browser checkout) before hitting Refresh.
+      try {
+        const sub = await api.subscription.current()
+        setHasSubscription(sub?.status === 'ACTIVE')
+      } catch {
+        /* leave existing state */
+      }
       try {
         localStorage.removeItem(STARTUP_SYNC_ERROR_KEY)
       } catch {
@@ -294,8 +329,12 @@ const ConnectPage = () => {
       /* ignore */
     }
     setStartupSyncError(false)
+  }, [])
+
+  const handleRetryStartupSync = useCallback(() => {
+    handleDismissStartupSyncError()
     void handleRefresh()
-  }, [handleRefresh])
+  }, [handleDismissStartupSyncError, handleRefresh])
 
   // Button colors
   const getButtonColor = () => {
@@ -339,7 +378,19 @@ const ConnectPage = () => {
                 severity="error"
                 onClose={handleDismissStartupSyncError}
                 sx={{ width: '100%', cursor: 'pointer' }}
-                onClick={handleDismissStartupSyncError}
+                onClick={handleRetryStartupSync}
+                action={
+                  <Button
+                    size="small"
+                    color="inherit"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleRetryStartupSync()
+                    }}
+                  >
+                    {t('shared.actions.retry')}
+                  </Button>
+                }
               >
                 {t('layout.components.connect.startupSyncFailed')}
               </Alert>

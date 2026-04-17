@@ -23,7 +23,7 @@ import {
  * Designed to be called fire-and-forget:
  *   syncSubscription().catch(console.error)
  */
-let isSyncing = false
+let inflight: Promise<void> | null = null
 
 export interface SyncOptions {
   /**
@@ -35,13 +35,13 @@ export interface SyncOptions {
 }
 
 export async function syncSubscription(options?: SyncOptions): Promise<void> {
-  if (isSyncing) return // prevent concurrent runs
-  isSyncing = true
-  try {
-    await doSync(options?.force ?? false)
-  } finally {
-    isSyncing = false
-  }
+  // Share the in-flight promise so concurrent callers observe the actual
+  // outcome instead of a spurious early-return success.
+  if (inflight) return inflight
+  inflight = doSync(options?.force ?? false).finally(() => {
+    inflight = null
+  })
+  return inflight
 }
 
 async function doSync(force: boolean): Promise<void> {
@@ -168,6 +168,25 @@ async function doSync(force: boolean): Promise<void> {
 
   // 6. Activate the profile
   await patchProfilesConfig({ current: targetUid })
+
+  // 7. Clear any stale startup-sync-error flag so login/register/main all
+  //    benefit from a genuine success.
+  try {
+    localStorage.removeItem('xxlink:last-sync-error')
+    window.dispatchEvent(new CustomEvent('xxlink:last-sync-error-changed'))
+  } catch {
+    /* ignore */
+  }
+
+  // 8. If we force-rebuilt, notify subscribers (e.g. CurrentProxyCard) so
+  //    they can reset cached group/proxy selection state.
+  if (force) {
+    try {
+      window.dispatchEvent(new CustomEvent('xxlink:subscription-resync'))
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 /** Check if two subscription URLs point to the same service */

@@ -59,7 +59,7 @@
         "refreshing": "Refreshing...",
         "noSubscription": "You don't have a subscription yet"
       },
-      "startupSyncFailed": "Startup sync failed, click to retry",
+      "startupSyncFailed": "Subscription sync failed. Click to retry.",
       "feedback": {
         "toggleFailed": "Failed to toggle connection",
         "refreshFailed": "Failed to refresh subscription",

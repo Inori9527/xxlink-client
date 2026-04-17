@@ -183,6 +183,37 @@ export const CurrentProxyCard = () => {
     return savedSortType ? (Number(savedSortType) as ProxySortType) : 0
   })
   const [delaySortRefresh, setDelaySortRefresh] = useState(0)
+  // Bumped when a force-rebuild sync completes so the init effect re-runs
+  // and re-picks the primary group against the freshly imported profile.
+  const [resyncTick, setResyncTick] = useState(0)
+
+  useEffect(() => {
+    const handler = () => {
+      try {
+        // Clear any profile-scoped or legacy selection state so init picks
+        // a fresh primary group from the new profile's groups.
+        const keys = [STORAGE_KEY_GROUP, STORAGE_KEY_PROXY]
+        for (const base of keys) {
+          localStorage.removeItem(base)
+          if (currentProfileId) {
+            localStorage.removeItem(`${base}:${currentProfileId}`)
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+      setState((prev) => ({
+        ...prev,
+        selection: { group: '', proxy: '' },
+        displayProxy: null,
+      }))
+      setResyncTick((v) => v + 1)
+    }
+    window.addEventListener('xxlink:subscription-resync', handler)
+    return () => {
+      window.removeEventListener('xxlink:subscription-resync', handler)
+    }
+  }, [currentProfileId])
 
   const normalizePolicyName = useCallback(
     (value?: string | null) => (typeof value === 'string' ? value.trim() : ''),
@@ -312,7 +343,9 @@ export const CurrentProxyCard = () => {
         },
       }))
     }
-  }, [isGlobalMode, isDirectMode, proxies, readProfileScopedItem])
+    // resyncTick is intentionally in deps so a force-rebuild resync triggers
+    // this effect to re-pick the primary group from the fresh profile.
+  }, [isGlobalMode, isDirectMode, proxies, readProfileScopedItem, resyncTick])
 
   // 监听代理数据变化，更新状态
   useEffect(() => {
