@@ -28,6 +28,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 
 import { BasePage } from '@/components/base'
+import { useClash } from '@/hooks/use-clash'
 import { useProxySelection } from '@/hooks/use-proxy-selection'
 import { useTrafficData } from '@/hooks/use-traffic-data'
 import { useVerge } from '@/hooks/use-verge'
@@ -89,6 +90,7 @@ const ConnectPage = () => {
   const navigate = useNavigate()
   const pageVisible = useVisibility()
   const { verge, patchVerge } = useVerge()
+  const { patchClash } = useClash()
   const { proxies, refreshProxy } = useAppData()
   const { changeProxy } = useProxySelection({
     onSuccess: () => refreshProxy(),
@@ -271,6 +273,13 @@ const ConnectPage = () => {
         // both
         payload.enable_tun_mode = next
         payload.enable_system_proxy = next
+      }
+      // When connecting, force Clash routing mode to `global` so the node
+      // selected in the GLOBAL group actually carries traffic. Without this,
+      // a `rule`-mode subscription would ignore our selection and route
+      // through whatever the rules dictate (often a different country).
+      if (next) {
+        await patchClash({ mode: 'global' })
       }
       await patchVerge(payload)
     } catch (error) {
