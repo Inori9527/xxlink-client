@@ -616,6 +616,29 @@ FunctionEnd
   ${EndIf}
 !macroend
 
+!macro InstallVergeService
+  ; Install the helper service if it's not already present. Running this
+  ; unconditionally as part of setup matches the behaviour of commercial
+  ; VPN installers — users never have to click a separate "install service"
+  ; button, and Full VPN (TUN) mode works on first launch without a UAC
+  ; prompt. The installer is already elevated (installMode: perMachine),
+  ; so no extra consent dialog appears.
+  SimpleSC::ExistsService "clash_verge_service"
+  Pop $0  ; 0: exists; other: not installed
+  ${If} $0 != 0
+    ${If} ${FileExists} "$INSTDIR\resources\clash-verge-service-install.exe"
+      DetailPrint "Installing ${PRODUCTNAME} helper service..."
+      nsExec::ExecToLog '"$INSTDIR\resources\clash-verge-service-install.exe"'
+      Pop $0  ; exit code
+      ${If} $0 != 0
+        DetailPrint "Helper service install returned exit code $0 (ignored; Full VPN mode may be unavailable until reinstall)."
+      ${EndIf}
+    ${Else}
+      DetailPrint "clash-verge-service-install.exe missing — skipping helper service install."
+    ${EndIf}
+  ${EndIf}
+!macroend
+
 !macro StartVergeService
   ; Check if the service exists
   SimpleSC::ExistsService "clash_verge_service"
@@ -946,6 +969,7 @@ Section Install
     File /a "/oname={{this}}" "{{no-escape @key}}"
   {{/each}}
 
+  !insertmacro InstallVergeService
   !insertmacro StartVergeService
 
   ; Create file associations
