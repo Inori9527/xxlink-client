@@ -19,6 +19,7 @@ import {
   type ReactNode,
   useEffect,
 } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, Link as RouterLink } from 'react-router'
 
 import { apiRegister, AuthError } from '@/services/auth'
@@ -27,6 +28,7 @@ import { getPreloadConfig, resolveThemeMode } from '@/services/preload'
 
 export default function RegisterPage(): ReactNode {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { isAuthenticated } = useAuth()
 
   const [email, setEmail] = useState('')
@@ -58,11 +60,11 @@ export default function RegisterPage(): ReactNode {
     setError('')
 
     if (password !== confirm) {
-      setError('两次输入的密码不一致')
+      setError(t('shared.auth.validation.passwordMismatch'))
       return
     }
     if (password.length < 8) {
-      setError('密码至少需要 8 位字符')
+      setError(t('shared.auth.validation.passwordTooShort'))
       return
     }
 
@@ -75,7 +77,9 @@ export default function RegisterPage(): ReactNode {
       setError(
         err instanceof AuthError
           ? err.message
-          : `注册失败: ${err instanceof Error ? err.message : String(err)}`,
+          : t('shared.auth.errors.registerFailed', {
+              error: err instanceof Error ? err.message : String(err),
+            }),
       )
     } finally {
       setLoading(false)
@@ -114,10 +118,10 @@ export default function RegisterPage(): ReactNode {
                 letterSpacing: 1,
               }}
             >
-              XXLink
+              {t('shared.auth.brand')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              创建新账号
+              {t('shared.auth.register.subtitle')}
             </Typography>
           </Box>
 
@@ -131,7 +135,7 @@ export default function RegisterPage(): ReactNode {
           {/* Register form */}
           <Box component="form" onSubmit={handleSubmit} noValidate>
             <TextField
-              label="邮箱"
+              label={t('shared.auth.form.email')}
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -143,11 +147,11 @@ export default function RegisterPage(): ReactNode {
               sx={{ mb: 2 }}
             />
             <TextField
-              label="密码"
+              label={t('shared.auth.form.password')}
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="至少 8 位字符"
+              placeholder={t('shared.auth.register.passwordPlaceholder')}
               required
               fullWidth
               disabled={loading}
@@ -160,7 +164,11 @@ export default function RegisterPage(): ReactNode {
                         onClick={() => setShowPassword((v) => !v)}
                         edge="end"
                         tabIndex={-1}
-                        aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                        aria-label={
+                          showPassword
+                            ? t('shared.auth.form.hidePassword')
+                            : t('shared.auth.form.showPassword')
+                        }
                       >
                         {showPassword ? <VisibilityOff /> : <Visibility />}
                       </IconButton>
@@ -170,7 +178,7 @@ export default function RegisterPage(): ReactNode {
               }}
             />
             <TextField
-              label="确认密码"
+              label={t('shared.auth.form.confirmPassword')}
               type={showConfirm ? 'text' : 'password'}
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
@@ -187,7 +195,11 @@ export default function RegisterPage(): ReactNode {
                         onClick={() => setShowConfirm((v) => !v)}
                         edge="end"
                         tabIndex={-1}
-                        aria-label={showConfirm ? '隐藏密码' : '显示密码'}
+                        aria-label={
+                          showConfirm
+                            ? t('shared.auth.form.hidePassword')
+                            : t('shared.auth.form.showPassword')
+                        }
                       >
                         {showConfirm ? <VisibilityOff /> : <Visibility />}
                       </IconButton>
@@ -212,7 +224,7 @@ export default function RegisterPage(): ReactNode {
               {loading ? (
                 <CircularProgress size={22} color="inherit" />
               ) : (
-                '创建账号'
+                t('shared.auth.register.submit')
               )}
             </Button>
           </Box>
@@ -224,7 +236,7 @@ export default function RegisterPage(): ReactNode {
             sx={{ mt: 3 }}
             color="text.secondary"
           >
-            已有账号？{' '}
+            {t('shared.auth.register.hasAccount')}{' '}
             <RouterLink
               to="/login"
               style={{
@@ -233,7 +245,7 @@ export default function RegisterPage(): ReactNode {
                 textDecoration: 'none',
               }}
             >
-              立即登录
+              {t('shared.auth.register.goLogin')}
             </RouterLink>
           </Typography>
         </Paper>

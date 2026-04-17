@@ -96,6 +96,10 @@
         "group": "Group",
         "proxy": "Proxy",
         "noActiveNode": "No active proxy node"
+      },
+      "empty": {
+        "noSubscription": "No subscription yet",
+        "goToPlans": "Go to plans"
       }
     },
     "tests": {

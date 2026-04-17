@@ -47,17 +47,19 @@
       },
       "mode": {
         "system": "Browser only",
-        "tun": "Global",
+        "tun": "All Traffic",
         "both": "Recommended"
       },
-      "modeTooltip": "Browser only: proxy system browser traffic only. Global: use TUN virtual adapter for all traffic (admin required). Recommended: enable both.",
+      "modeTooltip": "Browser only: proxy system browser traffic only. All Traffic: use TUN virtual adapter for all traffic (admin required). Recommended: enable both.",
       "empty": {
         "title": "No nodes available",
         "subtitle": "Please purchase a plan or refresh your subscription",
         "goToPlans": "Go to Plans",
         "refresh": "Refresh subscription",
-        "refreshing": "Refreshing..."
+        "refreshing": "Refreshing...",
+        "noSubscription": "You don't have a subscription yet"
       },
+      "startupSyncFailed": "Startup sync failed, click to retry",
       "feedback": {
         "toggleFailed": "Failed to toggle connection",
         "refreshFailed": "Failed to refresh subscription",

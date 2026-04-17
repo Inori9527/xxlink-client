@@ -6,6 +6,7 @@ import {
   RefreshRounded,
 } from '@mui/icons-material'
 import {
+  Alert,
   Autocomplete,
   Box,
   Button,
@@ -32,9 +33,13 @@ import { useTrafficData } from '@/hooks/use-traffic-data'
 import { useVerge } from '@/hooks/use-verge'
 import { useVisibility } from '@/hooks/use-visibility'
 import { useAppData } from '@/providers/app-data-context'
+import { api } from '@/services/api'
 import { showNotice } from '@/services/notice-service'
 import { syncSubscription } from '@/services/subscription-sync'
 import parseTraffic from '@/utils/parse-traffic'
+
+const STARTUP_SYNC_ERROR_KEY = 'xxlink:last-sync-error'
+const STARTUP_SYNC_ERROR_TTL_MS = 5 * 60 * 1000
 
 type ConnectMode = 'system' | 'tun' | 'both'
 
@@ -94,7 +99,37 @@ const ConnectPage = () => {
   const [busy, setBusy] = useState(false)
   const [errorFlash, setErrorFlash] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [hasSubscription, setHasSubscription] = useState<boolean | null>(null)
+  const [startupSyncError, setStartupSyncError] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(STARTUP_SYNC_ERROR_KEY)
+      if (!raw) return false
+      const parsed = JSON.parse(raw) as { ts?: number }
+      if (typeof parsed?.ts !== 'number') return false
+      return Date.now() - parsed.ts < STARTUP_SYNC_ERROR_TTL_MS
+    } catch {
+      return false
+    }
+  })
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Probe current subscription status once on mount. Failure => treat as
+  // "no subscription" (safer default — hide the refresh button).
+  useEffect(() => {
+    let cancelled = false
+    api.subscription
+      .current()
+      .then((sub) => {
+        if (cancelled) return
+        setHasSubscription(sub?.status === 'ACTIVE')
+      })
+      .catch(() => {
+        if (!cancelled) setHasSubscription(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const tunEnabled = verge?.enable_tun_mode ?? false
   const sysEnabled = verge?.enable_system_proxy ?? false
@@ -166,17 +201,16 @@ const ConnectPage = () => {
 
   // Auto-select "auto" (url-test) when the current GLOBAL selection is empty
   // or has been filtered out of the visible list (e.g. raw "proxy" group).
-  const autoSelectedRef = useRef(false)
+  // Self-healing: re-fires whenever the selection becomes invalid (e.g. after
+  // a force-rebuild) but is idempotent when the current selection is valid.
   useEffect(() => {
-    if (autoSelectedRef.current) return
     if (!globalGroup?.name || nodeOptions.length === 0) return
-    const currentValid = currentNode && nodeOptions.includes(currentNode)
-    if (currentValid) return
-    const autoOption = nodeOptions.find((n) => n.toLowerCase() === 'auto')
-    const target = autoOption ?? nodeOptions[0]
-    if (!target) return
-    autoSelectedRef.current = true
-    changeProxy(globalGroup.name, target, currentNode, true)
+    if (currentNode && nodeOptions.includes(currentNode)) return
+    const target =
+      nodeOptions.find((n) => n.toLowerCase() === 'auto') ?? nodeOptions[0]
+    if (target && target !== currentNode) {
+      changeProxy(globalGroup.name, target, currentNode, true)
+    }
   }, [globalGroup?.name, nodeOptions, currentNode, changeProxy])
 
   const handleModeChange = useCallback((next: ConnectMode) => {
@@ -235,6 +269,12 @@ const ConnectPage = () => {
     try {
       await syncSubscription()
       await refreshProxy()
+      try {
+        localStorage.removeItem(STARTUP_SYNC_ERROR_KEY)
+      } catch {
+        /* ignore */
+      }
+      setStartupSyncError(false)
       showNotice.success('layout.components.connect.feedback.refreshed')
     } catch (error) {
       console.error('[Connect] refresh failed', error)
@@ -246,6 +286,16 @@ const ConnectPage = () => {
       setRefreshing(false)
     }
   })
+
+  const handleDismissStartupSyncError = useCallback(() => {
+    try {
+      localStorage.removeItem(STARTUP_SYNC_ERROR_KEY)
+    } catch {
+      /* ignore */
+    }
+    setStartupSyncError(false)
+    void handleRefresh()
+  }, [handleRefresh])
 
   // Button colors
   const getButtonColor = () => {
@@ -283,47 +333,72 @@ const ConnectPage = () => {
         }}
       >
         {isEmpty ? (
-          <Paper
-            elevation={0}
-            sx={{
-              width: '100%',
-              p: 4,
-              borderRadius: 3,
-              textAlign: 'center',
-              bgcolor: alpha(theme.palette.primary.main, 0.04),
-              border: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
-            }}
-          >
-            <Stack spacing={2} alignItems="center">
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                {t('layout.components.connect.empty.title')}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {t('layout.components.connect.empty.subtitle')}
-              </Typography>
-              <Stack direction="row" spacing={2} sx={{ pt: 1 }}>
-                <Button variant="contained" onClick={() => navigate('/plans')}>
-                  {t('layout.components.connect.empty.goToPlans')}
-                </Button>
-                <Button
-                  variant="outlined"
-                  onClick={handleRefresh}
-                  disabled={refreshing}
-                  startIcon={
-                    refreshing ? (
-                      <CircularProgress size={16} />
-                    ) : (
-                      <RefreshRounded />
-                    )
-                  }
-                >
-                  {refreshing
-                    ? t('layout.components.connect.empty.refreshing')
-                    : t('layout.components.connect.empty.refresh')}
-                </Button>
+          <>
+            {hasSubscription === true && startupSyncError && (
+              <Alert
+                severity="error"
+                onClose={handleDismissStartupSyncError}
+                sx={{ width: '100%', cursor: 'pointer' }}
+                onClick={handleDismissStartupSyncError}
+              >
+                {t('layout.components.connect.startupSyncFailed')}
+              </Alert>
+            )}
+            <Paper
+              elevation={0}
+              sx={{
+                width: '100%',
+                p: 4,
+                borderRadius: 3,
+                textAlign: 'center',
+                bgcolor: alpha(theme.palette.primary.main, 0.04),
+                border: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
+              }}
+            >
+              <Stack spacing={2} alignItems="center">
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                  {t('layout.components.connect.empty.title')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {t('layout.components.connect.empty.subtitle')}
+                </Typography>
+                {hasSubscription !== true && (
+                  <Chip
+                    size="small"
+                    label={t('layout.components.connect.empty.noSubscription')}
+                    color="default"
+                    variant="outlined"
+                  />
+                )}
+                <Stack direction="row" spacing={2} sx={{ pt: 1 }}>
+                  <Button
+                    variant="contained"
+                    onClick={() => navigate('/plans')}
+                  >
+                    {t('layout.components.connect.empty.goToPlans')}
+                  </Button>
+                  {hasSubscription === true && (
+                    <Button
+                      variant="outlined"
+                      onClick={handleRefresh}
+                      disabled={refreshing}
+                      startIcon={
+                        refreshing ? (
+                          <CircularProgress size={16} />
+                        ) : (
+                          <RefreshRounded />
+                        )
+                      }
+                    >
+                      {refreshing
+                        ? t('layout.components.connect.empty.refreshing')
+                        : t('layout.components.connect.empty.refresh')}
+                    </Button>
+                  )}
+                </Stack>
               </Stack>
-            </Stack>
-          </Paper>
+            </Paper>
+          </>
         ) : (
           <>
             {/* Big round button */}

@@ -51,6 +51,7 @@ pub fn resolve_setup_async() {
 
         init_verge_config().await;
         Config::verify_config_initialization().await;
+        apply_auto_connect_on_launch().await;
         init_window().await;
 
         let core_init = AsyncHandler::spawn(|| async {
@@ -156,6 +157,27 @@ pub(super) async fn init_tray() {
 
 pub(super) async fn init_verge_config() {
     logging_error!(Type::Setup, Config::init_config().await);
+}
+
+/// If the user opted out of auto-connect on launch, clear the persisted
+/// TUN / system proxy flags before the core manager, sysopt and tray read them.
+/// Default (None) preserves legacy behavior: restore last state.
+pub(super) async fn apply_auto_connect_on_launch() {
+    let verge = Config::verge().await;
+    let auto_connect = verge.latest_arc().auto_connect_on_launch.unwrap_or(true);
+    if auto_connect {
+        return;
+    }
+    logging!(
+        info,
+        Type::Setup,
+        "auto_connect_on_launch is disabled; forcing clean start (TUN + system proxy off)",
+    );
+    verge.edit_draft(|d| {
+        d.enable_tun_mode = Some(false);
+        d.enable_system_proxy = Some(false);
+    });
+    verge.apply();
 }
 
 pub(super) async fn init_service_manager() {

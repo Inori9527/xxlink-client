@@ -141,7 +141,47 @@
   "auth": {
     "forgotPassword": "忘记密码？",
     "registeredSuccess": "注册成功，请登录",
-    "cancelGoogleLogin": "取消 Google 登录"
+    "cancelGoogleLogin": "取消 Google 登录",
+    "brand": "XXLink",
+    "login": {
+      "subtitle": "登录以继续使用",
+      "submit": "登录",
+      "dividerText": "或使用以下方式登录",
+      "noAccount": "还没有账号？",
+      "goRegister": "立即注册"
+    },
+    "register": {
+      "subtitle": "创建新账号",
+      "submit": "创建账号",
+      "hasAccount": "已有账号？",
+      "goLogin": "立即登录",
+      "passwordPlaceholder": "至少 8 位字符"
+    },
+    "form": {
+      "email": "邮箱",
+      "password": "密码",
+      "confirmPassword": "确认密码",
+      "showPassword": "显示密码",
+      "hidePassword": "隐藏密码"
+    },
+    "validation": {
+      "passwordMismatch": "两次输入的密码不一致",
+      "passwordTooShort": "密码至少需要 8 位字符"
+    },
+    "google": {
+      "signIn": "使用 Google 登录",
+      "waiting": "正在等待 Google 登录...",
+      "notConfigured": "Google 登录未配置，请联系管理员",
+      "accessDenied": "您取消了授权，请重试",
+      "authFailed": "Google 授权失败: {{error}}",
+      "missingCode": "Google 授权失败：未收到授权码",
+      "loginFailed": "Google 登录失败: {{error}}"
+    },
+    "errors": {
+      "openBrowser": "无法打开浏览器: {{error}}",
+      "loginFailed": "登录失败: {{error}}",
+      "registerFailed": "注册失败: {{error}}"
+    }
   },
   "legal": {
     "terms": "服务条款",

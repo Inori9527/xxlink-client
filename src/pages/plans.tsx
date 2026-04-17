@@ -68,7 +68,7 @@ function mapError(
     ) {
       return t('plans.page.feedback.errors.networkError')
     }
-    return msg || t(fallbackKey)
+    return t(fallbackKey)
   }
   if (typeof err === 'string' && err) return err
   return t(fallbackKey)
@@ -176,16 +176,25 @@ const CurrentSubCard = ({ sub, onCopied }: CurrentSubCardProps) => {
         </Box>
       </Box>
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          noWrap
-          sx={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}
-        >
-          {t('plans.page.current.labels.subUrl')}
-          {sub.subUrl}
-        </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            component="div"
+            sx={{ mb: 0.25 }}
+          >
+            {t('plans.page.current.labels.subUrl')}
+          </Typography>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            component="div"
+            sx={{ wordBreak: 'break-all' }}
+          >
+            {sub.subUrl}
+          </Typography>
+        </Box>
         <Tooltip title={t('plans.page.current.tooltips.copy')}>
           <IconButton
             size="small"
@@ -392,7 +401,7 @@ const PlansPage = () => {
         setPlans(plansData)
         setSubscription(subData)
       } catch (err) {
-        setError(mapError(err, t, 'page.feedback.errors.loadFailed'))
+        setError(mapError(err, t, 'plans.page.feedback.errors.loadFailed'))
       } finally {
         setLoading(false)
       }
@@ -409,7 +418,7 @@ const PlansPage = () => {
       )
       await open(result.sessionUrl)
     } catch (err) {
-      setError(mapError(err, t, 'page.feedback.errors.purchaseFailed'))
+      setError(mapError(err, t, 'plans.page.feedback.errors.purchaseFailed'))
     } finally {
       setPurchasingId(null)
     }

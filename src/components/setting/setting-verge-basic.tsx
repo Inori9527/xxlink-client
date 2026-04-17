@@ -44,7 +44,13 @@ const SettingVergeBasic = ({ onError }: Props) => {
   const { t } = useTranslation()
 
   const { verge, patchVerge, mutateVerge } = useVerge()
-  const { theme_mode, language, tray_event, start_page } = verge ?? {}
+  const {
+    theme_mode,
+    language,
+    tray_event,
+    start_page,
+    auto_connect_on_launch,
+  } = verge ?? {}
   const configRef = useRef<DialogRef>(null)
   const miscRef = useRef<DialogRef>(null)
   const updateRef = useRef<DialogRef>(null)
@@ -162,6 +168,29 @@ const SettingVergeBasic = ({ onError }: Props) => {
               )
             })}
           </Select>
+        </GuardState>
+      </SettingItem>
+
+      <SettingItem
+        label={t('settings.components.verge.basic.fields.autoConnectOnLaunch')}
+        extra={
+          <TooltipIcon
+            title={t(
+              'settings.components.verge.basic.tooltips.autoConnectOnLaunch',
+            )}
+            sx={{ opacity: '0.7' }}
+          />
+        }
+      >
+        <GuardState
+          value={auto_connect_on_launch ?? true}
+          valueProps="checked"
+          onCatch={onError}
+          onFormat={(_: unknown, checked: boolean) => checked}
+          onChange={(e) => onChangeData({ auto_connect_on_launch: e })}
+          onGuard={(e) => patchVerge({ auto_connect_on_launch: e })}
+        >
+          <Switch edge="end" />
         </GuardState>
       </SettingItem>
 

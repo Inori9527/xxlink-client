@@ -96,6 +96,10 @@
         "group": "代理组",
         "proxy": "节点",
         "noActiveNode": "暂无激活的代理节点"
+      },
+      "empty": {
+        "noSubscription": "您还没有订阅",
+        "goToPlans": "前往套餐"
       }
     },
     "tests": {

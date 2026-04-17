@@ -72,6 +72,22 @@ function clearStorage(): void {
   localStorage.removeItem(LS_ACCESS_TOKEN)
   localStorage.removeItem(LS_REFRESH_TOKEN)
   localStorage.removeItem(LS_USER)
+
+  // Also clear any xxlink:* namespaced keys (user preferences like
+  // connect-mode, show-advanced-settings, last-sync-error, etc.).
+  // We do NOT touch clash-verge-* keys — those are device-scoped by design.
+  try {
+    const keysToRemove: string[] = []
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith('xxlink:')) {
+        keysToRemove.push(key)
+      }
+    }
+    keysToRemove.forEach((key) => localStorage.removeItem(key))
+  } catch {
+    // localStorage unavailable — ignore
+  }
 }
 
 // ---------------------------------------------------------------------------

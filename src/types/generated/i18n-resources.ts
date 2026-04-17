@@ -68,6 +68,10 @@ export interface TranslationResources {
           actions: {
             refreshDelay: string
           }
+          empty: {
+            goToPlans: string
+            noSubscription: string
+          }
           labels: {
             directMode: string
             globalMode: string
@@ -184,6 +188,7 @@ export interface TranslationResources {
           }
           empty: {
             goToPlans: string
+            noSubscription: string
             refresh: string
             refreshing: string
             subtitle: string
@@ -213,6 +218,7 @@ export interface TranslationResources {
             tun: string
           }
           modeTooltip: string
+          startupSyncFailed: string
           title: string
         }
         navigation: {
@@ -295,11 +301,11 @@ export interface TranslationResources {
         feedback: {
           copied: string
           errors: {
+            generic: string
             loadFailed: string
             networkError: string
             purchaseFailed: string
             sessionExpired: string
-            unknownError: string
           }
         }
         form: {
@@ -725,6 +731,7 @@ export interface TranslationResources {
               browse: string
             }
             fields: {
+              autoConnectOnLaunch: string
               hotkeySetting: string
               language: string
               layoutSetting: string
@@ -737,6 +744,7 @@ export interface TranslationResources {
             }
             title: string
             tooltips: {
+              autoConnectOnLaunch: string
               showAdvancedSettings: string
             }
             trayOptions: {
@@ -1373,9 +1381,49 @@ export interface TranslationResources {
         upgrade: string
       }
       auth: {
+        brand: string
         cancelGoogleLogin: string
+        errors: {
+          loginFailed: string
+          openBrowser: string
+          registerFailed: string
+        }
         forgotPassword: string
+        form: {
+          confirmPassword: string
+          email: string
+          hidePassword: string
+          password: string
+          showPassword: string
+        }
+        google: {
+          accessDenied: string
+          authFailed: string
+          loginFailed: string
+          missingCode: string
+          notConfigured: string
+          signIn: string
+          waiting: string
+        }
+        login: {
+          dividerText: string
+          goRegister: string
+          noAccount: string
+          submit: string
+          subtitle: string
+        }
+        register: {
+          goLogin: string
+          hasAccount: string
+          passwordPlaceholder: string
+          submit: string
+          subtitle: string
+        }
         registeredSuccess: string
+        validation: {
+          passwordMismatch: string
+          passwordTooShort: string
+        }
       }
       editorModes: {
         advanced: string

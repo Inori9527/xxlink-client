@@ -16,7 +16,7 @@
         "trafficUsage": "流量使用",
         "startAt": "开始时间",
         "expireAt": "到期时间",
-        "subUrl": "订阅链接："
+        "subUrl": "订阅链接"
       },
       "tooltips": {
         "copy": "复制订阅链接"
@@ -50,7 +50,7 @@
         "purchaseFailed": "创建订单失败，请稍后重试",
         "sessionExpired": "登录已过期，请重新登录",
         "networkError": "网络错误，请稍后重试",
-        "unknownError": "发生未知错误"
+        "generic": "发生未知错误，请稍后重试"
       }
     },
     "duration": {

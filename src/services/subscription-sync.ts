@@ -94,6 +94,17 @@ async function doSync(force: boolean): Promise<void> {
       }
     }
     remoteProfiles.length = 0
+
+    // Cached proxy-group selections may reference group names that no
+    // longer exist in the freshly imported profile. Clear them so the
+    // CurrentProxyCard re-initializes with the new groups.
+    try {
+      localStorage.removeItem('clash-verge-selected-proxy-group')
+      localStorage.removeItem('clash-verge-selected-proxy')
+      localStorage.removeItem('clash-verge-proxy-sort-type')
+    } catch {
+      // localStorage unavailable — ignore
+    }
   }
 
   // Find exact match (same token) or pick the first matching origin profile

@@ -184,6 +184,9 @@ pub struct IVerge {
 
     /// 启用外部控制器
     pub enable_external_controller: Option<bool>,
+
+    /// 启动时自动连接（恢复上次的 TUN/系统代理状态）
+    pub auto_connect_on_launch: Option<bool>,
 }
 
 impl IVerge {
@@ -336,6 +339,7 @@ impl IVerge {
             enable_dns_settings: Some(false),
             home_cards: None,
             enable_external_controller: Some(false),
+            auto_connect_on_launch: Some(true),
             ..Self::default()
         }
     }
@@ -421,6 +425,7 @@ impl IVerge {
         patch!(enable_dns_settings);
         patch!(home_cards);
         patch!(enable_external_controller);
+        patch!(auto_connect_on_launch);
     }
 
     pub const fn get_singleton_port() -> u16 {

@@ -119,15 +119,15 @@ export default function LoginPage(): ReactNode {
       if (oauthError) {
         setError(
           oauthError === 'access_denied'
-            ? '您取消了授权，请重试'
-            : `Google 授权失败: ${oauthError}`,
+            ? t('shared.auth.google.accessDenied')
+            : t('shared.auth.google.authFailed', { error: oauthError }),
         )
         setGoogleLoading(false)
         return
       }
 
       if (!code || !redirectUri) {
-        setError('Google 授权失败：未收到授权码')
+        setError(t('shared.auth.google.missingCode'))
         setGoogleLoading(false)
         return
       }
@@ -147,7 +147,9 @@ export default function LoginPage(): ReactNode {
         setError(
           err instanceof AuthError
             ? err.message
-            : `Google 登录失败: ${err instanceof Error ? err.message : String(err)}`,
+            : t('shared.auth.google.loginFailed', {
+                error: err instanceof Error ? err.message : String(err),
+              }),
         )
       } finally {
         setGoogleLoading(false)
@@ -161,7 +163,7 @@ export default function LoginPage(): ReactNode {
     return () => {
       unlisten?.()
     }
-  }, [setAuth, navigate])
+  }, [setAuth, navigate, t])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -176,7 +178,9 @@ export default function LoginPage(): ReactNode {
       setError(
         err instanceof AuthError
           ? err.message
-          : `登录失败: ${err instanceof Error ? err.message : String(err)}`,
+          : t('shared.auth.errors.loginFailed', {
+              error: err instanceof Error ? err.message : String(err),
+            }),
       )
     } finally {
       setLoading(false)
@@ -185,7 +189,7 @@ export default function LoginPage(): ReactNode {
 
   const handleGoogleLogin = async () => {
     if (!GOOGLE_CLIENT_ID) {
-      setError('Google 登录未配置，请联系管理员')
+      setError(t('shared.auth.google.notConfigured'))
       return
     }
     setError('')
@@ -212,7 +216,9 @@ export default function LoginPage(): ReactNode {
       })
     } catch (err) {
       setError(
-        `无法打开浏览器: ${err instanceof Error ? err.message : String(err)}`,
+        t('shared.auth.errors.openBrowser', {
+          error: err instanceof Error ? err.message : String(err),
+        }),
       )
       setGoogleLoading(false)
     }
@@ -272,10 +278,10 @@ export default function LoginPage(): ReactNode {
                 letterSpacing: 1,
               }}
             >
-              XXLink
+              {t('shared.auth.brand')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              登录以继续使用
+              {t('shared.auth.login.subtitle')}
             </Typography>
           </Box>
 
@@ -300,7 +306,7 @@ export default function LoginPage(): ReactNode {
           {/* Login form */}
           <Box component="form" onSubmit={handleSubmit} noValidate>
             <TextField
-              label="邮箱"
+              label={t('shared.auth.form.email')}
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -312,7 +318,7 @@ export default function LoginPage(): ReactNode {
               sx={{ mb: 2 }}
             />
             <TextField
-              label="密码"
+              label={t('shared.auth.form.password')}
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -329,7 +335,11 @@ export default function LoginPage(): ReactNode {
                         onClick={() => setShowPassword((v) => !v)}
                         edge="end"
                         tabIndex={-1}
-                        aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                        aria-label={
+                          showPassword
+                            ? t('shared.auth.form.hidePassword')
+                            : t('shared.auth.form.showPassword')
+                        }
                       >
                         {showPassword ? <VisibilityOff /> : <Visibility />}
                       </IconButton>
@@ -371,7 +381,7 @@ export default function LoginPage(): ReactNode {
               {loading ? (
                 <CircularProgress size={22} color="inherit" />
               ) : (
-                '登录'
+                t('shared.auth.login.submit')
               )}
             </Button>
           </Box>
@@ -380,7 +390,7 @@ export default function LoginPage(): ReactNode {
           <>
             <Divider sx={{ my: 2.5 }}>
               <Typography variant="caption" color="text.secondary">
-                或使用以下方式登录
+                {t('shared.auth.login.dividerText')}
               </Typography>
             </Divider>
             {googleLoading ? (
@@ -417,7 +427,7 @@ export default function LoginPage(): ReactNode {
                   },
                 }}
               >
-                使用 Google 登录
+                {t('shared.auth.google.signIn')}
               </Button>
             )}
           </>
@@ -429,7 +439,7 @@ export default function LoginPage(): ReactNode {
             sx={{ mt: 3 }}
             color="text.secondary"
           >
-            还没有账号？{' '}
+            {t('shared.auth.login.noAccount')}{' '}
             <RouterLink
               to="/register"
               style={{
@@ -438,7 +448,7 @@ export default function LoginPage(): ReactNode {
                 textDecoration: 'none',
               }}
             >
-              立即注册
+              {t('shared.auth.login.goRegister')}
             </RouterLink>
           </Typography>
 

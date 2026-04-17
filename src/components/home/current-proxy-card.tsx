@@ -1066,6 +1066,28 @@ export const CurrentProxyCard = () => {
             </Select>
           </FormControl>
         </Box>
+      ) : !currentProfile || !proxies?.groups?.length ? (
+        <Box
+          sx={{
+            textAlign: 'center',
+            py: 4,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 1.5,
+          }}
+        >
+          <Typography variant="body1" color="text.secondary">
+            {t('home.components.currentProxy.empty.noSubscription')}
+          </Typography>
+          <Button
+            variant="contained"
+            size="small"
+            onClick={() => navigate('/plans')}
+          >
+            {t('home.components.currentProxy.empty.goToPlans')}
+          </Button>
+        </Box>
       ) : (
         <Box sx={{ textAlign: 'center', py: 4 }}>
           <Typography variant="body1" color="text.secondary">

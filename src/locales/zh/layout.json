@@ -47,17 +47,19 @@
       },
       "mode": {
         "system": "仅浏览器",
-        "tun": "全局",
+        "tun": "全流量",
         "both": "推荐"
       },
-      "modeTooltip": "仅浏览器：只代理系统浏览器流量。全局：使用 TUN 虚拟网卡接管所有流量（需管理员）。推荐：两者都启用。",
+      "modeTooltip": "仅浏览器：只代理系统浏览器流量。全流量：使用 TUN 虚拟网卡接管所有流量（需管理员）。推荐：两者都启用。",
       "empty": {
         "title": "暂无可用节点",
         "subtitle": "请先购买套餐或刷新订阅",
         "goToPlans": "前往套餐",
         "refresh": "刷新订阅",
-        "refreshing": "刷新中..."
+        "refreshing": "刷新中...",
+        "noSubscription": "您还没有订阅"
       },
+      "startupSyncFailed": "启动时刷新订阅失败，点击重试",
       "feedback": {
         "toggleFailed": "连接切换失败",
         "refreshFailed": "刷新订阅失败",

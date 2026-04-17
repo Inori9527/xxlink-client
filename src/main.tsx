@@ -147,7 +147,29 @@ const bootstrap = async () => {
       new Promise((_, reject) =>
         setTimeout(() => reject(new Error('syncSubscription timeout')), 10000),
       ),
-    ]).catch(console.error)
+    ])
+      .then(() => {
+        // Clear any stale error flag from a previous failed startup
+        try {
+          localStorage.removeItem('xxlink:last-sync-error')
+        } catch {
+          /* ignore */
+        }
+      })
+      .catch((error) => {
+        console.error(error)
+        try {
+          localStorage.setItem(
+            'xxlink:last-sync-error',
+            JSON.stringify({
+              message: error instanceof Error ? error.message : String(error),
+              ts: Date.now(),
+            }),
+          )
+        } catch {
+          /* ignore */
+        }
+      })
   }
 }
 

@@ -141,7 +141,47 @@
   "auth": {
     "forgotPassword": "Forgot password?",
     "registeredSuccess": "Registered successfully — please log in",
-    "cancelGoogleLogin": "Cancel Google login"
+    "cancelGoogleLogin": "Cancel Google login",
+    "brand": "XXLink",
+    "login": {
+      "subtitle": "Sign in to continue",
+      "submit": "Sign in",
+      "dividerText": "Or sign in with",
+      "noAccount": "Don't have an account?",
+      "goRegister": "Sign up"
+    },
+    "register": {
+      "subtitle": "Create a new account",
+      "submit": "Create account",
+      "hasAccount": "Already have an account?",
+      "goLogin": "Sign in",
+      "passwordPlaceholder": "At least 8 characters"
+    },
+    "form": {
+      "email": "Email",
+      "password": "Password",
+      "confirmPassword": "Confirm password",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password"
+    },
+    "validation": {
+      "passwordMismatch": "Passwords don't match",
+      "passwordTooShort": "Password must be at least 8 characters"
+    },
+    "google": {
+      "signIn": "Sign in with Google",
+      "waiting": "Waiting for Google sign-in...",
+      "notConfigured": "Google sign-in is not configured. Please contact the administrator.",
+      "accessDenied": "You cancelled the authorization. Please try again.",
+      "authFailed": "Google authorization failed: {{error}}",
+      "missingCode": "Google authorization failed: no authorization code received",
+      "loginFailed": "Google sign-in failed: {{error}}"
+    },
+    "errors": {
+      "openBrowser": "Unable to open browser: {{error}}",
+      "loginFailed": "Sign-in failed: {{error}}",
+      "registerFailed": "Registration failed: {{error}}"
+    }
   },
   "legal": {
     "terms": "Terms of Service",

@@ -167,13 +167,15 @@
           "disable": "禁用"
         },
         "tooltips": {
-          "showAdvancedSettings": "显示高级开发者及诊断选项"
+          "showAdvancedSettings": "显示高级开发者及诊断选项",
+          "autoConnectOnLaunch": "开启后，应用启动时会恢复上次的连接状态"
         },
         "fields": {
           "language": "语言设置",
           "themeMode": "主题模式",
           "trayClickEvent": "托盘点击事件",
           "startPage": "启动页面",
+          "autoConnectOnLaunch": "启动时自动连接",
           "themeSetting": "主题设置",
           "layoutSetting": "界面设置",
           "misc": "杂项设置",

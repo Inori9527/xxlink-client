@@ -16,7 +16,7 @@
         "trafficUsage": "Traffic usage",
         "startAt": "Start date",
         "expireAt": "Expire date",
-        "subUrl": "Subscription URL:"
+        "subUrl": "Subscription URL"
       },
       "tooltips": {
         "copy": "Copy subscription URL"
@@ -50,7 +50,7 @@
         "purchaseFailed": "Failed to create order. Please try again later.",
         "sessionExpired": "Session expired. Please log in again.",
         "networkError": "Network error. Please try again later.",
-        "unknownError": "An unknown error occurred."
+        "generic": "An unknown error occurred. Please try again later."
       }
     },
     "duration": {

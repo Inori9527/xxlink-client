@@ -943,6 +943,7 @@ interface IVergeConfig {
   enable_hover_jump_navigator?: boolean
   hover_jump_navigator_delay?: number
   enable_external_controller?: boolean
+  auto_connect_on_launch?: boolean
 }
 
 // Traffic monitor types
