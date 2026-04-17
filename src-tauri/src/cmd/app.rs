@@ -4,7 +4,9 @@ use crate::utils::resolve::ui::{self, UiReadyStage};
 use crate::{cmd::StringifyErr as _, feat, utils::dirs};
 use clash_verge_logging::{Type, logging};
 use smartstring::alias::String;
-use tauri::{AppHandle, Manager as _};
+use tauri::AppHandle;
+#[cfg(feature = "verge-dev")]
+use tauri::Manager as _;
 
 /// 打开应用程序所在目录
 #[tauri::command]
@@ -58,7 +60,11 @@ pub async fn open_core_log() -> CmdResult<()> {
 }
 
 /// 打开/关闭开发者工具
+///
+/// Devtools are only compiled in when the `verge-dev` feature is enabled —
+/// release builds don't ship them, so this command is a no-op there.
 #[tauri::command]
+#[cfg(feature = "verge-dev")]
 pub fn open_devtools(app_handle: AppHandle) {
     if let Some(window) = app_handle.get_webview_window("main") {
         if !window.is_devtools_open() {
@@ -67,6 +73,12 @@ pub fn open_devtools(app_handle: AppHandle) {
             window.close_devtools();
         }
     }
+}
+
+#[tauri::command]
+#[cfg(not(feature = "verge-dev"))]
+pub fn open_devtools(_app_handle: AppHandle) {
+    // devtools not compiled in
 }
 
 /// 退出应用
