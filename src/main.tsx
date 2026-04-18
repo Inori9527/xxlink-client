@@ -1,6 +1,8 @@
 import './assets/styles/index.scss'
 import './services/monaco'
 
+import createCache from '@emotion/cache'
+import { CacheProvider } from '@emotion/react'
 import { ResizeObserver } from '@juggle/resize-observer'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { ComposeContextProvider } from 'foxact/compose-context-provider'
@@ -42,6 +44,29 @@ if (!container) {
 
 disableWebViewShortcuts()
 
+// Tauri 2 auto-injects a nonce into the CSP style-src directive at runtime.
+// Per CSP spec, when a nonce is present, `'unsafe-inline'` is ignored — so
+// any inline styles emotion (MUI's style engine) injects without a matching
+// nonce get blocked. Read the Tauri-supplied nonce from the runtime CSP and
+// thread it through emotion's cache so its <style> tags pass the policy.
+const getCspNonce = (): string | undefined => {
+  const metaNonce = document.querySelector<HTMLMetaElement>(
+    'meta[property="csp-nonce"]',
+  )?.content
+  if (metaNonce) return metaNonce
+  // Tauri exposes the nonce on a script element with [data-tauri-nonce]
+  const scriptNonce = document
+    .querySelector<HTMLScriptElement>('script[nonce]')
+    ?.getAttribute('nonce')
+  return scriptNonce ?? undefined
+}
+
+const emotionCache = createCache({
+  key: 'mui',
+  nonce: getCspNonce(),
+  prepend: true,
+})
+
 const initializeApp = (initialThemeMode: 'light' | 'dark') => {
   const contexts = [
     <ThemeModeProvider key="theme" initialState={initialThemeMode} />,
@@ -52,19 +77,21 @@ const initializeApp = (initialThemeMode: 'light' | 'dark') => {
   const root = createRoot(container)
   root.render(
     <React.StrictMode>
-      <ComposeContextProvider contexts={contexts}>
-        <BaseErrorBoundary>
-          <QueryClientProvider client={queryClient}>
-            <AuthProvider>
-              <WindowProvider>
-                <AppDataProvider>
-                  <RouterProvider router={router} />
-                </AppDataProvider>
-              </WindowProvider>
-            </AuthProvider>
-          </QueryClientProvider>
-        </BaseErrorBoundary>
-      </ComposeContextProvider>
+      <CacheProvider value={emotionCache}>
+        <ComposeContextProvider contexts={contexts}>
+          <BaseErrorBoundary>
+            <QueryClientProvider client={queryClient}>
+              <AuthProvider>
+                <WindowProvider>
+                  <AppDataProvider>
+                    <RouterProvider router={router} />
+                  </AppDataProvider>
+                </WindowProvider>
+              </AuthProvider>
+            </QueryClientProvider>
+          </BaseErrorBoundary>
+        </ComposeContextProvider>
+      </CacheProvider>
     </React.StrictMode>,
   )
 }

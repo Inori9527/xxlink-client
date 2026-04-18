@@ -34,15 +34,14 @@ export default defineConfig({
         // leaving the main bundle's MUI usage (e.g. the login page, which
         // is in the entry chunk) with an undefined style engine and
         // completely unstyled components.
-        manualChunks: {
-          'mui-core': [
-            '@mui/material',
-            '@mui/system',
-            '@mui/icons-material',
-            '@mui/lab',
-            '@emotion/react',
-            '@emotion/styled',
-          ],
+        manualChunks: (id: string) => {
+          if (
+            id.includes('/node_modules/@mui/') ||
+            id.includes('/node_modules/@emotion/')
+          ) {
+            return 'mui-core'
+          }
+          return undefined
         },
       },
     },
