@@ -169,7 +169,17 @@ async function doSync(force: boolean): Promise<void> {
   // 6. Activate the profile
   await patchProfilesConfig({ current: targetUid })
 
-  // 7. Clear any stale startup-sync-error flag so login/register/main all
+  // 7. Tell AppDataProvider to refetch clash config + proxy list so the
+  //    Connect page picks up the new nodes immediately (without requiring
+  //    the user to click the manual refresh button).
+  try {
+    window.dispatchEvent(new Event('verge://refresh-clash-config'))
+    window.dispatchEvent(new Event('verge://refresh-proxy-config'))
+  } catch {
+    /* ignore */
+  }
+
+  // 8. Clear any stale startup-sync-error flag so login/register/main all
   //    benefit from a genuine success.
   try {
     localStorage.removeItem('xxlink:last-sync-error')
