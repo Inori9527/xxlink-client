@@ -54,7 +54,7 @@
           "requireLiteralLeadingDot": false
         }
       },
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: https: data:; connect-src 'self' https://api.xxlink.net https://api.ip.sb http://localhost http://127.0.0.1; font-src 'self' data:"
+      "csp": null
     }
   }
 }
