@@ -145,15 +145,9 @@ impl Config {
                                 arch_msg
                             );
                             CoreManager::global()
-                                .use_default_config(
-                                    "config_validate::core_arch_mismatch",
-                                    &arch_msg,
-                                )
+                                .use_default_config("config_validate::core_arch_mismatch", &arch_msg)
                                 .await?;
-                            return Ok(Some((
-                                "config_validate::core_arch_mismatch",
-                                arch_msg,
-                            )));
+                            return Ok(Some(("config_validate::core_arch_mismatch", arch_msg)));
                         }
                         logging!(
                             warn,

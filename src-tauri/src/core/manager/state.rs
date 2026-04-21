@@ -72,16 +72,8 @@ impl CoreManager {
                 // etc). Emit the actionable notice instead of silently
                 // logging a generic spawn failure.
                 if rendered.contains("os error 216") {
-                    logging!(
-                        error,
-                        Type::Core,
-                        "Sidecar 启动失败（架构不匹配）: {}",
-                        rendered
-                    );
-                    handle::Handle::notice_message(
-                        "config_validate::core_arch_mismatch",
-                        rendered,
-                    );
+                    logging!(error, Type::Core, "Sidecar 启动失败（架构不匹配）: {}", rendered);
+                    handle::Handle::notice_message("config_validate::core_arch_mismatch", rendered);
                 }
                 return Err(err.into());
             }

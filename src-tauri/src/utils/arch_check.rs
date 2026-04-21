@@ -25,12 +25,12 @@ pub enum BinaryArch {
 impl BinaryArch {
     pub fn label(&self) -> String {
         match self {
-            BinaryArch::X86 => "x86".to_string(),
-            BinaryArch::X64 => "x64".to_string(),
-            BinaryArch::Arm => "ARM".to_string(),
-            BinaryArch::Arm64 => "ARM64".to_string(),
-            BinaryArch::Unknown(code) => format!("unknown(0x{code:04x})"),
-            BinaryArch::NotPe => "non-PE".to_string(),
+            Self::X86 => "x86".to_string(),
+            Self::X64 => "x64".to_string(),
+            Self::Arm => "ARM".to_string(),
+            Self::Arm64 => "ARM64".to_string(),
+            Self::Unknown(code) => format!("unknown(0x{code:04x})"),
+            Self::NotPe => "non-PE".to_string(),
         }
     }
 }
@@ -77,7 +77,7 @@ pub const fn host_arch() -> BinaryArch {
 #[cfg(target_os = "windows")]
 pub fn read_pe_machine<P: AsRef<Path>>(path: P) -> std::io::Result<BinaryArch> {
     use std::fs::File;
-    use std::io::{Read, Seek, SeekFrom};
+    use std::io::{Read as _, Seek as _, SeekFrom};
 
     let mut f = File::open(path)?;
 
@@ -122,9 +122,7 @@ pub fn is_compatible(host: BinaryArch, bin: BinaryArch) -> bool {
         return true;
     }
     // ARM64 Windows can run x86 (WOW64) and x64 (emulation, Win11+).
-    if matches!(host, BinaryArch::Arm64)
-        && matches!(bin, BinaryArch::X86 | BinaryArch::X64 | BinaryArch::Arm)
-    {
+    if matches!(host, BinaryArch::Arm64) && matches!(bin, BinaryArch::X86 | BinaryArch::X64 | BinaryArch::Arm) {
         return true;
     }
     false
