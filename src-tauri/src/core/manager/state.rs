@@ -4,9 +4,9 @@ use crate::{
     config::{Config, IClashTemp},
     core::{handle, logger::Logger, manager::CLASH_LOGGER, service},
     logging,
-    utils::dirs,
+    utils::{arch_check, dirs},
 };
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use clash_verge_logging::Type;
 use compact_str::CompactString;
 use log::Level;
@@ -30,9 +30,20 @@ impl CoreManager {
         let clash_core = Config::verge().await.latest_arc().get_valid_clash_core();
         let config_dir = dirs::app_home_dir()?;
 
+        // Pre-flight: if the bundled sidecar was built for a different CPU
+        // architecture than this process, Windows will refuse to launch it
+        // with OS error 216 and pop a modal dialog. Catch it upfront and
+        // surface an actionable notice so the user knows to reinstall.
+        if let Ok(Some(report)) = arch_check::check_sidecar_arch(clash_core.as_str()) {
+            let msg = report.human_message();
+            logging!(error, Type::Core, "{}", msg);
+            handle::Handle::notice_message("config_validate::core_arch_mismatch", msg.clone());
+            return Err(anyhow!(msg));
+        }
+
         #[cfg(unix)]
         let previous_mask = unsafe { tauri_plugin_clash_verge_sysinfo::libc::umask(0o007) };
-        let (mut rx, child) = app_handle
+        let spawn_result = app_handle
             .shell()
             .sidecar(clash_core.as_str())?
             .args([
@@ -47,10 +58,33 @@ impl CoreManager {
                 },
                 &IClashTemp::guard_external_controller_ipc(),
             ])
-            .spawn()?;
+            .spawn();
         #[cfg(unix)]
         unsafe {
             tauri_plugin_clash_verge_sysinfo::libc::umask(previous_mask)
+        };
+        let (mut rx, child) = match spawn_result {
+            Ok(ok) => ok,
+            Err(err) => {
+                let rendered = err.to_string();
+                // Backstop for arch mismatch if the pre-flight check above
+                // was bypassed (path didn't resolve, race with installer,
+                // etc). Emit the actionable notice instead of silently
+                // logging a generic spawn failure.
+                if rendered.contains("os error 216") {
+                    logging!(
+                        error,
+                        Type::Core,
+                        "Sidecar 启动失败（架构不匹配）: {}",
+                        rendered
+                    );
+                    handle::Handle::notice_message(
+                        "config_validate::core_arch_mismatch",
+                        rendered,
+                    );
+                }
+                return Err(err.into());
+            }
         };
 
         let pid = child.pid();
