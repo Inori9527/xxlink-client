@@ -565,7 +565,16 @@ const resolveServicePermission = async () => {
 // =======================
 // Other resource resolvers (service, mmdb, geosite, geoip, enableLoopback)
 // =======================
-const SERVICE_URL = `https://github.com/clash-verge-rev/clash-verge-service-ipc/releases/download/${SIDECAR_HOST}`
+// Upstream clash-verge-service-ipc only publishes release tags under the
+// *-msvc triple; the binaries themselves are ABI-compatible with our
+// *-gnu Rust target on Windows (Go-built service, no C++ runtime
+// entanglement). Saved filename keeps SIDECAR_HOST so Tauri externalBin
+// resolution still works.
+const SERVICE_TAG =
+  platform === 'win32'
+    ? SIDECAR_HOST.replace(/-pc-windows-gnu$/, '-pc-windows-msvc')
+    : SIDECAR_HOST
+const SERVICE_URL = `https://github.com/clash-verge-rev/clash-verge-service-ipc/releases/download/${SERVICE_TAG}`
 const resolveService = () => {
   const ext = platform === 'win32' ? '.exe' : ''
   const suffix = platform === 'linux' ? '-' + SIDECAR_HOST : ''
