@@ -69,11 +69,17 @@ impl CoreManager {
                 let rendered = err.to_string();
                 // Backstop for arch mismatch if the pre-flight check above
                 // was bypassed (path didn't resolve, race with installer,
-                // etc). Emit the actionable notice instead of silently
-                // logging a generic spawn failure.
+                // etc).
                 if rendered.contains("os error 216") {
                     logging!(error, Type::Core, "Sidecar 启动失败（架构不匹配）: {}", rendered);
                     handle::Handle::notice_message("config_validate::core_arch_mismatch", rendered);
+                } else {
+                    // Any other spawn failure reaches UI as a boot_error
+                    // notice so the user isn't left with "暂无可用节点" and
+                    // no explanation — this was the silent-failure path
+                    // for the 1.0.2 incident.
+                    logging!(error, Type::Core, "Sidecar spawn 失败: {}", rendered);
+                    handle::Handle::notice_message("config_validate::boot_error", rendered);
                 }
                 return Err(err.into());
             }

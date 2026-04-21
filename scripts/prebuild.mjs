@@ -32,6 +32,9 @@ const PLATFORM_MAP = {
   'x86_64-pc-windows-msvc': 'win32',
   'i686-pc-windows-msvc': 'win32',
   'aarch64-pc-windows-msvc': 'win32',
+  'x86_64-pc-windows-gnu': 'win32',
+  'i686-pc-windows-gnu': 'win32',
+  'aarch64-pc-windows-gnu': 'win32',
   'x86_64-apple-darwin': 'darwin',
   'aarch64-apple-darwin': 'darwin',
   'x86_64-unknown-linux-gnu': 'linux',
@@ -45,6 +48,9 @@ const ARCH_MAP = {
   'x86_64-pc-windows-msvc': 'x64',
   'i686-pc-windows-msvc': 'ia32',
   'aarch64-pc-windows-msvc': 'arm64',
+  'x86_64-pc-windows-gnu': 'x64',
+  'i686-pc-windows-gnu': 'ia32',
+  'aarch64-pc-windows-gnu': 'arm64',
   'x86_64-apple-darwin': 'x64',
   'aarch64-apple-darwin': 'arm64',
   'x86_64-unknown-linux-gnu': 'x64',
@@ -58,9 +64,20 @@ const ARCH_MAP = {
 const arg1 = process.argv.slice(2)[0]
 const arg2 = process.argv.slice(2)[1]
 const target = arg1 === '--force' || arg1 === '-f' ? arg2 : arg1
-const { platform, arch } = target
-  ? { platform: PLATFORM_MAP[target], arch: ARCH_MAP[target] }
-  : process
+let platform, arch
+if (target) {
+  platform = PLATFORM_MAP[target]
+  arch = ARCH_MAP[target]
+  if (!platform || !arch) {
+    throw new Error(
+      `prebuild: unknown target "${target}" — add it to PLATFORM_MAP / ARCH_MAP. ` +
+        `Silent fallback to process.{platform,arch} is disallowed because it produced ` +
+        `a shipped binary mismatch (see 1.0.2 ARM64-in-x64-installer incident).`,
+    )
+  }
+} else {
+  ;({ platform, arch } = process)
+}
 
 const SIDECAR_HOST = target
   ? target
@@ -296,6 +313,42 @@ async function downloadFile(url, outPath) {
   log_success(`download finished: ${url}`)
 }
 
+// Verify Windows PE IMAGE_FILE_HEADER.Machine matches the expected arch.
+// Prevents a repeat of the 1.0.2 incident where a mis-labelled ARM64 mihomo
+// shipped in the x64 installer because the target-map lookup silently fell
+// back to process.arch on the build host.
+function verifyPEMachine(filePath, expectedArch, label) {
+  const EXPECTED = { x64: 0x8664, ia32: 0x014c, arm64: 0xaa64, arm: 0x01c0 }
+  const want = EXPECTED[expectedArch]
+  if (want === undefined) return
+  const fd = fs.openSync(filePath, 'r')
+  try {
+    const head = Buffer.alloc(64)
+    fs.readSync(fd, head, 0, 64, 0)
+    if (head.readUInt16LE(0) !== 0x5a4d) {
+      throw new Error(`${label}: not a PE file (missing MZ)`)
+    }
+    const peOffset = head.readUInt32LE(60)
+    const machineBuf = Buffer.alloc(2)
+    fs.readSync(fd, machineBuf, 0, 2, peOffset + 4)
+    const got = machineBuf.readUInt16LE(0)
+    if (got !== want) {
+      fs.closeSync(fd)
+      fs.rmSync(filePath, { force: true })
+      throw new Error(
+        `${label}: PE machine mismatch — wanted ${expectedArch} ` +
+          `(0x${want.toString(16)}), got 0x${got.toString(16)}. File deleted.`,
+      )
+    }
+  } finally {
+    try {
+      fs.closeSync(fd)
+    } catch {
+      /* already closed in mismatch branch */
+    }
+  }
+}
+
 // =======================
 // resolveSidecar (支持 zip / tgz / gz)
 // =======================
@@ -381,6 +434,10 @@ async function resolveSidecar(binInfo) {
           })
       })
       log_success(`gz binary processed: "${name}"`)
+    }
+
+    if (platform === 'win32') {
+      verifyPEMachine(sidecarPath, arch, name)
     }
   } catch (err) {
     await fsp.rm(sidecarPath, { recursive: true, force: true })
@@ -508,7 +565,16 @@ const resolveServicePermission = async () => {
 // =======================
 // Other resource resolvers (service, mmdb, geosite, geoip, enableLoopback)
 // =======================
-const SERVICE_URL = `https://github.com/clash-verge-rev/clash-verge-service-ipc/releases/download/${SIDECAR_HOST}`
+// Upstream clash-verge-service-ipc only publishes release tags under the
+// *-msvc triple; the binaries themselves are ABI-compatible with our
+// *-gnu Rust target on Windows (Go-built service, no C++ runtime
+// entanglement). Saved filename keeps SIDECAR_HOST so Tauri externalBin
+// resolution still works.
+const SERVICE_TAG =
+  platform === 'win32'
+    ? SIDECAR_HOST.replace(/-pc-windows-gnu$/, '-pc-windows-msvc')
+    : SIDECAR_HOST
+const SERVICE_URL = `https://github.com/clash-verge-rev/clash-verge-service-ipc/releases/download/${SERVICE_TAG}`
 const resolveService = () => {
   const ext = platform === 'win32' ? '.exe' : ''
   const suffix = platform === 'linux' ? '-' + SIDECAR_HOST : ''
