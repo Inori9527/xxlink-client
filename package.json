@@ -15,6 +15,8 @@
     "web:build": "tsc --noEmit && vite build",
     "web:serve": "vite preview",
     "prebuild": "node scripts/prebuild.mjs",
+    "prebuild:win-x64": "node scripts/prebuild.mjs x86_64-pc-windows-gnu --force",
+    "build:win-x64": "pnpm prebuild:win-x64 && pnpm tauri build --target x86_64-pc-windows-gnu",
     "updater": "node scripts/updater.mjs",
     "updater-fixed-webview2": "node scripts/updater-fixed-webview2.mjs",
     "release-version": "node scripts/release-version.mjs",
