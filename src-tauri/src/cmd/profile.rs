@@ -293,6 +293,18 @@ async fn handle_success(current_value: Option<&String>) -> CmdResult<bool> {
 }
 
 async fn handle_validation_failure(error_msg: String, current_profile: Option<&String>) -> CmdResult<bool> {
+    // If the failure was flagged as an architecture mismatch, surface the
+    // dedicated notice so the UI can tell the user to reinstall.
+    if let Some(tail) = error_msg.strip_prefix(crate::core::validate::ARCH_MISMATCH_PREFIX) {
+        let arch_msg: String = tail.into();
+        logging!(error, Type::Cmd, "Sidecar 架构不匹配，中止配置切换: {}", arch_msg);
+        Config::profiles().await.discard();
+        if let Some(prev_profile) = current_profile {
+            restore_previous_profile(prev_profile).await?;
+        }
+        handle::Handle::notice_message("config_validate::core_arch_mismatch", arch_msg);
+        return Ok(false);
+    }
     logging!(warn, Type::Cmd, "配置验证失败: {}", error_msg);
     Config::profiles().await.discard();
     if let Some(prev_profile) = current_profile {
@@ -305,7 +317,16 @@ async fn handle_validation_failure(error_msg: String, current_profile: Option<&S
 async fn handle_update_error<E: std::fmt::Display>(e: E) -> CmdResult<bool> {
     logging!(warn, Type::Cmd, "更新过程发生错误: {}", e,);
     Config::profiles().await.discard();
-    handle::Handle::notice_message("config_validate::boot_error", e.to_string());
+    let rendered = e.to_string();
+    // Windows OS error 216 == ERROR_EXE_MACHINE_TYPE_MISMATCH: the sidecar
+    // binary is the wrong architecture for this machine. Report it as such
+    // instead of a generic boot error, so the UI can guide the user to
+    // reinstall the correct build.
+    if rendered.contains("os error 216") {
+        handle::Handle::notice_message("config_validate::core_arch_mismatch", rendered);
+    } else {
+        handle::Handle::notice_message("config_validate::boot_error", rendered);
+    }
     Ok(false)
 }
 

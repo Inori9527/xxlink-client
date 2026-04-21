@@ -8,8 +8,14 @@ use tokio::fs;
 use crate::config::{Config, ConfigType};
 use crate::core::handle;
 use crate::singleton;
-use crate::utils::dirs;
+use crate::utils::{arch_check, dirs};
 use clash_verge_logging::{Type, logging};
+
+/// Sentinel prefix used to flag a validation failure that was caused by the
+/// sidecar binary not matching the host CPU architecture. The config layer
+/// recognises this prefix and translates it into a distinct frontend notice
+/// instead of the misleading "subscription config validation failed" message.
+pub const ARCH_MISMATCH_PREFIX: &str = "__xxlink_core_arch_mismatch__::";
 
 pub struct CoreConfigValidator {
     is_processing: AtomicBool,
@@ -99,6 +105,17 @@ impl CoreConfigValidator {
         let clash_core = Config::verge().await.latest_arc().get_valid_clash_core();
         logging!(info, Type::Validate, "使用内核: {}", clash_core);
 
+        // If the sidecar is the wrong architecture, spawning it will fail
+        // with Windows OS error 216. Detect that before we try, so the
+        // caller can surface a meaningful notice instead of a confusing
+        // "subscription config failed" message.
+        if let Ok(Some(report)) = arch_check::check_sidecar_arch(clash_core.as_str()) {
+            let msg = report.human_message();
+            logging!(error, Type::Validate, "{}", msg);
+            let flagged: String = format!("{ARCH_MISMATCH_PREFIX}{msg}").into();
+            return Ok((false, flagged));
+        }
+
         let app_handle = handle::Handle::app_handle();
         let app_dir = dirs::app_home_dir()?;
         let app_dir_str = dirs::path_to_str(&app_dir)?;
@@ -110,7 +127,27 @@ impl CoreConfigValidator {
                 .shell()
                 .sidecar(clash_core.as_str())?
                 .args(["-t", "-d", app_dir_str, "-f", config_path]);
-        let output = command.output().await?;
+        let output = match command.output().await {
+            Ok(output) => output,
+            Err(err) => {
+                // Belt-and-braces: the Windows arch-mismatch check above
+                // should catch this first, but if the sidecar path moved
+                // or the PE read failed, we can still recognise OS error
+                // 216 from the spawn failure and flag it for the caller.
+                let rendered = err.to_string();
+                if rendered.contains("os error 216") {
+                    logging!(
+                        error,
+                        Type::Validate,
+                        "Sidecar 架构不匹配（通过 spawn 错误识别）: {}",
+                        rendered
+                    );
+                    let flagged: String = format!("{ARCH_MISMATCH_PREFIX}{rendered}").into();
+                    return Ok((false, flagged));
+                }
+                return Err(err.into());
+            }
+        };
 
         let status = &output.status;
         let stderr = &output.stderr;

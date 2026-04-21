@@ -38,6 +38,11 @@ export const handleNoticeMessage = (
     update_failed: () => showNotice.error(msg),
     'config_validate::boot_error': () =>
       showNotice.error('shared.feedback.validation.config.bootFailed', msg),
+    'config_validate::core_arch_mismatch': () =>
+      showNotice.error(
+        'shared.feedback.validation.config.coreArchMismatch',
+        msg,
+      ),
     'config_validate::core_change': () =>
       showNotice.error(
         'shared.feedback.validation.config.coreChangeFailed',

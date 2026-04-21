@@ -6,7 +6,7 @@ use crate::{
         CoreManager,
         handle::{self, Handle},
         service, tray,
-        validate::CoreConfigValidator,
+        validate::{ARCH_MISMATCH_PREFIX, CoreConfigValidator},
     },
     enhance,
     process::AsyncHandler,
@@ -133,6 +133,28 @@ impl Config {
             match CoreConfigValidator::global().validate_config().await {
                 Ok((is_valid, error_msg)) => {
                     if !is_valid {
+                        // Architecture mismatch short-circuits validation
+                        // long before the YAML is ever loaded — report it
+                        // as such instead of blaming the subscription file.
+                        if let Some(tail) = error_msg.strip_prefix(ARCH_MISMATCH_PREFIX) {
+                            let arch_msg: String = tail.into();
+                            logging!(
+                                error,
+                                Type::Config,
+                                "[首次启动] Sidecar 架构不匹配，跳过订阅验证: {}",
+                                arch_msg
+                            );
+                            CoreManager::global()
+                                .use_default_config(
+                                    "config_validate::core_arch_mismatch",
+                                    &arch_msg,
+                                )
+                                .await?;
+                            return Ok(Some((
+                                "config_validate::core_arch_mismatch",
+                                arch_msg,
+                            )));
+                        }
                         logging!(
                             warn,
                             Type::Config,

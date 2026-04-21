@@ -98,6 +98,7 @@
       "config": {
         "failed": "Subscription configuration validation failed. Please check the subscription configuration file; modifications have been rolled back.",
         "bootFailed": "Boot subscription configuration validation failed. Started with the default configuration; please check the subscription configuration file.",
+        "coreArchMismatch": "The core binary is built for a different CPU architecture than this system, so it cannot be launched. Please reinstall the XXLink build that matches your operating system. Details: ",
         "coreChangeFailed": "Configuration validation failed when switching the kernel. Started with the default configuration; please check the subscription configuration file.",
         "processTerminated": "The validation process has been terminated."
       },

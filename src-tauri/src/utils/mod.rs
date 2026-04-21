@@ -1,3 +1,4 @@
+pub mod arch_check;
 pub mod dirs;
 pub mod help;
 pub mod init;

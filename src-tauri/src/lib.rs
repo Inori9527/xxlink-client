@@ -203,6 +203,11 @@ mod app_init {
 }
 
 pub fn run() {
+    // Own the error surface: prevent Windows from popping the synchronous
+    // "image file is not a valid Win32 application" dialog when a sidecar
+    // fails to launch with ERROR_EXE_MACHINE_TYPE_MISMATCH.
+    utils::arch_check::suppress_critical_error_dialogs();
+
     if app_init::init_singleton_check().is_err() {
         return;
     }

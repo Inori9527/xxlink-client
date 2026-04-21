@@ -1460,6 +1460,7 @@ export interface TranslationResources {
         validation: {
           config: {
             bootFailed: string
+            coreArchMismatch: string
             coreChangeFailed: string
             failed: string
             processTerminated: string
