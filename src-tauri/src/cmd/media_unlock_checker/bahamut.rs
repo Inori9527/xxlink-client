@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use clash_verge_logging::{Type, logging};
+use xxlink_logging::{Type, logging};
 use regex::Regex;
 use reqwest::{Client, cookie::Jar};
 

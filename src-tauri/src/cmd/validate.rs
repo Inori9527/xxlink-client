@@ -1,5 +1,5 @@
 use crate::core::handle;
-use clash_verge_logging::{Type, logging};
+use xxlink_logging::{Type, logging};
 use smartstring::alias::String;
 
 /// 处理YAML验证相关的所有消息通知

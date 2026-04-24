@@ -46,29 +46,28 @@ impl Handle {
 
     pub fn notify_profile_changed(profile_id: &String) {
         Self::send_event(FrontendEvent::ProfileChanged {
-            current_profile_id: profile_id,
+            current_profile_id: profile_id.clone(),
         });
     }
 
     pub fn notify_timer_updated(profile_index: &String) {
-        Self::send_event(FrontendEvent::TimerUpdated { profile_index });
+        Self::send_event(FrontendEvent::TimerUpdated {
+            profile_index: profile_index.clone(),
+        });
     }
 
     pub fn notify_profile_update_started(uid: &String) {
-        Self::send_event(FrontendEvent::ProfileUpdateStarted { uid });
+        Self::send_event(FrontendEvent::ProfileUpdateStarted { uid: uid.clone() });
     }
 
     pub fn notify_profile_update_completed(uid: &String) {
-        Self::send_event(FrontendEvent::ProfileUpdateCompleted { uid });
+        Self::send_event(FrontendEvent::ProfileUpdateCompleted { uid: uid.clone() });
     }
 
     pub fn notice_message<S: AsRef<str>, M: Into<String>>(status: S, msg: M) {
-        let status_str = status.as_ref();
-        let msg_str = msg.into();
-
         Self::send_event(FrontendEvent::NoticeMessage {
-            status: status_str,
-            message: msg_str,
+            status: status.as_ref().into(),
+            message: msg.into(),
         });
     }
 

@@ -41,7 +41,7 @@ export default function LoginPage(): ReactNode {
     try {
       const result = await apiLogin(email, password)
       setAuth(result.user, result.accessToken, result.refreshToken)
-      syncSubscription().catch(console.error)
+      syncSubscription({ force: true }).catch(console.error)
       void navigate('/')
     } catch (err) {
       setError(

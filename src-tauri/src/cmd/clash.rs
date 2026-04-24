@@ -7,7 +7,7 @@ use crate::{
     constants,
     core::{CoreManager, handle, validate::CoreConfigValidator},
 };
-use clash_verge_logging::{Type, logging, logging_error};
+use xxlink_logging::{Type, logging, logging_error};
 use compact_str::CompactString;
 use serde_yaml_ng::Mapping;
 use smartstring::alias::String;

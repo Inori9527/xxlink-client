@@ -9,7 +9,7 @@ use crate::config::{Config, ConfigType};
 use crate::core::handle;
 use crate::singleton;
 use crate::utils::{arch_check, dirs};
-use clash_verge_logging::{Type, logging};
+use xxlink_logging::{Type, logging};
 
 /// Sentinel prefix used to flag a validation failure that was caused by the
 /// sidecar binary not matching the host CPU architecture. The config layer

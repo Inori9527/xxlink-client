@@ -3,7 +3,7 @@
 //!
 //! When a user installs the wrong architecture package of XXLink (or the
 //! sidecar is replaced by an AV / manual swap), launching
-//! `verge-mihomo.exe` fails with Windows OS error 216
+//! `xxlink-mihomo.exe` fails with Windows OS error 216
 //! (`ERROR_EXE_MACHINE_TYPE_MISMATCH`) and Windows pops a modal dialog
 //! before the Rust error ever bubbles up. We want to catch that case early
 //! and surface a clear, actionable notification to the UI instead of the
@@ -151,7 +151,7 @@ pub fn suppress_critical_error_dialogs() {
     }
 }
 
-/// Best-effort resolve the path to the `verge-mihomo` sidecar that Tauri
+/// Best-effort resolve the path to the `xxlink-mihomo` sidecar that Tauri
 /// copies next to the main executable. Returns `None` if we can't figure
 /// out the exe directory (which effectively disables the pre-flight check).
 pub fn resolve_sidecar_path(sidecar_stem: &str) -> Option<std::path::PathBuf> {
@@ -184,7 +184,7 @@ impl ArchCheckReport {
     }
 }
 
-/// Pre-flight the `verge-mihomo` sidecar binary. Returns:
+/// Pre-flight the `xxlink-mihomo` sidecar binary. Returns:
 /// * `Ok(None)` — sidecar looks compatible (or we couldn't decide, in which
 ///   case we don't want to block the user).
 /// * `Ok(Some(report))` — confirmed architecture mismatch.

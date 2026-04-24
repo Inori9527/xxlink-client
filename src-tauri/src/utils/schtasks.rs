@@ -1,6 +1,6 @@
 use crate::utils::dirs::{self, PathBufExec as _};
 use anyhow::{Result, anyhow};
-use clash_verge_logging::{Type, logging};
+use xxlink_logging::{Type, logging};
 use std::fs;
 use std::os::windows::process::CommandExt as _;
 use std::path::{Path, PathBuf};
@@ -11,8 +11,8 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 const TASK_NAME_USER: &str = "XXLink";
 const TASK_NAME_ADMIN: &str = "XXLink (Admin)";
 const TASK_XML_DIR: &str = "tasks";
-const TASK_XML_USER: &str = "clash-verge-task-user.xml";
-const TASK_XML_ADMIN: &str = "clash-verge-task-admin.xml";
+const TASK_XML_USER: &str = "xxlink-task-user.xml";
+const TASK_XML_ADMIN: &str = "xxlink-task-admin.xml";
 
 #[derive(Clone, Copy)]
 pub enum TaskMode {

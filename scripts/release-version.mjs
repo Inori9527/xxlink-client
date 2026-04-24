@@ -6,6 +6,7 @@
  *
  * <version> can be:
  *   - A full semver version (e.g., 1.2.3, v1.2.3, 1.2.3-beta, v1.2.3+build)
+ *   - A bump level: "patch"/"small", "minor"/"medium", "major"/"large"
  *   - A tag: "alpha", "beta", "rc", "autobuild", "autobuild-latest", or "deploytest"
  *     - "alpha", "beta", "rc": Appends the tag to the current base version (e.g., 1.2.3-beta)
  *     - "autobuild": Appends a timestamped autobuild tag (e.g., 1.2.3+autobuild.2406101530)
@@ -15,6 +16,9 @@
  * Examples:
  *   pnpm release-version 1.2.3
  *   pnpm release-version v1.2.3-beta
+ *   pnpm release-version patch
+ *   pnpm release-version minor
+ *   pnpm release-version major
  *   pnpm release-version beta
  *   pnpm release-version autobuild
  *   pnpm release-version autobuild-latest
@@ -131,6 +135,25 @@ function getBaseVersion(version) {
   let base = version.replace(/-(alpha|beta|rc)(\.\d+)?/i, '')
   base = base.replace(/\+[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*/g, '')
   return base
+}
+
+function bumpSemver(version, level) {
+  const normalized = normalizeVersion(getBaseVersion(version)).slice(1)
+  const [majorRaw, minorRaw, patchRaw] = normalized.split('.')
+  const major = Number.parseInt(majorRaw ?? '0', 10) || 0
+  const minor = Number.parseInt(minorRaw ?? '0', 10) || 0
+  const patch = Number.parseInt(patchRaw ?? '0', 10) || 0
+
+  switch (level) {
+    case 'patch':
+      return `v${major}.${minor}.${patch + 1}`
+    case 'minor':
+      return `v${major}.${minor + 1}.0`
+    case 'major':
+      return `v${major + 1}.0.0`
+    default:
+      throw new Error(`Unsupported bump level: ${level}`)
+  }
 }
 
 /**
@@ -268,25 +291,37 @@ async function main(versionArg) {
       'autobuild-latest',
       'deploytest',
     ]
+    const bumpAliases = {
+      patch: 'patch',
+      small: 'patch',
+      minor: 'minor',
+      medium: 'minor',
+      major: 'major',
+      large: 'major',
+    }
+    const normalizedArg = versionArg.toLowerCase()
 
-    if (validTags.includes(versionArg.toLowerCase())) {
+    if (normalizedArg in bumpAliases) {
+      const currentVersion = await getCurrentVersion()
+      newVersion = bumpSemver(currentVersion, bumpAliases[normalizedArg])
+    } else if (validTags.includes(normalizedArg)) {
       const currentVersion = await getCurrentVersion()
       const baseVersion = getBaseVersion(currentVersion)
 
-      if (versionArg.toLowerCase() === 'autobuild') {
+      if (normalizedArg === 'autobuild') {
         // 格式: 2.3.0+autobuild.1004.cc39b27
         // 使用 Tauri 相关的最新 commit hash
         newVersion = `${baseVersion}+autobuild.${generateShortTimestamp(true, true)}`
-      } else if (versionArg.toLowerCase() === 'autobuild-latest') {
+      } else if (normalizedArg === 'autobuild-latest') {
         // 格式: 2.3.0+autobuild.1004.a1b2c3d (使用最新 Tauri 提交)
         const latestTauriCommit = getLatestTauriCommit()
         newVersion = `${baseVersion}+autobuild.${generateShortTimestamp()}.${latestTauriCommit}`
-      } else if (versionArg.toLowerCase() === 'deploytest') {
+      } else if (normalizedArg === 'deploytest') {
         // 格式: 2.3.0+deploytest.1004.cc39b27
         // 使用 Tauri 相关的最新 commit hash
         newVersion = `${baseVersion}+deploytest.${generateShortTimestamp(true, true)}`
       } else {
-        newVersion = `${baseVersion}-${versionArg.toLowerCase()}`
+        newVersion = `${baseVersion}-${normalizedArg}`
       }
     } else {
       if (!isValidVersion(versionArg)) {

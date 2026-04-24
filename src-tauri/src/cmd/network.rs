@@ -1,12 +1,12 @@
 use super::CmdResult;
 use crate::cmd::StringifyErr as _;
-use clash_verge_logging::{Type, logging};
+use xxlink_logging::{Type, logging};
 use gethostname::gethostname;
 use network_interface::NetworkInterface;
 use serde_yaml_ng::Mapping;
 use std::net::TcpListener;
 use sysproxy::{Autoproxy, Sysproxy};
-use tauri_plugin_clash_verge_sysinfo;
+use tauri_plugin_xxlink_sysinfo;
 
 /// get the system proxy
 #[tauri::command]
@@ -75,7 +75,7 @@ pub fn get_system_hostname() -> String {
 /// 获取网络接口列表
 #[tauri::command]
 pub fn get_network_interfaces() -> Vec<String> {
-    tauri_plugin_clash_verge_sysinfo::list_network_interfaces()
+    tauri_plugin_xxlink_sysinfo::list_network_interfaces()
 }
 
 /// 获取网络接口详细信息

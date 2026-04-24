@@ -6,7 +6,7 @@
  * corresponding Clash remote profile is imported and set as current.
  */
 
-import { api, getSubUrl } from '@/services/api'
+import { api, getSubUrl, isSubscriptionActiveNow } from '@/services/api'
 import {
   getProfiles,
   importProfile,
@@ -45,25 +45,15 @@ export async function syncSubscription(options?: SyncOptions): Promise<void> {
 }
 
 async function doSync(force: boolean): Promise<void> {
-  // 1. Fetch current subscription
   const sub = await api.subscription.current()
 
-  if (!sub || sub.status !== 'ACTIVE') {
-    // Nothing to sync — user has no active subscription
+  if (!sub || !isSubscriptionActiveNow(sub)) {
     return
   }
 
-  // 2. Build the Clash-format subscription URL
   const clashUrl = getSubUrl(sub.subUrl, 'clash')
-
-  // 3. Check existing profiles for a match
-  //    Match by domain (e.g. api.xxlink.net/api/v1/subscription) so that
-  //    token rotation doesn't create duplicate profiles.
   const profilesConfig = await getProfiles()
 
-  // Match remote profiles that point to the same subscription service.
-  // We check: (a) exact token match, or (b) same host + /subscription/ path.
-  // We do NOT require item.type === 'remote' because it may be absent in the TS response.
   const remoteProfiles =
     profilesConfig.items?.filter(
       (item) =>
@@ -79,10 +69,17 @@ async function doSync(force: boolean): Promise<void> {
     profilesConfig.items?.length ?? 0,
   )
 
-  // Force mode: wipe every matching profile and fall through to fresh import
-  if (force && remoteProfiles.length > 0) {
+  const exactMatch = remoteProfiles.find(
+    (item) => item.url && isSameSubscriptionUrl(item.url, clashUrl),
+  )
+
+  // Rebuild on force refresh or when the token/format changed. This avoids
+  // reusing a same-origin profile that still points at an expired token.
+  const shouldReimport = force || (remoteProfiles.length > 0 && !exactMatch)
+
+  if (shouldReimport && remoteProfiles.length > 0) {
     console.log(
-      '[subscription-sync] Force mode — deleting',
+      '[subscription-sync] Rebuilding - deleting',
       remoteProfiles.length,
       'existing profile(s)',
     )
@@ -90,60 +87,36 @@ async function doSync(force: boolean): Promise<void> {
       try {
         await deleteProfile(stale.uid)
       } catch (err) {
-        console.warn('[subscription-sync] force delete failed', err)
+        console.warn('[subscription-sync] rebuild delete failed', err)
       }
     }
-    remoteProfiles.length = 0
 
-    // Cached proxy-group selections may reference group names that no
-    // longer exist in the freshly imported profile. Clear them so the
-    // CurrentProxyCard re-initializes with the new groups.
     try {
       localStorage.removeItem('clash-verge-selected-proxy-group')
       localStorage.removeItem('clash-verge-selected-proxy')
       localStorage.removeItem('clash-verge-proxy-sort-type')
     } catch {
-      // localStorage unavailable — ignore
+      /* ignore */
     }
   }
 
-  // Find exact match (same token) or pick the first matching origin profile
-  const exactMatch = remoteProfiles.find(
-    (item) => item.url && item.url.includes(sub.subUrl),
-  )
-  const existingItem = exactMatch ?? remoteProfiles[0]
-
+  const existingItem = shouldReimport ? undefined : exactMatch
   let targetUid: string
 
   if (existingItem) {
-    // 4a. Profile already imported
     targetUid = existingItem.uid
 
-    // If the URL changed (token rotation / plan change), update it
-    if (existingItem.url !== clashUrl) {
-      await patchProfile(targetUid, {
-        url: clashUrl,
-        name: 'subscription.yaml',
-      })
-    }
-
-    // Fix escaped-quote name if present
     if (existingItem.name && existingItem.name.includes('\\"')) {
       await patchProfile(targetUid, { name: 'subscription.yaml' })
     }
 
     await updateProfile(targetUid)
   } else {
-    // 4b. New import
     await importProfile(clashUrl, { with_proxy: false })
 
-    // After import, re-fetch to get the newly created profile's uid
     const updated = await getProfiles()
     const newItem = updated.items?.find(
-      (item) =>
-        item.type === 'remote' &&
-        item.url &&
-        isSameSubscriptionOrigin(item.url, sub.subUrl),
+      (item) => item.url && isSameSubscriptionUrl(item.url, clashUrl),
     )
 
     if (!newItem) {
@@ -156,22 +129,17 @@ async function doSync(force: boolean): Promise<void> {
     targetUid = newItem.uid
   }
 
-  // 5. Remove stale duplicate profiles (old tokens / old plans)
   const staleProfiles = remoteProfiles.filter((p) => p.uid !== targetUid)
   for (const stale of staleProfiles) {
     try {
       await deleteProfile(stale.uid)
     } catch {
-      // Ignore — might already be removed
+      /* ignore */
     }
   }
 
-  // 6. Activate the profile
   await patchProfilesConfig({ current: targetUid })
 
-  // 7. Tell AppDataProvider to refetch clash config + proxy list so the
-  //    Connect page picks up the new nodes immediately (without requiring
-  //    the user to click the manual refresh button).
   try {
     window.dispatchEvent(new Event('verge://refresh-clash-config'))
     window.dispatchEvent(new Event('verge://refresh-proxy-config'))
@@ -179,8 +147,6 @@ async function doSync(force: boolean): Promise<void> {
     /* ignore */
   }
 
-  // 8. Clear any stale startup-sync-error flag so login/register/main all
-  //    benefit from a genuine success.
   try {
     localStorage.removeItem('xxlink:last-sync-error')
     window.dispatchEvent(new CustomEvent('xxlink:last-sync-error-changed'))
@@ -188,9 +154,7 @@ async function doSync(force: boolean): Promise<void> {
     /* ignore */
   }
 
-  // 8. If we force-rebuilt, notify subscribers (e.g. CurrentProxyCard) so
-  //    they can reset cached group/proxy selection state.
-  if (force) {
+  if (shouldReimport) {
     try {
       window.dispatchEvent(new CustomEvent('xxlink:subscription-resync'))
     } catch {
@@ -199,15 +163,36 @@ async function doSync(force: boolean): Promise<void> {
   }
 }
 
-/** Check if two subscription URLs point to the same service */
 function isSameSubscriptionOrigin(urlA: string, urlB: string): boolean {
+  const keyA = getSubscriptionServiceKey(urlA)
+  const keyB = getSubscriptionServiceKey(urlB)
+  if (keyA && keyB) return keyA === keyB
+
   try {
     const a = new URL(urlA)
     const b = new URL(urlB)
-    // Same host is enough — both are already filtered by /subscription/ path
-    return a.host === b.host
+    return a.origin === b.origin && a.pathname === b.pathname
   } catch {
-    // Fallback: simple string comparison for host portion
-    return urlA.includes('api.xxlink.net') && urlB.includes('api.xxlink.net')
+    return false
+  }
+}
+
+function isSameSubscriptionUrl(urlA: string, urlB: string): boolean {
+  try {
+    return new URL(urlA).toString() === new URL(urlB).toString()
+  } catch {
+    return urlA === urlB
+  }
+}
+
+function getSubscriptionServiceKey(url: string): string | null {
+  try {
+    const parsed = new URL(url)
+    const marker = '/subscription/'
+    const markerIndex = parsed.pathname.indexOf(marker)
+    if (markerIndex === -1) return null
+    return `${parsed.origin}${parsed.pathname.slice(0, markerIndex + marker.length)}`
+  } catch {
+    return null
   }
 }

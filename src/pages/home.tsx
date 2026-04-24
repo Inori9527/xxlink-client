@@ -25,7 +25,7 @@ import { Suspense, lazy, useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { BasePage } from '@/components/base'
-import { ClashModeCard } from '@/components/home/clash-mode-card'
+import { ConnectModeCard } from '@/components/home/connect-mode-card'
 import { CurrentProxyCard } from '@/components/home/current-proxy-card'
 import { EnhancedCard } from '@/components/home/enhanced-card'
 import { EnhancedTrafficStats } from '@/components/home/enhanced-traffic-stats'
@@ -387,7 +387,7 @@ const ClashModeEnhancedCard = () => {
       iconColor="info"
       action={null}
     >
-      <ClashModeCard />
+      <ConnectModeCard />
     </EnhancedCard>
   )
 }

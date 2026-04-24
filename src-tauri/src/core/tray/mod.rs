@@ -6,10 +6,10 @@ use crate::process::AsyncHandler;
 use crate::singleton;
 use crate::utils::window_manager::WindowManager;
 use crate::{Type, config::Config, feat, logging};
-use clash_verge_limiter::{Limiter, SystemClock, SystemLimiter};
-use clash_verge_logging::logging_error;
+use xxlink_limiter::{Limiter, SystemClock, SystemLimiter};
+use xxlink_logging::logging_error;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
-use tauri_plugin_clash_verge_sysinfo::is_current_app_handle_admin;
+use tauri_plugin_xxlink_sysinfo::is_current_app_handle_admin;
 
 use super::handle;
 use anyhow::Result;
@@ -214,9 +214,9 @@ impl Tray {
         }
 
         // Get localized strings before using them
-        let sys_proxy_text = clash_verge_i18n::t!("tray.tooltip.systemProxy");
-        let tun_text = clash_verge_i18n::t!("tray.tooltip.tun");
-        let profile_text = clash_verge_i18n::t!("tray.tooltip.profile");
+        let sys_proxy_text = xxlink_i18n::t!("tray.tooltip.systemProxy");
+        let tun_text = xxlink_i18n::t!("tray.tooltip.tun");
+        let profile_text = xxlink_i18n::t!("tray.tooltip.profile");
 
         let v = env!("CARGO_PKG_VERSION");
         let reassembled_version = v.split_once('+').map_or_else(

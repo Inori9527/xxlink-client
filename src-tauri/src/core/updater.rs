@@ -1,7 +1,7 @@
 use crate::{config::Config, singleton, utils::dirs};
 use anyhow::Result;
 use chrono::Utc;
-use clash_verge_logging::{Type, logging};
+use xxlink_logging::{Type, logging};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -294,10 +294,10 @@ impl SilentUpdater {
     async fn ask_user_to_install(app_handle: &tauri::AppHandle, version: &str) -> bool {
         use tauri_plugin_dialog::{DialogExt as _, MessageDialogButtons, MessageDialogKind};
 
-        let title = clash_verge_i18n::t!("notifications.updateReady.title").to_string();
-        let body = clash_verge_i18n::t!("notifications.updateReady.body").replace("{version}", version);
-        let install_now = clash_verge_i18n::t!("notifications.updateReady.installNow").to_string();
-        let later = clash_verge_i18n::t!("notifications.updateReady.later").to_string();
+        let title = xxlink_i18n::t!("notifications.updateReady.title").to_string();
+        let body = xxlink_i18n::t!("notifications.updateReady.body").replace("{version}", version);
+        let install_now = xxlink_i18n::t!("notifications.updateReady.installNow").to_string();
+        let later = xxlink_i18n::t!("notifications.updateReady.later").to_string();
 
         let (tx, rx) = tokio::sync::oneshot::channel();
 

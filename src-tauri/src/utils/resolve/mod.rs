@@ -16,8 +16,8 @@ use crate::{
     process::AsyncHandler,
     utils::{init, server, window_manager::WindowManager},
 };
-use clash_verge_logging::{Type, logging, logging_error};
-use clash_verge_signal;
+use xxlink_logging::{Type, logging, logging_error};
+use xxlink_signal;
 
 pub mod dns;
 pub mod scheme;
@@ -47,7 +47,7 @@ pub fn resolve_setup_sync() {
 
 pub fn resolve_setup_async() {
     AsyncHandler::spawn(|| async {
-        logging!(info, Type::ClashVergeRev, "Version: {}", env!("CARGO_PKG_VERSION"));
+    logging!(info, Type::XXLink, "Version: {}", env!("CARGO_PKG_VERSION"));
 
         init_verge_config().await;
         Config::verify_config_initialization().await;
@@ -144,7 +144,7 @@ async fn init_silent_updater() {
 
 pub fn init_signal() {
     logging!(info, Type::Setup, "Initializing signal handlers...");
-    clash_verge_signal::register(feat::quit);
+    xxlink_signal::register(feat::quit);
 }
 
 pub async fn init_work_config() {
@@ -182,7 +182,7 @@ pub(super) async fn apply_auto_connect_on_launch() {
 }
 
 pub(super) async fn init_service_manager() {
-    clash_verge_service_ipc::set_config(Some(ServiceManager::config())).await;
+    xxlink_service_ipc::set_config(Some(ServiceManager::config())).await;
     if !is_service_ipc_path_exists() {
         return;
     }

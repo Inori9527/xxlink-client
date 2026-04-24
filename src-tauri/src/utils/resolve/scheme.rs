@@ -9,7 +9,7 @@ use crate::{
     config::{Config, PrfItem, profiles},
     core::{CoreManager, handle},
 };
-use clash_verge_logging::{Type, logging, logging_error};
+use xxlink_logging::{Type, logging, logging_error};
 
 pub(super) async fn resolve_scheme(param: &str) -> Result<()> {
     logging!(info, Type::Config, "received deep link: {param}");
@@ -35,7 +35,7 @@ pub(super) async fn resolve_scheme(param: &str) -> Result<()> {
 }
 
 fn extract_subscription_info(link_parsed: &Url) -> Option<(std::string::String, Option<String>)> {
-    if !matches!(link_parsed.scheme(), "clash" | "clash-verge") {
+    if !matches!(link_parsed.scheme(), "xxlink") {
         return None;
     }
 

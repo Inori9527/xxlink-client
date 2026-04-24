@@ -34,7 +34,7 @@ import { useTrafficData } from '@/hooks/use-traffic-data'
 import { useVerge } from '@/hooks/use-verge'
 import { useVisibility } from '@/hooks/use-visibility'
 import { useAppData } from '@/providers/app-data-context'
-import { api } from '@/services/api'
+import { api, isSubscriptionActiveNow } from '@/services/api'
 import { showNotice } from '@/services/notice-service'
 import { syncSubscription } from '@/services/subscription-sync'
 import parseTraffic from '@/utils/parse-traffic'
@@ -46,6 +46,7 @@ type ConnectMode = 'system' | 'both'
 
 const MODE_STORAGE_KEY = 'xxlink:connect-mode'
 const DEFAULT_MODE: ConnectMode = 'both'
+
 
 // Names to exclude from the node dropdown (case-insensitive).
 // "proxy" is the raw manual-selection group the upstream ships; end users
@@ -128,7 +129,7 @@ const ConnectPage = () => {
       .current()
       .then((sub) => {
         if (cancelled) return
-        setHasSubscription(sub?.status === 'ACTIVE')
+        setHasSubscription(isSubscriptionActiveNow(sub))
       })
       .catch(() => {
         if (!cancelled) setHasSubscription(false)
@@ -300,13 +301,13 @@ const ConnectPage = () => {
     if (refreshing) return
     setRefreshing(true)
     try {
-      await syncSubscription()
+      await syncSubscription({ force: true })
       await refreshProxy()
       // Re-probe subscription status in case the user just bought a plan
       // outside the app (e.g. browser checkout) before hitting Refresh.
       try {
         const sub = await api.subscription.current()
-        setHasSubscription(sub?.status === 'ACTIVE')
+        setHasSubscription(isSubscriptionActiveNow(sub))
       } catch {
         /* leave existing state */
       }

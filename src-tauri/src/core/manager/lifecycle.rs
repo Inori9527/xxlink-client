@@ -5,10 +5,10 @@ use crate::core::handle::Handle;
 use crate::core::manager::CLASH_LOGGER;
 use crate::core::service::{SERVICE_MANAGER, ServiceStatus};
 use anyhow::Result;
-use clash_verge_logging::{Type, logging};
+use xxlink_logging::{Type, logging};
 use scopeguard::defer;
 use smartstring::alias::String;
-use tauri_plugin_clash_verge_sysinfo;
+use tauri_plugin_xxlink_sysinfo;
 
 impl CoreManager {
     pub async fn start_core(&self) -> Result<()> {
@@ -95,7 +95,7 @@ impl CoreManager {
 
     fn after_core_process(&self) {
         let app_handle = Handle::app_handle();
-        tauri_plugin_clash_verge_sysinfo::set_app_core_mode(app_handle, self.get_running_mode().to_string());
+        tauri_plugin_xxlink_sysinfo::set_app_core_mode(app_handle, self.get_running_mode().to_string());
     }
 
     #[cfg(target_os = "windows")]

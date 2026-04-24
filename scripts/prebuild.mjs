@@ -256,8 +256,8 @@ function clashMeta() {
   const isWin = platform === 'win32'
   const urlExt = isWin ? 'zip' : 'gz'
   return {
-    name: 'verge-mihomo',
-    targetFile: `verge-mihomo-${SIDECAR_HOST}${isWin ? '.exe' : ''}`,
+    name: 'xxlink-mihomo',
+    targetFile: `xxlink-mihomo-${SIDECAR_HOST}${isWin ? '.exe' : ''}`,
     exeFile: `${name}${isWin ? '.exe' : ''}`,
     zipFile: `${name}-${META_VERSION}.${urlExt}`,
     downloadURL: `${META_URL_PREFIX}/${META_VERSION}/${name}-${META_VERSION}.${urlExt}`,
@@ -529,9 +529,9 @@ const resolvePlugin = async () => {
 // service chmod (保留并使用 glob)
 const resolveServicePermission = async () => {
   const serviceExecutables = [
-    'clash-verge-service*',
-    'clash-verge-service-install*',
-    'clash-verge-service-uninstall*',
+    'xxlink-service*',
+    'xxlink-service-install*',
+    'xxlink-service-uninstall*',
   ]
   const hashCache = await loadHashCache()
   let hasChanges = false
@@ -565,7 +565,7 @@ const resolveServicePermission = async () => {
 // =======================
 // Other resource resolvers (service, mmdb, geosite, geoip, enableLoopback)
 // =======================
-// Upstream clash-verge-service-ipc only publishes release tags under the
+// Upstream xxlink-service-ipc only publishes release tags under the
 // *-msvc triple; the binaries themselves are ABI-compatible with our
 // *-gnu Rust target on Windows (Go-built service, no C++ runtime
 // entanglement). Saved filename keeps SIDECAR_HOST so Tauri externalBin
@@ -574,32 +574,32 @@ const SERVICE_TAG =
   platform === 'win32'
     ? SIDECAR_HOST.replace(/-pc-windows-gnu$/, '-pc-windows-msvc')
     : SIDECAR_HOST
-const SERVICE_URL = `https://github.com/clash-verge-rev/clash-verge-service-ipc/releases/download/${SERVICE_TAG}`
+const SERVICE_URL = `https://github.com/clash-verge-rev/xxlink-service-ipc/releases/download/${SERVICE_TAG}`
 const resolveService = () => {
   const ext = platform === 'win32' ? '.exe' : ''
   const suffix = platform === 'linux' ? '-' + SIDECAR_HOST : ''
   return resolveResource({
-    file: 'clash-verge-service' + suffix + ext,
+    file: 'xxlink-service' + suffix + ext,
     dir: SERVICE_DIR,
-    downloadURL: `${SERVICE_URL}/clash-verge-service${ext}`,
+    downloadURL: `${SERVICE_URL}/xxlink-service${ext}`,
   })
 }
 const resolveInstall = () => {
   const ext = platform === 'win32' ? '.exe' : ''
   const suffix = platform === 'linux' ? '-' + SIDECAR_HOST : ''
   return resolveResource({
-    file: 'clash-verge-service-install' + suffix + ext,
+    file: 'xxlink-service-install' + suffix + ext,
     dir: SERVICE_DIR,
-    downloadURL: `${SERVICE_URL}/clash-verge-service-install${ext}`,
+    downloadURL: `${SERVICE_URL}/xxlink-service-install${ext}`,
   })
 }
 const resolveUninstall = () => {
   const ext = platform === 'win32' ? '.exe' : ''
   const suffix = platform === 'linux' ? '-' + SIDECAR_HOST : ''
   return resolveResource({
-    file: 'clash-verge-service-uninstall' + suffix + ext,
+    file: 'xxlink-service-uninstall' + suffix + ext,
     dir: SERVICE_DIR,
-    downloadURL: `${SERVICE_URL}/clash-verge-service-uninstall${ext}`,
+    downloadURL: `${SERVICE_URL}/xxlink-service-uninstall${ext}`,
   })
 }
 
@@ -640,7 +640,7 @@ const resolveUnSetDnsScript = () =>
 // =======================
 const tasks = [
   {
-    name: 'verge-mihomo',
+    name: 'xxlink-mihomo',
     func: () =>
       getLatestReleaseVersion().then(() => resolveSidecar(clashMeta())),
     retry: 5,

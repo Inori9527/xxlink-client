@@ -5,7 +5,7 @@ use crate::{
     core::validate::CoreConfigValidator,
     utils::dirs,
 };
-use clash_verge_logging::{Type, logging};
+use xxlink_logging::{Type, logging};
 use smartstring::alias::String;
 use tokio::fs;
 

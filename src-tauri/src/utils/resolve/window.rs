@@ -7,7 +7,7 @@ use crate::{
     core::handle,
     utils::resolve::window_script::{INITIAL_LOADING_OVERLAY, build_window_initial_script},
 };
-use clash_verge_logging::{Type, logging_error};
+use xxlink_logging::{Type, logging_error};
 
 const DARK_BACKGROUND_COLOR: Color = Color(46, 48, 61, 255); // #2E303D
 const LIGHT_BACKGROUND_COLOR: Color = Color(245, 245, 245, 255); // #F5F5F5

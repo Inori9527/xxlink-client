@@ -3,7 +3,7 @@ use crate::core::{CoreManager, handle, sysopt};
 use crate::utils;
 #[cfg(target_os = "macos")]
 use crate::utils::window_manager::WindowManager;
-use clash_verge_logging::{Type, logging};
+use xxlink_logging::{Type, logging};
 use tokio::time::{Duration, timeout};
 
 pub async fn quit() {

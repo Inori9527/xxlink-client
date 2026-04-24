@@ -2,7 +2,7 @@ use crate::{
     config::{Config, IVerge},
     core::handle,
 };
-use clash_verge_logging::{Type, logging};
+use xxlink_logging::{Type, logging};
 
 /// Toggle system proxy on/off
 pub async fn toggle_system_proxy() -> bool {

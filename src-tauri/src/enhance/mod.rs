@@ -7,7 +7,7 @@ use self::{
 };
 use crate::utils::dirs;
 use crate::{config::Config, constants};
-use clash_verge_logging::{Type, logging};
+use xxlink_logging::{Type, logging};
 use serde_yaml_ng::{Mapping, Value};
 use smartstring::alias::String;
 use std::collections::{HashMap, HashSet};

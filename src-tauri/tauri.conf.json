@@ -1,5 +1,5 @@
 {
-  "version": "1.0.3",
+  "version": "1.1.3",
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "bundle": {
     "active": true,
@@ -11,18 +11,22 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["resources"],
+    "resources": [
+      "resources"
+    ],
     "publisher": "XXLink",
-    "externalBin": ["sidecar/verge-mihomo"],
+    "externalBin": [
+      "sidecar/xxlink-mihomo"
+    ],
     "copyright": "GNU General Public License v3.0",
     "category": "DeveloperTool",
     "shortDescription": "XXLink",
     "createUpdaterArtifacts": true
   },
   "build": {
-    "beforeBuildCommand": "pnpm run web:build",
+    "beforeBuildCommand": "corepack pnpm run web:build",
     "frontendDist": "../dist",
-    "beforeDevCommand": "pnpm run web:dev",
+    "beforeDevCommand": "corepack pnpm run web:dev",
     "devUrl": "http://localhost:3000/",
     "removeUnusedCommands": true
   },
@@ -30,7 +34,7 @@
   "identifier": "com.xxlink.desktop",
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQyOEMyRjBCQkVGOUJEREYKUldUZnZmbStDeStNMHU5Mmo1N24xQXZwSVRYbXA2NUpzZE5oVzlqeS9Bc0t6RVV4MmtwVjBZaHgK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEU4MkM1M0FENzk1ODhFMDkKUldRSmpsaDVyVk1zNkk5b2ZkMFZsNzZwRWttV3NMQ2krOGhCSHplRzFxeU9NUTIvbXRzbzUvUnMK",
       "endpoints": [
         "https://github.com/Inori9527/xxlink-client/releases/download/updater/update.json"
       ],
@@ -40,17 +44,24 @@
     },
     "deep-link": {
       "desktop": {
-        "schemes": ["xxlink"]
+        "schemes": [
+          "xxlink"
+        ]
       }
     }
   },
   "app": {
     "security": {
-      "capabilities": ["desktop-capability", "migrated"],
+      "capabilities": [
+        "desktop-capability",
+        "migrated"
+      ],
       "assetProtocol": {
         "enable": true,
         "scope": {
-          "allow": ["**"],
+          "allow": [
+            "**"
+          ],
           "requireLiteralLeadingDot": false
         }
       },

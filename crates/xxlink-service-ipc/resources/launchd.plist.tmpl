@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.xxlink.desktop.service</string>
+
+    <key>AssociatedBundleIdentifiers</key>
+    <array>
+        <string>com.xxlink.desktop</string>
+    </array>
+
+    <key>MachServices</key>
+    <dict>
+        <key>com.xxlink.desktop.service</key>
+        <true/>
+    </dict>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/PrivilegedHelperTools/com.xxlink.desktop.service.bundle/Contents/MacOS/xxlink-service</string>
+    </array>
+
+    <key>GroupName</key>
+    <string>{group_name}</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+</dict>
+</plist>

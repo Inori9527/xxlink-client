@@ -7,7 +7,7 @@ use crate::{
     utils::{arch_check, dirs},
 };
 use anyhow::{Result, anyhow};
-use clash_verge_logging::Type;
+use xxlink_logging::Type;
 use compact_str::CompactString;
 use log::Level;
 use scopeguard::defer;
@@ -42,7 +42,7 @@ impl CoreManager {
         }
 
         #[cfg(unix)]
-        let previous_mask = unsafe { tauri_plugin_clash_verge_sysinfo::libc::umask(0o007) };
+        let previous_mask = unsafe { tauri_plugin_xxlink_sysinfo::libc::umask(0o007) };
         let spawn_result = app_handle
             .shell()
             .sidecar(clash_core.as_str())?
@@ -61,7 +61,7 @@ impl CoreManager {
             .spawn();
         #[cfg(unix)]
         unsafe {
-            tauri_plugin_clash_verge_sysinfo::libc::umask(previous_mask)
+            tauri_plugin_xxlink_sysinfo::libc::umask(previous_mask)
         };
         let (mut rx, child) = match spawn_result {
             Ok(ok) => ok,

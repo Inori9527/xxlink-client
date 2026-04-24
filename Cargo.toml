@@ -1,12 +1,13 @@
 [workspace]
 members = [
   "src-tauri",
-  "crates/clash-verge-draft",
-  "crates/clash-verge-logging",
-  "crates/clash-verge-signal",
-  "crates/tauri-plugin-clash-verge-sysinfo",
-  "crates/clash-verge-i18n",
-  "crates/clash-verge-limiter",
+  "crates/xxlink-draft",
+  "crates/xxlink-logging",
+  "crates/xxlink-signal",
+  "crates/xxlink-service-ipc",
+  "crates/tauri-plugin-xxlink-sysinfo",
+  "crates/xxlink-i18n",
+  "crates/xxlink-limiter",
 ]
 resolver = "2"
 
@@ -45,12 +46,13 @@ codegen-units = 1
 split-debuginfo = "unpacked"
 
 [workspace.dependencies]
-clash-verge-draft = { path = "crates/clash-verge-draft" }
-clash-verge-logging = { path = "crates/clash-verge-logging" }
-clash-verge-signal = { path = "crates/clash-verge-signal" }
-clash-verge-i18n = { path = "crates/clash-verge-i18n" }
-clash-verge-limiter = { path = "crates/clash-verge-limiter" }
-tauri-plugin-clash-verge-sysinfo = { path = "crates/tauri-plugin-clash-verge-sysinfo" }
+xxlink-draft = { path = "crates/xxlink-draft" }
+xxlink-logging = { path = "crates/xxlink-logging" }
+xxlink-signal = { path = "crates/xxlink-signal" }
+xxlink-i18n = { path = "crates/xxlink-i18n" }
+xxlink-limiter = { path = "crates/xxlink-limiter" }
+xxlink_service_ipc = { path = "crates/xxlink-service-ipc", package = "xxlink_service_ipc" }
+tauri-plugin-xxlink-sysinfo = { path = "crates/tauri-plugin-xxlink-sysinfo" }
 
 tauri = { version = "2.10.3" }
 tauri-plugin-clipboard-manager = "2.3.2"

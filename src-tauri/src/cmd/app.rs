@@ -2,7 +2,7 @@ use super::CmdResult;
 use crate::core::{autostart, handle};
 use crate::utils::resolve::ui::{self, UiReadyStage};
 use crate::{cmd::StringifyErr as _, feat, utils::dirs};
-use clash_verge_logging::{Type, logging};
+use xxlink_logging::{Type, logging};
 use smartstring::alias::String;
 use tauri::AppHandle;
 #[cfg(feature = "verge-dev")]
@@ -112,6 +112,7 @@ pub fn get_auto_launch_status() -> CmdResult<bool> {
 pub async fn notify_ui_ready() {
     logging!(info, Type::Cmd, "前端UI已准备就绪");
     ui::mark_ui_ready();
+    crate::core::notification::NotificationSystem::flush_pending_events();
 
     handle::Handle::refresh_clash();
     let delayed_refresh_delay = std::time::Duration::from_millis(1500);

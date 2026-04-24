@@ -40,6 +40,8 @@ export interface Subscription {
   plan: Plan
 }
 
+type SubscriptionSnapshot = Pick<Subscription, 'status' | 'expireAt'>
+
 export interface Node {
   id: string
   name: string
@@ -196,6 +198,14 @@ export function getSubUrl(
   } catch {
     return `${BASE_URL}/subscription/${subUrl}?format=${format}`
   }
+}
+
+export function isSubscriptionActiveNow(
+  sub: SubscriptionSnapshot | null | undefined,
+): sub is SubscriptionSnapshot & { status: 'ACTIVE' } {
+  if (!sub || sub.status !== 'ACTIVE') return false
+  const expireAtMs = Date.parse(sub.expireAt)
+  return Number.isFinite(expireAtMs) && expireAtMs > Date.now()
 }
 
 // ---------------------------------------------------------------------------

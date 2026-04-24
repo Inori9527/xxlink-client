@@ -36,6 +36,7 @@ import { LayoutItem } from '@/components/layout/layout-item'
 import { LayoutTraffic } from '@/components/layout/layout-traffic'
 import { NoticeManager } from '@/components/layout/notice-manager'
 import { UpdateButton } from '@/components/layout/update-button'
+import { UpdatePrompt } from '@/components/layout/update-prompt'
 import { WindowControls } from '@/components/layout/window-controller'
 import { useI18n } from '@/hooks/use-i18n'
 import { useVerge } from '@/hooks/use-verge'
@@ -259,6 +260,7 @@ const Layout = () => {
     <ThemeProvider theme={theme}>
       {/* 左侧底部窗口控制按钮 */}
       <NoticeManager position={verge?.notice_position} />
+      <UpdatePrompt />
       <Paper
         square
         elevation={0}

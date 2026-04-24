@@ -7,8 +7,8 @@ use std::{
 };
 
 use anyhow::{Result, bail};
-use clash_verge_logging::{Type, logging};
-use clash_verge_service_ipc::WriterConfig;
+use xxlink_logging::{Type, logging};
+use xxlink_service_ipc::WriterConfig;
 use compact_str::CompactString;
 use flexi_logger::{
     Cleanup, Criterion, DeferredNow, FileSpec, LogSpecBuilder, LogSpecification, LoggerHandle,
@@ -75,8 +75,8 @@ impl Logger {
             let logger = flexi_logger::Logger::with(log_spec)
                 .log_to_file(FileSpec::default().directory(log_dir).basename(""))
                 .duplicate_to_stdout(log_level.into())
-                .format(clash_verge_logger::console_format)
-                .format_for_files(clash_verge_logger::file_format_with_level)
+                .format(xxlink_logger::console_format)
+                .format_for_files(xxlink_logger::file_format_with_level)
                 .rotate(
                     Criterion::Size(log_max_size * 1024),
                     flexi_logger::Naming::TimestampsCustomFormat {
@@ -91,7 +91,7 @@ impl Logger {
             filter_modules.push("tauri");
             #[cfg(feature = "tracing")]
             filter_modules.extend(["tauri_plugin_mihomo", "kode_bridge"]);
-            let logger = logger.filter(Box::new(clash_verge_logging::NoModuleFilter(filter_modules)));
+            let logger = logger.filter(Box::new(xxlink_logging::NoModuleFilter(filter_modules)));
 
             let handle = logger.start()?;
             *self.handle.lock() = Some(handle);
@@ -162,7 +162,7 @@ impl Logger {
         // update service writer config
         if service::is_service_ipc_path_exists() && service::is_service_available().await.is_ok() {
             let service_log_dir = dirs::path_to_str(&service_log_dir()?)?.into();
-            clash_verge_service_ipc::update_writer(&WriterConfig {
+            xxlink_service_ipc::update_writer(&WriterConfig {
                 directory: service_log_dir,
                 max_log_size: log_max_size * 1024,
                 max_log_files: log_max_count,
@@ -183,7 +183,7 @@ impl Logger {
                 .basename("sidecar")
                 .suppress_timestamp(),
         )
-        .format(clash_verge_logger::file_format_without_level)
+        .format(xxlink_logger::file_format_without_level)
         .rotate(
             Criterion::Size(log_max_size * 1024),
             flexi_logger::Naming::TimestampsCustomFormat {

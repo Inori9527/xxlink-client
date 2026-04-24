@@ -10,7 +10,7 @@ use crate::{
 };
 use anyhow::Result;
 use chrono::{Local, TimeZone as _};
-use clash_verge_logging::Type;
+use xxlink_logging::Type;
 #[cfg(target_os = "windows")]
 use std::path::Path;
 use std::{path::PathBuf, str::FromStr as _};
@@ -361,19 +361,19 @@ pub fn init_scheme() -> Result<()> {
     let app_exe = app_exe.to_string_lossy().into_owned();
 
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let (clash, _) = hkcu.create_subkey("Software\\Classes\\Clash")?;
-    clash.set_value("", &"XXLink")?;
-    clash.set_value("URL Protocol", &"XXLink URL Scheme Protocol")?;
-    let (default_icon, _) = hkcu.create_subkey("Software\\Classes\\Clash\\DefaultIcon")?;
+    let (scheme_key, _) = hkcu.create_subkey("Software\\Classes\\xxlink")?;
+    scheme_key.set_value("", &"XXLink")?;
+    scheme_key.set_value("URL Protocol", &"XXLink URL Scheme Protocol")?;
+    let (default_icon, _) = hkcu.create_subkey("Software\\Classes\\xxlink\\DefaultIcon")?;
     default_icon.set_value("", &app_exe)?;
-    let (command, _) = hkcu.create_subkey("Software\\Classes\\Clash\\Shell\\Open\\Command")?;
+    let (command, _) = hkcu.create_subkey("Software\\Classes\\xxlink\\Shell\\Open\\Command")?;
     command.set_value("", &format!("{app_exe} \"%1\""))?;
 
     Ok(())
 }
 #[cfg(target_os = "linux")]
 pub fn init_scheme() -> Result<()> {
-    const DESKTOP_FILE: &str = "clash-verge.desktop";
+    const DESKTOP_FILE: &str = "xxlink.desktop";
 
     for scheme in DEEP_LINK_SCHEMES {
         let handler = format!("x-scheme-handler/{scheme}");
@@ -399,7 +399,7 @@ pub const fn init_scheme() -> Result<()> {
 }
 
 #[cfg(target_os = "linux")]
-const DEEP_LINK_SCHEMES: &[&str] = &["clash", "clash-verge"];
+const DEEP_LINK_SCHEMES: &[&str] = &["xxlink"];
 
 async fn handle_copy(src: &PathBuf, dest: &PathBuf, file: &str) {
     match fs::copy(src, dest).await {

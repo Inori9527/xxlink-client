@@ -3,7 +3,7 @@
 //! NOTE:
 //! These helpers are not fixes and may stop working as environments change.
 
-use clash_verge_logging::{Type, logging};
+use xxlink_logging::{Type, logging};
 use std::{fs, path::Path};
 
 pub fn apply_nvidia_dmabuf_renderer_workaround() {

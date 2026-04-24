@@ -1,21 +1,21 @@
 use crate::core::{CoreManager, handle, manager::RunningMode};
 use anyhow::Result;
 use async_trait::async_trait;
-use clash_verge_logging::{Type, logging};
+use xxlink_logging::{Type, logging};
 #[cfg(unix)]
 use std::iter;
 use std::{fs, path::PathBuf};
 use tauri::Manager as _;
 
 #[cfg(not(feature = "verge-dev"))]
-pub static APP_ID: &str = "io.github.clash-verge-rev.clash-verge-rev";
+pub static APP_ID: &str = "com.xxlink.desktop";
 #[cfg(not(feature = "verge-dev"))]
-pub static BACKUP_DIR: &str = "clash-verge-rev-backup";
+pub static BACKUP_DIR: &str = "xxlink-backup";
 
 #[cfg(feature = "verge-dev")]
-pub static APP_ID: &str = "io.github.clash-verge-rev.clash-verge-rev.dev";
+pub static APP_ID: &str = "com.xxlink.desktop.dev";
 #[cfg(feature = "verge-dev")]
-pub static BACKUP_DIR: &str = "clash-verge-rev-backup-dev";
+pub static BACKUP_DIR: &str = "xxlink-backup-dev";
 
 pub static CLASH_CONFIG: &str = "config.yaml";
 pub static VERGE_CONFIG: &str = "verge.yaml";
@@ -91,13 +91,13 @@ pub fn profiles_path() -> Result<PathBuf> {
 #[cfg(target_os = "macos")]
 pub fn service_path() -> Result<PathBuf> {
     let res_dir = app_resources_dir()?;
-    Ok(res_dir.join("clash-verge-service"))
+    Ok(res_dir.join("xxlink-service"))
 }
 
 #[cfg(windows)]
 pub fn service_path() -> Result<PathBuf> {
     let res_dir = app_resources_dir()?;
-    Ok(res_dir.join("clash-verge-service.exe"))
+    Ok(res_dir.join("xxlink-service.exe"))
 }
 
 pub fn sidecar_log_dir() -> Result<PathBuf> {
@@ -172,18 +172,18 @@ pub fn ensure_mihomo_safe_dir() -> Option<PathBuf> {
 #[cfg(unix)]
 pub fn ipc_path() -> Result<PathBuf> {
     ensure_mihomo_safe_dir()
-        .map(|base_dir| base_dir.join("verge").join("verge-mihomo.sock"))
+        .map(|base_dir| base_dir.join("xxlink").join("xxlink-mihomo.sock"))
         .or_else(|| {
             app_home_dir()
                 .ok()
-                .map(|dir| dir.join("verge").join("verge-mihomo.sock"))
+                .map(|dir| dir.join("xxlink").join("xxlink-mihomo.sock"))
         })
         .ok_or_else(|| anyhow::anyhow!("Failed to determine ipc path"))
 }
 
 #[cfg(target_os = "windows")]
 pub fn ipc_path() -> Result<PathBuf> {
-    Ok(PathBuf::from(r"\\.\pipe\verge-mihomo"))
+    Ok(PathBuf::from(r"\\.\pipe\xxlink-mihomo"))
 }
 #[async_trait]
 pub trait PathBufExec {

@@ -28,6 +28,7 @@ import {
   ThemeModeProvider,
   UpdateStateProvider,
 } from './services/states'
+import { startSubscriptionAutoSync } from './services/subscription-auto-sync'
 import { syncSubscription } from './services/subscription-sync'
 import { disableWebViewShortcuts } from './utils/disable-webview-shortcuts'
 
@@ -165,12 +166,13 @@ const bootstrap = async () => {
   }
 
   initializeApp(result.initialThemeMode)
+  startSubscriptionAutoSync()
 
   // Sync subscription in the background if the user is already logged in
   if (authStore.getState().isAuthenticated) {
     // Non-blocking — must never freeze the UI
     Promise.race([
-      syncSubscription(),
+      syncSubscription({ force: true }),
       new Promise((_, reject) =>
         setTimeout(() => reject(new Error('syncSubscription timeout')), 10000),
       ),
