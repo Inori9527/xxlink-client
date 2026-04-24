@@ -23,28 +23,32 @@ description = "Run type checks"
 command = "pnpm"
 args = ["typecheck"]
 [tasks.typecheck.windows]
-command = "pnpm.cmd"
+command = "corepack.cmd"
+args = ["pnpm", "typecheck"]
 
 [tasks.lint-staged]
 description = "Run lint-staged for staged files"
 command = "pnpm"
 args = ["exec", "lint-staged"]
 [tasks.lint-staged.windows]
-command = "pnpm.cmd"
+command = "corepack.cmd"
+args = ["pnpm", "exec", "lint-staged"]
 
 [tasks.i18n-format]
 description = "Format i18n keys"
 command = "pnpm"
 args = ["i18n:format"]
 [tasks.i18n-format.windows]
-command = "pnpm.cmd"
+command = "corepack.cmd"
+args = ["pnpm", "i18n:format"]
 
 [tasks.i18n-types]
 description = "Generate i18n key types"
 command = "pnpm"
 args = ["i18n:types"]
 [tasks.i18n-types.windows]
-command = "pnpm.cmd"
+command = "corepack.cmd"
+args = ["pnpm", "i18n:types"]
 
 [tasks.git-add]
 description = "Add changed files to git"
