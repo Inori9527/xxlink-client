@@ -195,10 +195,10 @@ fn acquire_pid_lock(pid: u32) -> Option<PidLockGuard> {
     }
 }
 
-fn is_process_alive(pid: u32) -> bool {
+fn is_process_alive(_pid: u32) -> bool {
     #[cfg(unix)]
     {
-        unsafe { platform_lib::kill(pid as i32, 0) == 0 }
+        unsafe { platform_lib::kill(_pid as i32, 0) == 0 }
     }
     #[cfg(windows)]
     {
