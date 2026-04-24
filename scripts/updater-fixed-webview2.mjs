@@ -6,6 +6,7 @@ import { resolveUpdateLog } from './updatelog.mjs'
 const UPDATE_TAG_NAME = 'updater'
 const UPDATE_JSON_FILE = 'update-fixed-webview2.json'
 const UPDATE_JSON_PROXY = 'update-fixed-webview2-proxy.json'
+const PUBLIC_DOWNLOAD_BASE_URL = 'https://api.xxlink.net/download'
 
 /// generate update.json
 /// upload to update tag's release asset
@@ -17,27 +18,27 @@ async function resolveUpdater() {
   const options = { owner: context.repo.owner, repo: context.repo.repo }
   const github = getOctokit(process.env.GITHUB_TOKEN)
 
-  const { data: tags } = await github.rest.repos.listTags({
+  const { data: releases } = await github.rest.repos.listReleases({
     ...options,
     per_page: 10,
     page: 1,
   })
 
-  // get the latest publish tag
-  const tag = tags.find((t) => t.name.startsWith('v'))
+  const latestRelease = releases.find(
+    (release) => !release.draft && !release.prerelease && release.tag_name.startsWith('v'),
+  )
 
-  console.log(tag)
+  console.log(latestRelease?.tag_name ?? 'No release found')
   console.log()
 
-  const { data: latestRelease } = await github.rest.repos.getReleaseByTag({
-    ...options,
-    tag: tag.name,
-  })
+  if (!latestRelease) {
+    throw new Error('No published release found for fixed WebView2 updater')
+  }
 
   const updateData = {
-    name: tag.name,
-    notes: await resolveUpdateLog(tag.name), // use Changelog.md
-    pub_date: new Date().toISOString(),
+    name: latestRelease.tag_name,
+    notes: await resolveUpdateLog(latestRelease.tag_name),
+    pub_date: latestRelease.published_at || new Date().toISOString(),
     platforms: {
       'windows-x86_64': { signature: '', url: '' },
       'windows-aarch64': { signature: '', url: '' },
@@ -48,10 +49,11 @@ async function resolveUpdater() {
 
   const promises = latestRelease.assets.map(async (asset) => {
     const { name, browser_download_url } = asset
+    const publicAssetUrl = resolvePublicAssetUrl(name, browser_download_url)
 
     // win64 url
     if (name.endsWith('x64_fixed_webview2-setup.exe')) {
-      updateData.platforms['windows-x86_64'].url = browser_download_url
+      updateData.platforms['windows-x86_64'].url = publicAssetUrl
     }
     // win64 signature
     if (name.endsWith('x64_fixed_webview2-setup.exe.sig')) {
@@ -61,8 +63,8 @@ async function resolveUpdater() {
 
     // win32 url
     if (name.endsWith('x86_fixed_webview2-setup.exe')) {
-      updateData.platforms['windows-x86'].url = browser_download_url
-      updateData.platforms['windows-i686'].url = browser_download_url
+      updateData.platforms['windows-x86'].url = publicAssetUrl
+      updateData.platforms['windows-i686'].url = publicAssetUrl
     }
     // win32 signature
     if (name.endsWith('x86_fixed_webview2-setup.exe.sig')) {
@@ -73,7 +75,7 @@ async function resolveUpdater() {
 
     // win arm url
     if (name.endsWith('arm64_fixed_webview2-setup.exe')) {
-      updateData.platforms['windows-aarch64'].url = browser_download_url
+      updateData.platforms['windows-aarch64'].url = publicAssetUrl
     }
     // win arm signature
     if (name.endsWith('arm64_fixed_webview2-setup.exe.sig')) {
@@ -94,13 +96,11 @@ async function resolveUpdater() {
     }
   })
 
-  // 生成一个代理github的更新文件
-  // 使用 https://hub.fastgit.xyz/ 做github资源的加速
   const updateDataNew = JSON.parse(JSON.stringify(updateData))
 
   Object.entries(updateDataNew.platforms).forEach(([key, value]) => {
     if (value.url) {
-      updateDataNew.platforms[key].url = 'https://update.hwdns.net/' + value.url
+      updateDataNew.platforms[key].url = value.url
     } else {
       console.log(`[Error]: updateDataNew.platforms.${key} is null`)
     }
@@ -152,6 +152,14 @@ async function getSignature(url) {
   })
 
   return response.text()
+}
+
+function resolvePublicAssetUrl(name, fallbackUrl) {
+  if (/^XXLink_.*_(x64|x86|arm64)_fixed_webview2-setup\.exe$/i.test(name)) {
+    return `${PUBLIC_DOWNLOAD_BASE_URL}/${name}`
+  }
+
+  return fallbackUrl
 }
 
 resolveUpdater().catch(console.error)

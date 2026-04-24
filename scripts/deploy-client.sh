@@ -10,7 +10,7 @@
 # 步骤：
 #   1. 从 package.json 读版本号
 #   2. scp setup.exe 到 VPS 的 nginx downloads 目录
-#   3. 更新 landing 组件里的版本号/日期/URL
+#   3. 更新 landing 组件里的版本号/日期/URL（保持一方下载域名）
 #   4. 重建 landing 容器让页面生效
 #   5. 验证下载链接返回 200
 #
@@ -74,8 +74,8 @@ sed -i -E 's|XXLink_[0-9]+\.[0-9]+\.[0-9]+_x64-setup\.exe|XXLink_${VERSION}_x64-
 sed -i -E 's|Windows 版本 [0-9]+\.[0-9]+\.[0-9]+|Windows 版本 ${VERSION}|g' "${REMOTE_LANDING_FILE}"
 # Replace date label
 sed -i -E 's|更新于 [0-9]{4}年[0-9]{1,2}月|更新于 ${DATE_LABEL}|g' "${REMOTE_LANDING_FILE}"
-# Replace release tag link
-sed -i -E 's|releases/tag/v[0-9]+\.[0-9]+\.[0-9]+|releases/tag/v${VERSION}|g' "${REMOTE_LANDING_FILE}"
+# Replace any GitHub release link with the first-party landing page
+sed -i -E 's|https://github\.com/[^"'\'' ]+/releases/tag/v[0-9]+\.[0-9]+\.[0-9]+|${LANDING_HOST}/|g' "${REMOTE_LANDING_FILE}"
 REMOTE_EOF
 
 echo "🔨 [3/4] Rebuilding landing container..."

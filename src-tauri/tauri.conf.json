@@ -1,5 +1,5 @@
 {
-  "version": "1.1.3",
+  "version": "1.1.4",
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "bundle": {
     "active": true,
@@ -36,7 +36,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEU4MkM1M0FENzk1ODhFMDkKUldRSmpsaDVyVk1zNkk5b2ZkMFZsNzZwRWttV3NMQ2krOGhCSHplRzFxeU9NUTIvbXRzbzUvUnMK",
       "endpoints": [
-        "https://github.com/Inori9527/xxlink-client/releases/download/updater/update.json"
+        "https://api.xxlink.net/updater/update.json"
       ],
       "windows": {
         "installMode": "passive"

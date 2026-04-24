@@ -116,9 +116,7 @@ export function UpdateViewer({ ref }: { ref?: Ref<DialogRef> }) {
               variant="contained"
               size="small"
               onClick={() => {
-                openUrl(
-                  `https://github.com/Inori9527/xxlink-client/releases/tag/v${updateInfo?.version}`,
-                )
+                openUrl('https://xxlink.net/')
               }}
             >
               {t('settings.modals.update.actions.goToRelease')}

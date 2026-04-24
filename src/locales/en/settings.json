@@ -436,7 +436,7 @@
     "update": {
       "title": "New Version v{{version}}",
       "actions": {
-        "goToRelease": "Go to Release Page",
+        "goToRelease": "Go to Download Page",
         "update": "Update"
       },
       "messages": {

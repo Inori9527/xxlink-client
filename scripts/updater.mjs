@@ -7,6 +7,7 @@ import { resolveUpdateLog, resolveUpdateLogDefault } from './updatelog.mjs'
 const UPDATE_TAG_NAME = 'updater'
 const UPDATE_JSON_FILE = 'update.json'
 const UPDATE_JSON_PROXY = 'update-proxy.json'
+const PUBLIC_DOWNLOAD_BASE_URL = 'https://api.xxlink.net/download'
 // Add alpha update JSON filenames
 const ALPHA_TAG_NAME = 'updater-alpha'
 const ALPHA_UPDATE_JSON_FILE = 'update.json'
@@ -107,12 +108,13 @@ async function processRelease(github, options, release, isAlpha) {
 
   const promises = release.assets.map(async (asset) => {
       const { name, browser_download_url } = asset
+      const publicAssetUrl = resolvePublicAssetUrl(name, browser_download_url)
 
       // Process all the platform URL and signature data
       // win64 url
       if (name.endsWith('x64-setup.exe')) {
-        updateData.platforms.win64.url = browser_download_url
-        updateData.platforms['windows-x86_64'].url = browser_download_url
+        updateData.platforms.win64.url = publicAssetUrl
+        updateData.platforms['windows-x86_64'].url = publicAssetUrl
       }
       // win64 signature
       if (name.endsWith('x64-setup.exe.sig')) {
@@ -123,8 +125,8 @@ async function processRelease(github, options, release, isAlpha) {
 
       // win32 url
       if (name.endsWith('x86-setup.exe')) {
-        updateData.platforms['windows-x86'].url = browser_download_url
-        updateData.platforms['windows-i686'].url = browser_download_url
+        updateData.platforms['windows-x86'].url = publicAssetUrl
+        updateData.platforms['windows-i686'].url = publicAssetUrl
       }
       // win32 signature
       if (name.endsWith('x86-setup.exe.sig')) {
@@ -135,7 +137,7 @@ async function processRelease(github, options, release, isAlpha) {
 
       // win arm url
       if (name.endsWith('arm64-setup.exe')) {
-        updateData.platforms['windows-aarch64'].url = browser_download_url
+        updateData.platforms['windows-aarch64'].url = publicAssetUrl
       }
       // win arm signature
       if (name.endsWith('arm64-setup.exe.sig')) {
@@ -227,7 +229,7 @@ async function processRelease(github, options, release, isAlpha) {
 
   Object.entries(updateDataNew.platforms).forEach(([key, value]) => {
     if (value.url) {
-      updateDataNew.platforms[key].url = 'https://update.hwdns.net/' + value.url
+      updateDataNew.platforms[key].url = value.url
     } else {
       console.log(`[Error]: updateDataNew.platforms.${key} is null`)
     }
@@ -319,6 +321,14 @@ async function getSignature(url) {
   })
 
   return response.text()
+}
+
+function resolvePublicAssetUrl(name, fallbackUrl) {
+  if (/^XXLink_.*_(x64|x86|arm64)(?:_fixed_webview2)?-setup\.exe$/i.test(name)) {
+    return `${PUBLIC_DOWNLOAD_BASE_URL}/${name}`
+  }
+
+  return fallbackUrl
 }
 
 resolveUpdater().catch(console.error)

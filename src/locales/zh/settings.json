@@ -436,7 +436,7 @@
     "update": {
       "title": "新版本 v{{version}}",
       "actions": {
-        "goToRelease": "前往发布页",
+        "goToRelease": "前往下载页",
         "update": "更新"
       },
       "messages": {
