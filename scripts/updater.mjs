@@ -22,95 +22,90 @@ async function resolveUpdater() {
   const options = { owner: context.repo.owner, repo: context.repo.repo }
   const github = getOctokit(process.env.GITHUB_TOKEN)
 
-  // Fetch all tags using pagination
-  let allTags = []
+  // Fetch published releases instead of raw git tags, because the repository
+  // still contains upstream tags that do not map to valid XXLink releases.
+  let allReleases = []
   let page = 1
   const perPage = 100
 
   while (true) {
-    const { data: pageTags } = await github.rest.repos.listTags({
+    const { data: pageReleases } = await github.rest.repos.listReleases({
       ...options,
       per_page: perPage,
       page: page,
     })
 
-    allTags = allTags.concat(pageTags)
+    allReleases = allReleases.concat(pageReleases)
 
-    // Break if we received fewer tags than requested (last page)
-    if (pageTags.length < perPage) {
+    if (pageReleases.length < perPage) {
       break
     }
 
     page++
   }
 
-  const tags = allTags
-  console.log(`Retrieved ${tags.length} tags in total`)
+  const releases = allReleases.filter((release) => !release.draft)
+  const stableRelease = releases.find(
+    (release) =>
+      !release.prerelease && /^v\d+\.\d+\.\d+$/.test(release.tag_name),
+  )
+  const preRelease = releases.find(
+    (release) =>
+      release.prerelease &&
+      /(?:alpha|beta|rc|pre)/i.test(release.tag_name),
+  )
 
-  // More flexible tag detection with regex patterns
-  const stableTagRegex = /^v\d+\.\d+\.\d+$/ // Matches vX.Y.Z format
-  // const preReleaseRegex = /^v\d+\.\d+\.\d+-(alpha|beta|rc|pre)/i; // Matches vX.Y.Z-alpha/beta/rc format
-  const preReleaseRegex = /^(alpha|beta|rc|pre)$/i // Matches exact alpha/beta/rc/pre tags
-
-  // Get the latest stable tag and pre-release tag
-  const stableTag = tags.find((t) => stableTagRegex.test(t.name))
-  const preReleaseTag = tags.find((t) => preReleaseRegex.test(t.name))
-
-  console.log('All tags:', tags.map((t) => t.name).join(', '))
-  console.log('Stable tag:', stableTag ? stableTag.name : 'None found')
+  console.log(`Retrieved ${releases.length} published releases in total`)
+  console.log('All releases:', releases.map((r) => r.tag_name).join(', '))
   console.log(
-    'Pre-release tag:',
-    preReleaseTag ? preReleaseTag.name : 'None found',
+    'Stable release:',
+    stableRelease ? stableRelease.tag_name : 'None found',
+  )
+  console.log(
+    'Pre-release release:',
+    preRelease ? preRelease.tag_name : 'None found',
   )
   console.log()
 
-  // Process stable release
-  if (stableTag) {
-    await processRelease(github, options, stableTag, false)
+  if (stableRelease) {
+    await processRelease(github, options, stableRelease, false)
   }
 
-  // Process pre-release if found
-  if (preReleaseTag) {
-    await processRelease(github, options, preReleaseTag, true)
+  if (preRelease) {
+    await processRelease(github, options, preRelease, true)
   }
 }
 
 // Process a release (stable or alpha) and generate update files
-async function processRelease(github, options, tag, isAlpha) {
-  if (!tag) return
+async function processRelease(github, options, release, isAlpha) {
+  if (!release) return
 
-  try {
-    const { data: release } = await github.rest.repos.getReleaseByTag({
-      ...options,
-      tag: tag.name,
-    })
+  const updateData = {
+    name: release.tag_name,
+    notes: await resolveUpdateLog(release.tag_name).catch(() =>
+      resolveUpdateLogDefault().catch(() => 'No changelog available'),
+    ),
+    pub_date: release.published_at || new Date().toISOString(),
+    platforms: {
+      win64: { signature: '', url: '' }, // compatible with older formats
+      linux: { signature: '', url: '' }, // compatible with older formats
+      darwin: { signature: '', url: '' }, // compatible with older formats
+      'darwin-aarch64': { signature: '', url: '' },
+      'darwin-intel': { signature: '', url: '' },
+      'darwin-x86_64': { signature: '', url: '' },
+      'linux-x86_64': { signature: '', url: '' },
+      'linux-x86': { signature: '', url: '' },
+      'linux-i686': { signature: '', url: '' },
+      'linux-aarch64': { signature: '', url: '' },
+      'linux-armv7': { signature: '', url: '' },
+      'windows-x86_64': { signature: '', url: '' },
+      'windows-aarch64': { signature: '', url: '' },
+      'windows-x86': { signature: '', url: '' },
+      'windows-i686': { signature: '', url: '' },
+    },
+  }
 
-    const updateData = {
-      name: tag.name,
-      notes: await resolveUpdateLog(tag.name).catch(() =>
-        resolveUpdateLogDefault().catch(() => 'No changelog available'),
-      ),
-      pub_date: new Date().toISOString(),
-      platforms: {
-        win64: { signature: '', url: '' }, // compatible with older formats
-        linux: { signature: '', url: '' }, // compatible with older formats
-        darwin: { signature: '', url: '' }, // compatible with older formats
-        'darwin-aarch64': { signature: '', url: '' },
-        'darwin-intel': { signature: '', url: '' },
-        'darwin-x86_64': { signature: '', url: '' },
-        'linux-x86_64': { signature: '', url: '' },
-        'linux-x86': { signature: '', url: '' },
-        'linux-i686': { signature: '', url: '' },
-        'linux-aarch64': { signature: '', url: '' },
-        'linux-armv7': { signature: '', url: '' },
-        'windows-x86_64': { signature: '', url: '' },
-        'windows-aarch64': { signature: '', url: '' },
-        'windows-x86': { signature: '', url: '' },
-        'windows-i686': { signature: '', url: '' },
-      },
-    }
-
-    const promises = release.assets.map(async (asset) => {
+  const promises = release.assets.map(async (asset) => {
       const { name, browser_download_url } = asset
 
       // Process all the platform URL and signature data
@@ -215,125 +210,104 @@ async function processRelease(github, options, tag, isAlpha) {
       }
     })
 
-    await Promise.allSettled(promises)
-    console.log(updateData)
+  await Promise.allSettled(promises)
+  console.log(updateData)
 
-    // maybe should test the signature as well
-    // delete the null field
-    Object.entries(updateData.platforms).forEach(([key, value]) => {
-      if (!value.url) {
-        console.log(`[Error]: failed to parse release for "${key}"`)
-        delete updateData.platforms[key]
-      }
-    })
+  // maybe should test the signature as well
+  // delete the null field
+  Object.entries(updateData.platforms).forEach(([key, value]) => {
+    if (!value.url) {
+      console.log(`[Error]: failed to parse release for "${key}"`)
+      delete updateData.platforms[key]
+    }
+  })
 
-    // Generate a proxy update file for accelerated GitHub resources
-    const updateDataNew = JSON.parse(JSON.stringify(updateData))
+  // Generate a proxy update file for accelerated GitHub resources
+  const updateDataNew = JSON.parse(JSON.stringify(updateData))
 
-    Object.entries(updateDataNew.platforms).forEach(([key, value]) => {
-      if (value.url) {
-        updateDataNew.platforms[key].url =
-          'https://update.hwdns.net/' + value.url
-      } else {
-        console.log(`[Error]: updateDataNew.platforms.${key} is null`)
-      }
-    })
+  Object.entries(updateDataNew.platforms).forEach(([key, value]) => {
+    if (value.url) {
+      updateDataNew.platforms[key].url = 'https://update.hwdns.net/' + value.url
+    } else {
+      console.log(`[Error]: updateDataNew.platforms.${key} is null`)
+    }
+  })
 
-    // Get the appropriate updater release based on isAlpha flag
-    const releaseTag = isAlpha ? ALPHA_TAG_NAME : UPDATE_TAG_NAME
-    console.log(
-      `Processing ${isAlpha ? 'alpha' : 'stable'} release:`,
-      releaseTag,
-    )
+  const releaseTag = isAlpha ? ALPHA_TAG_NAME : UPDATE_TAG_NAME
+  console.log(
+    `Processing ${isAlpha ? 'alpha' : 'stable'} release:`,
+    releaseTag,
+  )
+
+  try {
+    let updateRelease
 
     try {
-      let updateRelease
-
-      try {
-        // Try to get the existing release
-        const response = await github.rest.repos.getReleaseByTag({
-          ...options,
-          tag: releaseTag,
-        })
-        updateRelease = response.data
-        console.log(
-          `Found existing ${releaseTag} release with ID: ${updateRelease.id}`,
-        )
-      } catch (error) {
-        // If release doesn't exist, create it
-        if (error.status === 404) {
-          console.log(
-            `Release with tag ${releaseTag} not found, creating new release...`,
-          )
-          const createResponse = await github.rest.repos.createRelease({
-            ...options,
-            tag_name: releaseTag,
-            name: isAlpha
-              ? 'Auto-update Alpha Channel'
-              : 'Auto-update Stable Channel',
-            body: `This release contains the update information for ${isAlpha ? 'alpha' : 'stable'} channel.`,
-            prerelease: isAlpha,
-          })
-          updateRelease = createResponse.data
-          console.log(
-            `Created new ${releaseTag} release with ID: ${updateRelease.id}`,
-          )
-        } else {
-          // If it's another error, throw it
-          throw error
-        }
-      }
-
-      // File names based on release type
-      const jsonFile = isAlpha ? ALPHA_UPDATE_JSON_FILE : UPDATE_JSON_FILE
-      const proxyFile = isAlpha ? ALPHA_UPDATE_JSON_PROXY : UPDATE_JSON_PROXY
-
-      // Delete existing assets with these names
-      for (const asset of updateRelease.assets) {
-        if (asset.name === jsonFile) {
-          await github.rest.repos.deleteReleaseAsset({
-            ...options,
-            asset_id: asset.id,
-          })
-        }
-
-        if (asset.name === proxyFile) {
-          await github.rest.repos
-            .deleteReleaseAsset({ ...options, asset_id: asset.id })
-            .catch(console.error) // do not break the pipeline
-        }
-      }
-
-      // Upload new assets
-      await github.rest.repos.uploadReleaseAsset({
+      const response = await github.rest.repos.getReleaseByTag({
         ...options,
-        release_id: updateRelease.id,
-        name: jsonFile,
-        data: JSON.stringify(updateData, null, 2),
+        tag: releaseTag,
       })
-
-      await github.rest.repos.uploadReleaseAsset({
-        ...options,
-        release_id: updateRelease.id,
-        name: proxyFile,
-        data: JSON.stringify(updateDataNew, null, 2),
-      })
-
-      console.log(
-        `Successfully uploaded ${isAlpha ? 'alpha' : 'stable'} update files to ${releaseTag}`,
-      )
+      updateRelease = response.data
+      console.log(`Found existing ${releaseTag} release with ID: ${updateRelease.id}`)
     } catch (error) {
-      console.error(
-        `Failed to process ${isAlpha ? 'alpha' : 'stable'} release:`,
-        error.message,
-      )
+      if (error.status === 404) {
+        console.log(`Release with tag ${releaseTag} not found, creating new release...`)
+        const createResponse = await github.rest.repos.createRelease({
+          ...options,
+          tag_name: releaseTag,
+          name: isAlpha
+            ? 'Auto-update Alpha Channel'
+            : 'Auto-update Stable Channel',
+          body: `This release contains the update information for ${isAlpha ? 'alpha' : 'stable'} channel.`,
+          prerelease: isAlpha,
+        })
+        updateRelease = createResponse.data
+        console.log(`Created new ${releaseTag} release with ID: ${updateRelease.id}`)
+      } else {
+        throw error
+      }
     }
+
+    const jsonFile = isAlpha ? ALPHA_UPDATE_JSON_FILE : UPDATE_JSON_FILE
+    const proxyFile = isAlpha ? ALPHA_UPDATE_JSON_PROXY : UPDATE_JSON_PROXY
+
+    for (const asset of updateRelease.assets) {
+      if (asset.name === jsonFile) {
+        await github.rest.repos.deleteReleaseAsset({
+          ...options,
+          asset_id: asset.id,
+        })
+      }
+
+      if (asset.name === proxyFile) {
+        await github.rest.repos
+          .deleteReleaseAsset({ ...options, asset_id: asset.id })
+          .catch(console.error)
+      }
+    }
+
+    await github.rest.repos.uploadReleaseAsset({
+      ...options,
+      release_id: updateRelease.id,
+      name: jsonFile,
+      data: JSON.stringify(updateData, null, 2),
+    })
+
+    await github.rest.repos.uploadReleaseAsset({
+      ...options,
+      release_id: updateRelease.id,
+      name: proxyFile,
+      data: JSON.stringify(updateDataNew, null, 2),
+    })
+
+    console.log(
+      `Successfully uploaded ${isAlpha ? 'alpha' : 'stable'} update files to ${releaseTag}`,
+    )
   } catch (error) {
-    if (error.status === 404) {
-      console.log(`Release not found for tag: ${tag.name}, skipping...`)
-    } else {
-      console.error(`Failed to get release for tag: ${tag.name}`, error.message)
-    }
+    console.error(
+      `Failed to process ${isAlpha ? 'alpha' : 'stable'} release:`,
+      error.message,
+    )
   }
 }
 
