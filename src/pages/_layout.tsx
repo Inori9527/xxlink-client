@@ -12,15 +12,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import {
-  Box,
-  List,
-  Menu,
-  MenuItem,
-  Paper,
-  SvgIcon,
-  ThemeProvider,
-} from '@mui/material'
+import { Box, List, Menu, MenuItem, Paper, ThemeProvider } from '@mui/material'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import type { CSSProperties } from 'react'
@@ -28,9 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation, useNavigate } from 'react-router'
 
-import iconDark from '@/assets/image/icon_dark.svg?react'
-import iconLight from '@/assets/image/icon_light.svg?react'
-import LogoSvg from '@/assets/image/logo.svg?react'
+import brandIcon from '@/assets/image/brand-icon.png'
 import { BaseErrorBoundary } from '@/components/base'
 import { LayoutItem } from '@/components/layout/layout-item'
 import { LayoutTraffic } from '@/components/layout/layout-traffic'
@@ -111,7 +101,6 @@ const OS = getSystem()
 
 const Layout = () => {
   const mode = useThemeMode()
-  const isDark = mode !== 'light'
   const { t } = useTranslation()
   const { theme } = useCustomTheme()
   const { verge, mutateVerge, patchVerge } = useVerge()
@@ -305,18 +294,32 @@ const Layout = () => {
                   justifyContent: 'space-between',
                 }}
               >
-                <SvgIcon
-                  component={isDark ? iconDark : iconLight}
-                  style={{
-                    height: '36px',
-                    width: '36px',
-                    marginTop: '-3px',
-                    marginRight: '5px',
-                    marginLeft: '-3px',
+                <Box
+                  component="img"
+                  src={brandIcon}
+                  alt="XXLink"
+                  sx={{
+                    width: 38,
+                    height: 38,
+                    mt: '-5px',
+                    mr: 1,
+                    ml: '-4px',
+                    borderRadius: 1,
+                    objectFit: 'cover',
                   }}
-                  inheritViewBox
                 />
-                <LogoSvg fill={isDark ? 'white' : 'black'} />
+                <Box
+                  component="span"
+                  sx={{
+                    color: 'text.primary',
+                    fontSize: 28,
+                    fontWeight: 800,
+                    lineHeight: '28px',
+                    letterSpacing: '-0.03em',
+                  }}
+                >
+                  XXLink
+                </Box>
               </div>
               <UpdateButton className="the-newbtn" />
             </div>
