@@ -17,20 +17,24 @@ import { useTranslation } from 'react-i18next'
 
 import { BasePage } from '@/components/base'
 import { useAppData } from '@/providers/app-data-context'
-import { api, type TrafficPromoRedeemResult } from '@/services/api'
+import { api, type PromoRedeemResult } from '@/services/api'
 import { syncSubscription } from '@/services/subscription-sync'
 
 function formatRedeemResult(
-  result: TrafficPromoRedeemResult,
+  result: PromoRedeemResult,
   t: (key: string, options?: Record<string, unknown>) => string,
 ): string {
-  const traffic = Number(result.trafficGb)
-  const trafficLabel = Number.isFinite(traffic)
-    ? `${traffic.toLocaleString()} GB`
-    : t('layout.components.promoCode.result.traffic')
+  if (result.message) return result.message
+  const traffic = Number(result.trafficGb ?? 0)
+  const benefitLabel =
+    Number.isFinite(traffic) && traffic > 0
+      ? `${traffic.toLocaleString()} GB`
+      : result.planName
+        ? result.planName
+        : t('layout.components.promoCode.result.traffic')
   return t('layout.components.promoCode.result.success', {
-    traffic: trafficLabel,
-    days: result.validDays,
+    traffic: benefitLabel,
+    days: result.validDays ?? '-',
   })
 }
 
@@ -41,7 +45,7 @@ const PromoCodePage = () => {
   const [code, setCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [syncing, setSyncing] = useState(false)
-  const [result, setResult] = useState<TrafficPromoRedeemResult | null>(null)
+  const [result, setResult] = useState<PromoRedeemResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [syncWarning, setSyncWarning] = useState(false)
 
@@ -74,7 +78,7 @@ const PromoCodePage = () => {
     setResult(null)
 
     try {
-      const redeemResult = await api.promo.redeemTraffic(normalizedCode)
+      const redeemResult = await api.promo.redeemCode(normalizedCode)
       setResult(redeemResult)
       setCode('')
       await handleSync()

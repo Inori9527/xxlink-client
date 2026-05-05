@@ -43,6 +43,31 @@ function formatTraffic(bytes: number): string {
   return `${gb.toFixed(2)} GB`
 }
 
+function getNumericBytes(value: string | number | undefined): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+  return 0
+}
+
+function getEffectiveTrafficLimit(
+  subscription: Subscription | null,
+  publicBenefit: PublicBenefitStatus | null,
+): number {
+  const planLimit = subscription?.plan.trafficLimit ?? 0
+  if (planLimit > 0) return planLimit
+  if (publicBenefit?.visible && publicBenefit.isTrial) {
+    const activeBonusBytes = getNumericBytes(publicBenefit.activeBonusBytes)
+    if (activeBonusBytes > 0) return activeBonusBytes
+    if (publicBenefit.subscriptionCreated || publicBenefit.bonusGranted) {
+      return getNumericBytes(publicBenefit.claimBytes)
+    }
+  }
+  return 0
+}
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString()
 }
@@ -123,7 +148,7 @@ const PlansPage = () => {
   }
 
   const used = activeSubscription?.trafficUsed ?? 0
-  const total = activeSubscription?.plan.trafficLimit ?? 0
+  const total = getEffectiveTrafficLimit(activeSubscription, publicBenefit)
   const pct = total > 0 ? Math.min((used / total) * 100, 100) : 0
   const remainingDays = activeSubscription
     ? getRemainingDays(activeSubscription.expireAt)

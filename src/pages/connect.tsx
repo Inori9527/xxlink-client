@@ -2,10 +2,10 @@ import {
   AccessTimeRounded,
   ArrowDownwardRounded,
   ArrowUpwardRounded,
-  AutoFixHighRounded,
   DataUsageRounded,
   InfoOutlineRounded,
   PowerSettingsNewRounded,
+  RefreshRounded,
 } from '@mui/icons-material'
 import {
   Alert,
@@ -15,6 +15,8 @@ import {
   ButtonGroup,
   Chip,
   CircularProgress,
+  IconButton,
+  LinearProgress,
   Paper,
   Stack,
   TextField,
@@ -140,6 +142,11 @@ type ConnectionSessionState = {
   traffic: { up: number; down: number }
 }
 
+type PeriodUsageState = {
+  used: number
+  limit: number
+}
+
 type ConnectionSessionAction =
   | { type: 'start'; ts: number }
   | { type: 'stop' }
@@ -167,6 +174,22 @@ const connectionSessionReducer = (
   }
 }
 
+const getBestTrafficLimit = (
+  usage: PeriodUsageState | null,
+  publicBenefit: PublicBenefitStatus | null,
+): number => {
+  const usageLimit = usage?.limit ?? 0
+  if (usageLimit > 0) return usageLimit
+  if (publicBenefit?.visible && publicBenefit.isTrial) {
+    const activeBonusBytes = getNumericBytes(publicBenefit.activeBonusBytes)
+    if (activeBonusBytes > 0) return activeBonusBytes
+    if (publicBenefit.subscriptionCreated || publicBenefit.bonusGranted) {
+      return getNumericBytes(publicBenefit.claimBytes)
+    }
+  }
+  return 0
+}
+
 const ConnectPage = () => {
   const { t } = useTranslation()
   const theme = useTheme()
@@ -187,6 +210,8 @@ const ConnectPage = () => {
   const [hasSubscription, setHasSubscription] = useState<boolean | null>(null)
   const [publicBenefit, setPublicBenefit] =
     useState<PublicBenefitStatus | null>(null)
+  const [periodUsage, setPeriodUsage] = useState<PeriodUsageState | null>(null)
+  const [periodTrafficDelta, setPeriodTrafficDelta] = useState(0)
   const [durationNow, setDurationNow] = useState(() => Date.now())
   const [connectionSession, updateConnectionSession] = useReducer(
     connectionSessionReducer,
@@ -219,8 +244,12 @@ const ConnectPage = () => {
   useEffect(() => {
     if (!pageVisible) return
     let cancelled = false
-    Promise.allSettled([api.subscription.current(), api.user.publicBenefit()])
-      .then(([subscriptionResult, benefitResult]) => {
+    Promise.allSettled([
+      api.subscription.current(),
+      api.user.publicBenefit(),
+      api.user.usage(),
+    ])
+      .then(([subscriptionResult, benefitResult, usageResult]) => {
         if (cancelled) return
         if (subscriptionResult.status === 'fulfilled') {
           setHasSubscription(isSubscriptionActiveNow(subscriptionResult.value))
@@ -229,6 +258,13 @@ const ConnectPage = () => {
         }
         if (benefitResult.status === 'fulfilled') {
           setPublicBenefit(benefitResult.value)
+        }
+        if (usageResult.status === 'fulfilled') {
+          setPeriodUsage({
+            used: getNumericBytes(usageResult.value.trafficUsed),
+            limit: getNumericBytes(usageResult.value.trafficLimit),
+          })
+          setPeriodTrafficDelta(0)
         }
       })
       .catch(() => {
@@ -328,6 +364,12 @@ const ConnectPage = () => {
         up: Math.max(0, last.up) * deltaSeconds,
         down: Math.max(0, last.down) * deltaSeconds,
       })
+      setPeriodTrafficDelta(
+        (prev) =>
+          prev +
+          Math.max(0, last.up) * deltaSeconds +
+          Math.max(0, last.down) * deltaSeconds,
+      )
       lastTrafficSampleRef.current = { ts: now, ...rate }
     }, 1000)
     return () => window.clearInterval(timer)
@@ -493,6 +535,14 @@ const ConnectPage = () => {
         ])
         setHasSubscription(isSubscriptionActiveNow(sub))
         if (benefit) setPublicBenefit(benefit)
+        const usage = await api.user.usage().catch(() => null)
+        if (usage) {
+          setPeriodUsage({
+            used: getNumericBytes(usage.trafficUsed),
+            limit: getNumericBytes(usage.trafficLimit),
+          })
+          setPeriodTrafficDelta(0)
+        }
       } catch {
         /* leave existing state */
       }
@@ -544,11 +594,25 @@ const ConnectPage = () => {
   const trialNeedsClaim =
     publicBenefit?.visible === true &&
     publicBenefit.isTrial &&
-    getNumericBytes(publicBenefit.activeBonusBytes) <= 0
+    getNumericBytes(publicBenefit.activeBonusBytes) <= 0 &&
+    !publicBenefit.subscriptionCreated &&
+    !publicBenefit.bonusGranted
 
   const connectedDurationLabel = connectionSession.connectedAt
     ? formatDuration(durationNow - connectionSession.connectedAt)
     : '0:00'
+  const realtimePeriodUsed = (periodUsage?.used ?? 0) + periodTrafficDelta
+  const periodTrafficLimit = getBestTrafficLimit(periodUsage, publicBenefit)
+  const periodTrafficPct =
+    periodTrafficLimit > 0
+      ? Math.min((realtimePeriodUsed / periodTrafficLimit) * 100, 100)
+      : 0
+  const periodTrafficLabel =
+    periodTrafficLimit > 0
+      ? `${formatTrafficTotal(realtimePeriodUsed)} / ${formatTrafficTotal(
+          periodTrafficLimit,
+        )}`
+      : `${formatTrafficTotal(realtimePeriodUsed)} / --`
 
   const statusLabel = busy
     ? t('layout.components.connect.actions.connecting')
@@ -575,6 +639,41 @@ const ConnectPage = () => {
           width: '100%',
         }}
       >
+        {hasSubscription === true && (
+          <Box
+            sx={{
+              width: '100%',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              mb: -2,
+            }}
+          >
+            <Tooltip title={t('layout.components.connect.empty.rebuild')}>
+              <span>
+                <IconButton
+                  aria-label={t('layout.components.connect.empty.rebuild')}
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  sx={{
+                    border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
+                    bgcolor: alpha(theme.palette.primary.main, 0.06),
+                    color: 'primary.main',
+                    '&:hover': {
+                      bgcolor: alpha(theme.palette.primary.main, 0.12),
+                    },
+                  }}
+                >
+                  {refreshing ? (
+                    <CircularProgress size={20} />
+                  ) : (
+                    <RefreshRounded />
+                  )}
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Box>
+        )}
+
         {trialNeedsClaim && (
           <Alert
             severity="info"
@@ -666,24 +765,6 @@ const ConnectPage = () => {
                         : 'layout.components.connect.empty.goToPlans',
                     )}
                   </Button>
-                  {hasSubscription === true && (
-                    <Button
-                      variant="outlined"
-                      onClick={handleRefresh}
-                      disabled={refreshing}
-                      startIcon={
-                        refreshing ? (
-                          <CircularProgress size={16} />
-                        ) : (
-                          <AutoFixHighRounded />
-                        )
-                      }
-                    >
-                      {refreshing
-                        ? t('layout.components.connect.empty.refreshing')
-                        : t('layout.components.connect.empty.rebuild')}
-                    </Button>
-                  )}
                 </Stack>
               </Stack>
             </Paper>
@@ -911,9 +992,23 @@ const ConnectPage = () => {
                       {t('layout.components.connect.session.traffic')}
                     </Typography>
                     <Typography variant="body2" fontWeight={800}>
-                      ↑ {formatTrafficTotal(connectionSession.traffic.up)} / ↓{' '}
-                      {formatTrafficTotal(connectionSession.traffic.down)}
+                      {periodTrafficLabel}
                     </Typography>
+                    {periodTrafficLimit > 0 && (
+                      <LinearProgress
+                        variant="determinate"
+                        value={periodTrafficPct}
+                        sx={{
+                          mt: 0.6,
+                          height: 4,
+                          borderRadius: 999,
+                          bgcolor: alpha(theme.palette.success.main, 0.16),
+                          '& .MuiLinearProgress-bar': {
+                            borderRadius: 999,
+                          },
+                        }}
+                      />
+                    )}
                   </Box>
                 </Stack>
               </Paper>
@@ -971,30 +1066,6 @@ const ConnectPage = () => {
                 </Typography>
               </Stack>
             </Stack>
-
-            <Button
-              fullWidth
-              variant="outlined"
-              onClick={handleRefresh}
-              disabled={refreshing}
-              startIcon={
-                refreshing ? (
-                  <CircularProgress size={16} />
-                ) : (
-                  <AutoFixHighRounded />
-                )
-              }
-              sx={{
-                borderRadius: 2,
-                py: 1,
-                borderStyle: 'dashed',
-                bgcolor: alpha(theme.palette.primary.main, 0.03),
-              }}
-            >
-              {refreshing
-                ? t('layout.components.connect.empty.rebuilding')
-                : t('layout.components.connect.empty.rebuild')}
-            </Button>
           </>
         )}
       </Stack>

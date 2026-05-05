@@ -69,7 +69,7 @@
       },
       "session": {
         "duration": "Connected time",
-        "traffic": "Session traffic"
+        "traffic": "Current cycle usage"
       },
       "startupSyncFailed": "Subscription sync failed. Click to retry.",
       "feedback": {
@@ -80,8 +80,8 @@
     },
     "promoCode": {
       "title": "Promo Code",
-      "heading": "Redeem traffic promo code",
-      "subtitle": "Enter a promo code issued by the dashboard. After redemption, XXLink will refresh your subscription and sync nodes.",
+      "heading": "Redeem promo code",
+      "subtitle": "Enter a promo code issued by the dashboard. After redemption, XXLink will refresh your account benefits, subscription, and nodes.",
       "placeholder": "Enter promo code",
       "redeem": "Redeem",
       "redeeming": "Redeeming...",
@@ -89,15 +89,15 @@
       "retrySync": "Retry sync",
       "syncWarning": "The promo code was redeemed, but subscription sync failed. Retry sync, or open Connect and rebuild the subscription.",
       "chips": {
-        "autoSync": "Auto-sync after traffic is added",
-        "trafficCode": "For traffic codes issued by admin"
+        "autoSync": "Auto-sync after redemption",
+        "trafficCode": "Supports traffic codes; plan trial codes can be added later"
       },
       "errors": {
         "empty": "Enter a promo code",
         "redeemFailed": "Failed to redeem promo code"
       },
       "result": {
-        "traffic": "traffic",
+        "traffic": "benefit",
         "success": "Redeemed {{traffic}}, valid for {{days}} days."
       }
     },

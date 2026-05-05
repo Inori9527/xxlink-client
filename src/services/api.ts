@@ -90,12 +90,15 @@ export interface PromoValidation {
   finalPrice: number
 }
 
-export interface TrafficPromoRedeemResult {
+export interface PromoRedeemResult {
   code: string
-  trafficGb: number
+  type?: 'TRAFFIC' | 'PLAN_TRIAL' | string
+  trafficGb?: number
   bonusBytes?: string | number
-  validDays: number
-  expiresAt: string
+  validDays?: number
+  expiresAt?: string
+  planName?: string
+  message?: string
   subscriptionCreated?: boolean
 }
 
@@ -289,8 +292,8 @@ export const api = {
         method: 'POST',
         body: { code, planId },
       }),
-    redeemTraffic: (code: string) =>
-      request<TrafficPromoRedeemResult>('/promo/redeem-traffic', {
+    redeemCode: (code: string) =>
+      request<PromoRedeemResult>('/promo/redeem-traffic', {
         method: 'POST',
         body: { code },
       }),

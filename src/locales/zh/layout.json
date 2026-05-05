@@ -69,7 +69,7 @@
       },
       "session": {
         "duration": "已连接时长",
-        "traffic": "本次流量消费"
+        "traffic": "当前周期用量"
       },
       "startupSyncFailed": "订阅同步失败，点击重试",
       "feedback": {
@@ -80,8 +80,8 @@
     },
     "promoCode": {
       "title": "优惠码",
-      "heading": "兑换流量优惠码",
-      "subtitle": "输入后台发放的优惠码，成功后会自动刷新订阅并同步节点。",
+      "heading": "兑换优惠码",
+      "subtitle": "输入后台发放的优惠码，成功后会自动刷新账号权益、订阅和节点。",
       "placeholder": "请输入优惠码",
       "redeem": "立即兑换",
       "redeeming": "兑换中...",
@@ -89,15 +89,15 @@
       "retrySync": "重试同步",
       "syncWarning": "优惠码已兑换，但订阅同步失败。请重试同步，或到连接页点击重构订阅。",
       "chips": {
-        "autoSync": "流量到账后自动同步",
-        "trafficCode": "适用于后台发放的流量码"
+        "autoSync": "兑换成功后自动同步",
+        "trafficCode": "支持流量码，后续可扩展套餐体验码"
       },
       "errors": {
         "empty": "请输入优惠码",
         "redeemFailed": "优惠码兑换失败"
       },
       "result": {
-        "traffic": "流量",
+        "traffic": "权益",
         "success": "已兑换 {{traffic}}，有效期 {{days}} 天。"
       }
     },
