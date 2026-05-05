@@ -1,7 +1,6 @@
 import {
   HelpOutlineRounded,
   HistoryEduOutlined,
-  RouterOutlined,
   SettingsOutlined,
   SpeedOutlined,
 } from '@mui/icons-material'
@@ -25,8 +24,6 @@ import { Suspense, lazy, useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { BasePage } from '@/components/base'
-import { ConnectModeCard } from '@/components/home/connect-mode-card'
-import { CurrentProxyCard } from '@/components/home/current-proxy-card'
 import { EnhancedCard } from '@/components/home/enhanced-card'
 import { EnhancedTrafficStats } from '@/components/home/enhanced-traffic-stats'
 import { HomeProfileCard } from '@/components/home/home-profile-card'
@@ -97,8 +94,9 @@ const HomeSettingsDialog = ({
   }
 
   const handleSave = async () => {
-    await patchVerge({ home_cards: cards })
-    onSave(cards)
+    const nextCards = { ...cards, proxy: false, mode: false }
+    await patchVerge({ home_cards: nextCards })
+    onSave(nextCards)
     onClose()
   }
 
@@ -110,29 +108,11 @@ const HomeSettingsDialog = ({
           <FormControlLabel
             control={
               <Checkbox
-                checked={cards.proxy || false}
-                onChange={() => handleToggle('proxy')}
-              />
-            }
-            label={t('home.page.settings.cards.currentProxy')}
-          />
-          <FormControlLabel
-            control={
-              <Checkbox
                 checked={cards.profile || false}
                 onChange={() => handleToggle('profile')}
               />
             }
             label={t('home.page.settings.cards.profile')}
-          />
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={cards.mode || false}
-                onChange={() => handleToggle('mode')}
-              />
-            }
-            label={t('home.page.settings.cards.proxyMode')}
           />
           <FormControlLabel
             control={
@@ -202,11 +182,11 @@ const HomePage = () => {
     () => ({
       info: false,
       profile: false,
-      proxy: true,
+      proxy: false,
       network: false,
-      mode: true,
+      mode: false,
       traffic: true,
-      clashinfo: true,
+      clashinfo: false,
       systeminfo: true,
       ip: true,
     }),
@@ -235,7 +215,18 @@ const HomePage = () => {
       : null
   }, [localHomeCards, remoteSignature])
 
-  const effectiveHomeCards = pendingLocalCards ?? remoteHomeCards
+  const effectiveHomeCards = useMemo<HomeCardsSettings>(() => {
+    const sanitizedCards: HomeCardsSettings = {
+      ...(pendingLocalCards ?? remoteHomeCards),
+      proxy: false,
+      mode: false,
+    }
+    const hasVisibleCard = Object.entries(sanitizedCards).some(
+      ([key, enabled]) =>
+        enabled && key !== 'proxy' && key !== 'mode' && key !== 'network',
+    )
+    return hasVisibleCard ? sanitizedCards : defaultCards
+  }, [defaultCards, pendingLocalCards, remoteHomeCards])
 
   // Open the XXLink user manual
   const toGithubDoc = useLockFn(() => {
@@ -248,7 +239,11 @@ const HomePage = () => {
   }, [])
 
   const renderCard = useCallback(
-    (cardKey: string, component: React.ReactNode, size: number = 6) => {
+    (
+      cardKey: keyof HomeCardsSettings,
+      component: React.ReactNode,
+      size: number = 6,
+    ) => {
       if (!effectiveHomeCards[cardKey]) return null
 
       return (
@@ -262,12 +257,10 @@ const HomePage = () => {
 
   const criticalCards = useMemo(
     () => [
-      renderCard('proxy', <CurrentProxyCard />),
       renderCard(
         'profile',
         <HomeProfileCard current={current} onProfileUpdated={mutateProfiles} />,
       ),
-      renderCard('mode', <ClashModeEnhancedCard />),
     ],
     [current, mutateProfiles, renderCard],
   )
@@ -374,21 +367,6 @@ const HomePage = () => {
         onSave={handleSaveSettings}
       />
     </BasePage>
-  )
-}
-
-// Enhanced Clash mode card
-const ClashModeEnhancedCard = () => {
-  const { t } = useTranslation()
-  return (
-    <EnhancedCard
-      title={t('home.page.cards.proxyMode')}
-      icon={<RouterOutlined />}
-      iconColor="info"
-      action={null}
-    >
-      <ConnectModeCard />
-    </EnhancedCard>
   )
 }
 

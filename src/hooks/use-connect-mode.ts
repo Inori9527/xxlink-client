@@ -6,7 +6,9 @@ export const CONNECT_MODE_STORAGE_KEY = 'xxlink:connect-mode'
 const CONNECT_MODE_EVENT = 'xxlink:connect-mode-changed'
 const DEFAULT_CONNECT_MODE: ConnectMode = 'both'
 
-const normalizeConnectMode = (value: string | null | undefined): ConnectMode => {
+const normalizeConnectMode = (
+  value: string | null | undefined,
+): ConnectMode => {
   if (value === 'system' || value === 'both') {
     return value
   }
@@ -61,15 +63,15 @@ export const getConnectModePayload = (
 }
 
 export const useConnectMode = () => {
-  const [mode, setModeState] = useState<ConnectMode>(() => loadConnectMode())
+  const [mode, setMode] = useState<ConnectMode>(() => loadConnectMode())
 
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    const syncMode = () => setModeState(loadConnectMode())
+    const syncMode = () => setMode(loadConnectMode())
     const handleSameTabChange = (event: Event) => {
       const detail = (event as CustomEvent<ConnectMode>).detail
-      setModeState(normalizeConnectMode(detail))
+      setMode(normalizeConnectMode(detail))
     }
     const handleStorage = (event: StorageEvent) => {
       if (event.key && event.key !== CONNECT_MODE_STORAGE_KEY) return
@@ -85,10 +87,10 @@ export const useConnectMode = () => {
     }
   }, [])
 
-  const setMode = useCallback((nextMode: ConnectMode) => {
+  const updateMode = useCallback((nextMode: ConnectMode) => {
     persistConnectMode(nextMode)
-    setModeState(nextMode)
+    setMode(nextMode)
   }, [])
 
-  return { mode, setMode }
+  return { mode, setMode: updateMode }
 }

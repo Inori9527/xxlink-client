@@ -4,12 +4,12 @@ import { useLockFn } from 'ahooks'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { useClash } from '@/hooks/use-clash'
 import {
   ConnectMode,
   getConnectModePayload,
   useConnectMode,
 } from '@/hooks/use-connect-mode'
-import { useClash } from '@/hooks/use-clash'
 import { useSystemState } from '@/hooks/use-system-state'
 import { useVerge } from '@/hooks/use-verge'
 import { showNotice } from '@/services/notice-service'

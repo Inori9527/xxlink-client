@@ -11,6 +11,7 @@
         "logs": "日志",
         "unlock": "解锁测试",
         "plans": "套餐",
+        "promoCode": "优惠码",
         "apiKeys": "API 密钥",
         "settings": "设置"
       },
@@ -55,8 +56,20 @@
         "subtitle": "请先购买套餐或刷新订阅",
         "goToPlans": "前往套餐",
         "refresh": "刷新订阅",
+        "rebuild": "重构订阅",
+        "rebuilding": "正在重构订阅...",
         "refreshing": "刷新中...",
         "noSubscription": "您还没有订阅"
+      },
+      "trial": {
+        "claimPrompt": "请到控制台领取本月 Trial 流量",
+        "emptyTitle": "Trial 流量待领取",
+        "emptySubtitle": "当前 Trial 暂无可用流量，请到控制台领取本月 Trial 流量后再重构订阅。",
+        "openDashboard": "打开控制台"
+      },
+      "session": {
+        "duration": "已连接时长",
+        "traffic": "本次流量消费"
       },
       "startupSyncFailed": "订阅同步失败，点击重试",
       "feedback": {
@@ -64,6 +77,35 @@
         "refreshFailed": "刷新订阅失败",
         "refreshed": "订阅已刷新"
       }
+    },
+    "promoCode": {
+      "title": "优惠码",
+      "heading": "兑换流量优惠码",
+      "subtitle": "输入后台发放的优惠码，成功后会自动刷新订阅并同步节点。",
+      "placeholder": "请输入优惠码",
+      "redeem": "立即兑换",
+      "redeeming": "兑换中...",
+      "syncing": "同步中...",
+      "retrySync": "重试同步",
+      "syncWarning": "优惠码已兑换，但订阅同步失败。请重试同步，或到连接页点击重构订阅。",
+      "chips": {
+        "autoSync": "流量到账后自动同步",
+        "trafficCode": "适用于后台发放的流量码"
+      },
+      "errors": {
+        "empty": "请输入优惠码",
+        "redeemFailed": "优惠码兑换失败"
+      },
+      "result": {
+        "traffic": "流量",
+        "success": "已兑换 {{traffic}}，有效期 {{days}} 天。"
+      }
+    },
+    "announcement": {
+      "label": "XXLink 公告",
+      "dismissHint": "关闭后本公告不会再次弹出；下一条新公告发布时会重新提醒。",
+      "viewDetails": "查看详情",
+      "dismiss": "不再显示此公告"
     }
   }
 }

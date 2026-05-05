@@ -97,7 +97,7 @@
       "system": "系统"
     },
     "clash": {
-      "title": "Clash 设置",
+      "title": "内核设置",
       "form": {
         "fields": {
           "allowLan": "局域网连接",
@@ -108,7 +108,7 @@
           "portConfig": "端口设置",
           "external": "外部控制",
           "webUI": "网页界面",
-          "clashCore": "Clash 内核",
+          "clashCore": "本地内核",
           "openUwpTool": "UWP 工具",
           "updateGeoData": "更新 GeoData",
           "tunnels": {
@@ -635,7 +635,7 @@
   "feedback": {
     "notifications": {
       "clash": {
-        "restartSuccess": "已重启 Clash 内核",
+        "restartSuccess": "已重启本地内核",
         "versionUpdated": "内核版本已更新",
         "alreadyLatestVersion": "已经是最新内核版本",
         "changeSuccess": "内核切换成功",
@@ -647,8 +647,8 @@
         "uninstallSuccess": "已成功卸载服务"
       },
       "updater": {
-        "withClashProxySuccess": "使用 Clash 代理更新成功",
-        "withClashProxyFailed": "使用 Clash 代理更新失败"
+        "withClashProxySuccess": "使用当前代理更新成功",
+        "withClashProxyFailed": "使用当前代理更新失败"
       }
     }
   },

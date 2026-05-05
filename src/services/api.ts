@@ -63,6 +63,23 @@ export interface UsageData {
   startAt: string
 }
 
+export interface PublicBenefitStatus {
+  visible: boolean
+  isTrial: boolean
+  hasPaidPlan: boolean
+  canClaim: boolean
+  emailVerified: boolean
+  claimBytes: string | number
+  activeBonusBytes: string | number
+  cooldownDays: number
+  validDays: number
+  lastClaimedAt?: string | null
+  nextClaimAt?: string | null
+  activeBonusExpiresAt?: string | null
+  subscriptionCreated?: boolean
+  bonusGranted?: boolean
+}
+
 export interface PromoValidation {
   valid: boolean
   code: string
@@ -71,6 +88,25 @@ export interface PromoValidation {
   discount: number
   originalPrice: number
   finalPrice: number
+}
+
+export interface TrafficPromoRedeemResult {
+  code: string
+  trafficGb: number
+  bonusBytes?: string | number
+  validDays: number
+  expiresAt: string
+  subscriptionCreated?: boolean
+}
+
+export interface Announcement {
+  id: string
+  title: string
+  body: string
+  level?: 'info' | 'success' | 'warning' | 'error'
+  publishedAt?: string | null
+  actionLabel?: string | null
+  actionUrl?: string | null
 }
 
 export interface ApiKey {
@@ -89,6 +125,11 @@ export interface ApiKeyUsage {
   todayCost: number
   models: Array<{ name: string; requests: number; tokens: number }>
 }
+
+// Keep the announcement path centralized so deployments can override it if needed.
+const ANNOUNCEMENT_LATEST_PATH =
+  (import.meta.env['VITE_ANNOUNCEMENT_LATEST_PATH'] as string | undefined) ??
+  '/announcements/latest'
 
 // ---------------------------------------------------------------------------
 // Backend API response envelope
@@ -226,6 +267,12 @@ export const api = {
   user: {
     profile: () => request<User>('/user/profile'),
     usage: () => request<UsageData>('/user/usage'),
+    publicBenefit: () => request<PublicBenefitStatus>('/user/public-benefit'),
+    claimPublicBenefit: () =>
+      request<PublicBenefitStatus>('/user/public-benefit/claim', {
+        method: 'POST',
+        body: {},
+      }),
   },
 
   payment: {
@@ -242,10 +289,19 @@ export const api = {
         method: 'POST',
         body: { code, planId },
       }),
+    redeemTraffic: (code: string) =>
+      request<TrafficPromoRedeemResult>('/promo/redeem-traffic', {
+        method: 'POST',
+        body: { code },
+      }),
   },
 
   nodes: {
     list: () => request<Node[]>('/nodes'),
+  },
+
+  announcements: {
+    latest: () => request<Announcement | null>(ANNOUNCEMENT_LATEST_PATH),
   },
 
   apiKeys: {

@@ -57,5 +57,14 @@
       "month": "month",
       "months": "{{count}} months"
     }
+  },
+  "trial": {
+    "title": "Trial traffic",
+    "subtitle": "After email verification, you can claim {{traffic}} Trial traffic every 30 days.",
+    "remaining": "Remaining Trial bonus traffic: {{traffic}}",
+    "claim": "Claim this month's Trial traffic",
+    "claiming": "Claiming...",
+    "cooldown": "{{days}} days remaining",
+    "verifyEmail": "Verify email first"
   }
 }

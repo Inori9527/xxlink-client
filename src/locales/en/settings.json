@@ -97,7 +97,7 @@
       "system": "System"
     },
     "clash": {
-      "title": "Clash Setting",
+      "title": "Core Settings",
       "form": {
         "fields": {
           "allowLan": "Allow LAN",
@@ -108,7 +108,7 @@
           "portConfig": "Port Config",
           "external": "External",
           "webUI": "Web UI",
-          "clashCore": "Clash Core",
+          "clashCore": "Local Core",
           "openUwpTool": "Open UWP tool",
           "updateGeoData": "Update GeoData",
           "tunnels": {
@@ -635,7 +635,7 @@
   "feedback": {
     "notifications": {
       "clash": {
-        "restartSuccess": "Clash Core Restarted",
+        "restartSuccess": "Local Core Restarted",
         "versionUpdated": "Core Version Updated",
         "alreadyLatestVersion": "Already Using Latest Core Version",
         "changeSuccess": "Core changed successfully",
@@ -647,8 +647,8 @@
         "uninstallSuccess": "Service Uninstalled Successfully"
       },
       "updater": {
-        "withClashProxySuccess": "Update with Clash proxy successfully",
-        "withClashProxyFailed": "Update failed even with Clash proxy"
+        "withClashProxySuccess": "Updated with current proxy successfully",
+        "withClashProxyFailed": "Update failed even with current proxy"
       }
     }
   },

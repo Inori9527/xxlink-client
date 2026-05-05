@@ -282,10 +282,7 @@ async function downloadFile(url, outPath) {
     headers: { 'Content-Type': 'application/octet-stream' },
   })
   if (!response.ok) {
-    const body = await response.text().catch(() => '')
     // 将 body 写到文件以便排查（可通过临时目录查看）
-    await fsp.mkdir(path.dirname(outPath), { recursive: true })
-    await fsp.writeFile(outPath, body)
     throw new Error(`Failed to download ${url}: status ${response.status}`)
   }
 
@@ -565,42 +562,86 @@ const resolveServicePermission = async () => {
 // =======================
 // Other resource resolvers (service, mmdb, geosite, geoip, enableLoopback)
 // =======================
-// Upstream xxlink-service-ipc only publishes release tags under the
-// *-msvc triple; the binaries themselves are ABI-compatible with our
-// *-gnu Rust target on Windows (Go-built service, no C++ runtime
-// entanglement). Saved filename keeps SIDECAR_HOST so Tauri externalBin
-// resolution still works.
-const SERVICE_TAG =
+const SERVICE_VERSION = 'v2.3.0'
+const SERVICE_REPO = 'clash-verge-service-ipc'
+const SERVICE_HOST =
   platform === 'win32'
     ? SIDECAR_HOST.replace(/-pc-windows-gnu$/, '-pc-windows-msvc')
     : SIDECAR_HOST
-const SERVICE_URL = `https://github.com/clash-verge-rev/xxlink-service-ipc/releases/download/${SERVICE_TAG}`
+const SERVICE_ARCHIVE_EXT = platform === 'win32' ? 'zip' : 'tar.gz'
+const SERVICE_ARCHIVE = `${SERVICE_REPO}-${SERVICE_VERSION}-${SERVICE_HOST}.${SERVICE_ARCHIVE_EXT}`
+const SERVICE_URL = `https://github.com/clash-verge-rev/${SERVICE_REPO}/releases/download/${SERVICE_VERSION}/${SERVICE_ARCHIVE}`
+
+async function resolveServiceResource(file, sourceFile) {
+  const targetPath = path.join(SERVICE_DIR, file)
+  const existingSize = fs.existsSync(targetPath)
+    ? fs.statSync(targetPath).size
+    : 0
+  if (!FORCE && existingSize > 1024) {
+    log_success(`"${file}" already exists, skipping download`)
+    return
+  }
+
+  const tempDir = path.join(TEMP_DIR, SERVICE_REPO)
+  const tempArchive = path.join(tempDir, SERVICE_ARCHIVE)
+  await fsp.mkdir(tempDir, { recursive: true })
+
+  try {
+    if (!fs.existsSync(tempArchive) || FORCE) {
+      await downloadFile(SERVICE_URL, tempArchive)
+    }
+
+    if (SERVICE_ARCHIVE.endsWith('.zip')) {
+      const zip = new AdmZip(tempArchive)
+      zip
+        .getEntries()
+        .forEach((entry) =>
+          log_debug(`"${SERVICE_REPO}" entry: ${entry.entryName}`),
+        )
+      zip.extractAllTo(tempDir, true)
+    } else {
+      await extract({ cwd: tempDir, file: tempArchive })
+    }
+
+    const sourcePath = path.join(tempDir, sourceFile)
+    if (!fs.existsSync(sourcePath)) {
+      throw new Error(`${sourceFile} not found in ${SERVICE_ARCHIVE}`)
+    }
+
+    await fsp.mkdir(SERVICE_DIR, { recursive: true })
+    await fsp.copyFile(sourcePath, targetPath)
+    if (platform !== 'win32') execSync(`chmod 755 ${targetPath}`)
+    if (platform === 'win32') verifyPEMachine(targetPath, arch, file)
+    await updateHashCache(targetPath)
+    log_success(`${file} finished`)
+  } finally {
+    await fsp.rm(tempDir, { recursive: true, force: true })
+  }
+}
+
 const resolveService = () => {
   const ext = platform === 'win32' ? '.exe' : ''
   const suffix = platform === 'linux' ? '-' + SIDECAR_HOST : ''
-  return resolveResource({
-    file: 'xxlink-service' + suffix + ext,
-    dir: SERVICE_DIR,
-    downloadURL: `${SERVICE_URL}/xxlink-service${ext}`,
-  })
+  return resolveServiceResource(
+    'xxlink-service' + suffix + ext,
+    'clash-verge-service' + ext,
+  )
 }
 const resolveInstall = () => {
   const ext = platform === 'win32' ? '.exe' : ''
   const suffix = platform === 'linux' ? '-' + SIDECAR_HOST : ''
-  return resolveResource({
-    file: 'xxlink-service-install' + suffix + ext,
-    dir: SERVICE_DIR,
-    downloadURL: `${SERVICE_URL}/xxlink-service-install${ext}`,
-  })
+  return resolveServiceResource(
+    'xxlink-service-install' + suffix + ext,
+    'clash-verge-service-install' + ext,
+  )
 }
 const resolveUninstall = () => {
   const ext = platform === 'win32' ? '.exe' : ''
   const suffix = platform === 'linux' ? '-' + SIDECAR_HOST : ''
-  return resolveResource({
-    file: 'xxlink-service-uninstall' + suffix + ext,
-    dir: SERVICE_DIR,
-    downloadURL: `${SERVICE_URL}/xxlink-service-uninstall${ext}`,
-  })
+  return resolveServiceResource(
+    'xxlink-service-uninstall' + suffix + ext,
+    'clash-verge-service-uninstall' + ext,
+  )
 }
 
 const resolveMmdb = () =>

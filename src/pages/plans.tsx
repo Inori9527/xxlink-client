@@ -1,3 +1,4 @@
+import CardGiftcardRoundedIcon from '@mui/icons-material/CardGiftcardRounded'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded'
@@ -22,9 +23,15 @@ import {
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { open } from '@tauri-apps/plugin-shell'
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { BasePage } from '@/components/base'
-import { api, isSubscriptionActiveNow, type Subscription } from '@/services/api'
+import {
+  api,
+  isSubscriptionActiveNow,
+  type PublicBenefitStatus,
+  type Subscription,
+} from '@/services/api'
 
 const WEB_RECHARGE_URL = 'https://xxlink.net/dashboard/recharge'
 
@@ -47,18 +54,26 @@ function getRemainingDays(iso: string): number {
 }
 
 const PlansPage = () => {
+  const { t } = useTranslation()
   const theme = useTheme()
   const [subscription, setSubscription] = useState<Subscription | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [claimingBenefit, setClaimingBenefit] = useState(false)
   const [copySuccess, setCopySuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [publicBenefit, setPublicBenefit] =
+    useState<PublicBenefitStatus | null>(null)
 
   const loadSubscription = async () => {
     setError(null)
     try {
-      const subData = await api.subscription.current()
+      const [subData, benefitData] = await Promise.all([
+        api.subscription.current(),
+        api.user.publicBenefit().catch(() => null),
+      ])
       setSubscription(subData)
+      setPublicBenefit(benefitData)
     } catch {
       setError('套餐状态加载失败，请稍后重试。')
     }
@@ -80,6 +95,24 @@ const PlansPage = () => {
 
   const handleOpenRecharge = async () => {
     await open(WEB_RECHARGE_URL)
+  }
+
+  const handleClaimBenefit = async () => {
+    setClaimingBenefit(true)
+    setError(null)
+    try {
+      const benefitData = await api.user.claimPublicBenefit()
+      setPublicBenefit(benefitData)
+      await loadSubscription()
+    } catch (claimError) {
+      const message =
+        claimError instanceof Error
+          ? claimError.message
+          : 'Trial 流量领取失败，请稍后重试。'
+      setError(message)
+    } finally {
+      setClaimingBenefit(false)
+    }
   }
 
   const handleCopy = async () => {
@@ -182,6 +215,88 @@ const PlansPage = () => {
           </Stack>
         </Stack>
       </Paper>
+
+      {publicBenefit?.visible && (
+        <Paper
+          elevation={0}
+          sx={{
+            mt: 2,
+            p: { xs: 2, md: 2.5 },
+            borderRadius: 2,
+            border: `1px solid ${alpha(theme.palette.success.main, 0.28)}`,
+            bgcolor:
+              theme.palette.mode === 'dark'
+                ? alpha(theme.palette.success.main, 0.1)
+                : alpha(theme.palette.success.main, 0.05),
+          }}
+        >
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            spacing={2}
+            justifyContent="space-between"
+            alignItems={{ xs: 'stretch', md: 'center' }}
+          >
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <Box
+                sx={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 2,
+                  display: 'grid',
+                  placeItems: 'center',
+                  bgcolor: alpha(theme.palette.success.main, 0.14),
+                  color: theme.palette.success.main,
+                }}
+              >
+                <CardGiftcardRoundedIcon />
+              </Box>
+              <Box>
+                <Typography variant="h6" fontWeight={900}>
+                  {t('plans.trial.title')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {t('plans.trial.subtitle', {
+                    traffic: formatTraffic(
+                      Number(publicBenefit.claimBytes || 0),
+                    ),
+                  })}
+                </Typography>
+                {publicBenefit.activeBonusBytes && (
+                  <Typography variant="caption" color="text.secondary">
+                    {t('plans.trial.remaining', {
+                      traffic: formatTraffic(
+                        Number(publicBenefit.activeBonusBytes || 0),
+                      ),
+                    })}
+                  </Typography>
+                )}
+              </Box>
+            </Stack>
+
+            <Button
+              variant="contained"
+              color="success"
+              onClick={handleClaimBenefit}
+              disabled={
+                claimingBenefit ||
+                !publicBenefit.emailVerified ||
+                !publicBenefit.canClaim
+              }
+              sx={{ borderRadius: 1.5, fontWeight: 800 }}
+            >
+              {claimingBenefit
+                ? t('plans.trial.claiming')
+                : publicBenefit.canClaim
+                  ? t('plans.trial.claim')
+                  : publicBenefit.emailVerified
+                    ? t('plans.trial.cooldown', {
+                        days: publicBenefit.cooldownDays,
+                      })
+                    : t('plans.trial.verifyEmail')}
+            </Button>
+          </Stack>
+        </Paper>
+      )}
 
       {loading ? (
         <Skeleton

@@ -178,6 +178,12 @@ export interface TranslationResources {
     }
     layout: {
       components: {
+        announcement: {
+          dismiss: string
+          dismissHint: string
+          label: string
+          viewDetails: string
+        }
         connect: {
           actions: {
             clickToConnect: string
@@ -189,6 +195,8 @@ export interface TranslationResources {
           empty: {
             goToPlans: string
             noSubscription: string
+            rebuild: string
+            rebuilding: string
             refresh: string
             refreshing: string
             subtitle: string
@@ -217,8 +225,18 @@ export interface TranslationResources {
             system: string
           }
           modeTooltip: string
+          session: {
+            duration: string
+            traffic: string
+          }
           startupSyncFailed: string
           title: string
+          trial: {
+            claimPrompt: string
+            emptySubtitle: string
+            emptyTitle: string
+            openDashboard: string
+          }
         }
         navigation: {
           menu: {
@@ -237,11 +255,35 @@ export interface TranslationResources {
             logs: string
             plans: string
             profiles: string
+            promoCode: string
             proxies: string
             rules: string
             settings: string
             unlock: string
           }
+        }
+        promoCode: {
+          chips: {
+            autoSync: string
+            trafficCode: string
+          }
+          errors: {
+            empty: string
+            redeemFailed: string
+          }
+          heading: string
+          placeholder: string
+          redeem: string
+          redeeming: string
+          result: {
+            success: string
+            traffic: string
+          }
+          retrySync: string
+          subtitle: string
+          syncing: string
+          syncWarning: string
+          title: string
         }
       }
     }
@@ -316,6 +358,15 @@ export interface TranslationResources {
           promo: string
         }
         title: string
+      }
+      trial: {
+        claim: string
+        claiming: string
+        cooldown: string
+        remaining: string
+        subtitle: string
+        title: string
+        verifyEmail: string
       }
     }
     profiles: {

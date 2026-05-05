@@ -57,5 +57,14 @@
       "month": "月",
       "months": "{{count}} 个月"
     }
+  },
+  "trial": {
+    "title": "Trial 专属流量",
+    "subtitle": "邮箱验证后，每 30 天可领取一次 {{traffic}} Trial 流量。",
+    "remaining": "当前 Trial 赠送流量剩余 {{traffic}}",
+    "claim": "领取本月 Trial 流量",
+    "claiming": "领取中...",
+    "cooldown": "还需 {{days}} 天",
+    "verifyEmail": "请先验证邮箱"
   }
 }

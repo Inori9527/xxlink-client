@@ -1,9 +1,11 @@
 import {
+  AccessTimeRounded,
   ArrowDownwardRounded,
   ArrowUpwardRounded,
+  AutoFixHighRounded,
+  DataUsageRounded,
   InfoOutlineRounded,
   PowerSettingsNewRounded,
-  RefreshRounded,
 } from '@mui/icons-material'
 import {
   Alert,
@@ -22,8 +24,16 @@ import {
   keyframes,
   useTheme,
 } from '@mui/material'
+import { open } from '@tauri-apps/plugin-shell'
 import { useLockFn } from 'ahooks'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 
@@ -34,19 +44,24 @@ import { useTrafficData } from '@/hooks/use-traffic-data'
 import { useVerge } from '@/hooks/use-verge'
 import { useVisibility } from '@/hooks/use-visibility'
 import { useAppData } from '@/providers/app-data-context'
-import { api, isSubscriptionActiveNow } from '@/services/api'
+import {
+  api,
+  isSubscriptionActiveNow,
+  type PublicBenefitStatus,
+} from '@/services/api'
 import { showNotice } from '@/services/notice-service'
 import { syncSubscription } from '@/services/subscription-sync'
 import parseTraffic from '@/utils/parse-traffic'
+import { getProxyDisplayName, getProxyDisplayKey } from '@/utils/proxy-display'
 
 const STARTUP_SYNC_ERROR_KEY = 'xxlink:last-sync-error'
 const STARTUP_SYNC_ERROR_TTL_MS = 5 * 60 * 1000
+const DASHBOARD_URL = 'https://xxlink.net/dashboard'
 
 type ConnectMode = 'system' | 'both'
 
 const MODE_STORAGE_KEY = 'xxlink:connect-mode'
 const DEFAULT_MODE: ConnectMode = 'both'
-
 
 // Names to exclude from the node dropdown (case-insensitive).
 // "proxy" is the raw manual-selection group the upstream ships; end users
@@ -78,6 +93,10 @@ type ProxyEntry = {
   history?: { time: string; delay: number }[]
 }
 
+type DisplayProxyEntry = ProxyEntry & {
+  displayName: string
+}
+
 const getLatency = (entry: ProxyEntry | undefined): number | undefined => {
   const history = entry?.history
   if (!history || history.length === 0) return undefined
@@ -85,6 +104,67 @@ const getLatency = (entry: ProxyEntry | undefined): number | undefined => {
   if (!last || typeof last.delay !== 'number' || last.delay <= 0)
     return undefined
   return last.delay
+}
+
+const formatDuration = (durationMs: number): string => {
+  const totalSeconds = Math.max(0, Math.floor(durationMs / 1000))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds
+      .toString()
+      .padStart(2, '0')}`
+  }
+
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`
+}
+
+const formatTrafficTotal = (bytes: number): string => {
+  const [value, unit] = parseTraffic(Math.max(0, bytes))
+  return `${value} ${unit}`
+}
+
+const getNumericBytes = (value: string | number | undefined): number => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+  return 0
+}
+
+type ConnectionSessionState = {
+  connectedAt: number | null
+  traffic: { up: number; down: number }
+}
+
+type ConnectionSessionAction =
+  | { type: 'start'; ts: number }
+  | { type: 'stop' }
+  | { type: 'addTraffic'; up: number; down: number }
+
+const connectionSessionReducer = (
+  state: ConnectionSessionState,
+  action: ConnectionSessionAction,
+): ConnectionSessionState => {
+  switch (action.type) {
+    case 'start':
+      return { connectedAt: action.ts, traffic: { up: 0, down: 0 } }
+    case 'stop':
+      return { ...state, connectedAt: null }
+    case 'addTraffic':
+      return {
+        ...state,
+        traffic: {
+          up: state.traffic.up + action.up,
+          down: state.traffic.down + action.down,
+        },
+      }
+    default:
+      return state
+  }
 }
 
 const ConnectPage = () => {
@@ -105,6 +185,13 @@ const ConnectPage = () => {
   const [errorFlash, setErrorFlash] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [hasSubscription, setHasSubscription] = useState<boolean | null>(null)
+  const [publicBenefit, setPublicBenefit] =
+    useState<PublicBenefitStatus | null>(null)
+  const [durationNow, setDurationNow] = useState(() => Date.now())
+  const [connectionSession, updateConnectionSession] = useReducer(
+    connectionSessionReducer,
+    { connectedAt: null, traffic: { up: 0, down: 0 } },
+  )
   const [startupSyncError, setStartupSyncError] = useState<boolean>(() => {
     try {
       const raw = localStorage.getItem(STARTUP_SYNC_ERROR_KEY)
@@ -117,6 +204,13 @@ const ConnectPage = () => {
     }
   })
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const wasConnectedRef = useRef(false)
+  const currentTrafficRateRef = useRef({ up: 0, down: 0 })
+  const lastTrafficSampleRef = useRef<{
+    ts: number
+    up: number
+    down: number
+  } | null>(null)
 
   // Probe current subscription status every time the page becomes visible.
   // This ensures users who buy a plan on /plans and return to Connect see
@@ -125,11 +219,17 @@ const ConnectPage = () => {
   useEffect(() => {
     if (!pageVisible) return
     let cancelled = false
-    api.subscription
-      .current()
-      .then((sub) => {
+    Promise.allSettled([api.subscription.current(), api.user.publicBenefit()])
+      .then(([subscriptionResult, benefitResult]) => {
         if (cancelled) return
-        setHasSubscription(isSubscriptionActiveNow(sub))
+        if (subscriptionResult.status === 'fulfilled') {
+          setHasSubscription(isSubscriptionActiveNow(subscriptionResult.value))
+        } else {
+          setHasSubscription(false)
+        }
+        if (benefitResult.status === 'fulfilled') {
+          setPublicBenefit(benefitResult.value)
+        }
       })
       .catch(() => {
         if (!cancelled) setHasSubscription(false)
@@ -180,10 +280,58 @@ const ConnectPage = () => {
 
   const {
     response: { data: traffic },
-  } = useTrafficData({ enabled: connected && pageVisible })
+  } = useTrafficData({ enabled: connected })
 
   const [upVal, upUnit] = parseTraffic(traffic?.up || 0)
   const [downVal, downUnit] = parseTraffic(traffic?.down || 0)
+
+  useEffect(() => {
+    currentTrafficRateRef.current = {
+      up: traffic?.up || 0,
+      down: traffic?.down || 0,
+    }
+  }, [traffic?.down, traffic?.up])
+
+  useEffect(() => {
+    if (connected && !wasConnectedRef.current) {
+      const now = Date.now()
+      updateConnectionSession({ type: 'start', ts: now })
+      lastTrafficSampleRef.current = {
+        ts: now,
+        up: currentTrafficRateRef.current.up,
+        down: currentTrafficRateRef.current.down,
+      }
+    }
+
+    if (!connected && wasConnectedRef.current) {
+      updateConnectionSession({ type: 'stop' })
+      lastTrafficSampleRef.current = null
+    }
+
+    wasConnectedRef.current = connected
+  }, [connected])
+
+  useEffect(() => {
+    if (!connected) return
+    const timer = window.setInterval(() => {
+      const now = Date.now()
+      const last = lastTrafficSampleRef.current
+      const rate = currentTrafficRateRef.current
+      setDurationNow(now)
+      if (!last) {
+        lastTrafficSampleRef.current = { ts: now, ...rate }
+        return
+      }
+      const deltaSeconds = Math.min(Math.max(now - last.ts, 0), 5000) / 1000
+      updateConnectionSession({
+        type: 'addTraffic',
+        up: Math.max(0, last.up) * deltaSeconds,
+        down: Math.max(0, last.down) * deltaSeconds,
+      })
+      lastTrafficSampleRef.current = { ts: now, ...rate }
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [connected])
 
   // GLOBAL group for simple one-click node selection
   const globalGroup = proxies?.global as
@@ -196,33 +344,63 @@ const ConnectPage = () => {
 
   const currentNode = globalGroup?.now || ''
 
-  const nodeEntries = useMemo<ProxyEntry[]>(() => {
+  const nodeEntries = useMemo<DisplayProxyEntry[]>(() => {
     const all = globalGroup?.all || []
-    return all
-      .map((item) =>
+    const byKey = new Map<string, DisplayProxyEntry>()
+
+    for (const item of all) {
+      const entry =
         typeof item === 'string'
           ? ({ name: item } as ProxyEntry)
-          : (item as ProxyEntry),
-      )
-      .filter(
-        (entry): entry is ProxyEntry =>
-          !!entry &&
-          typeof entry.name === 'string' &&
-          entry.name.length > 0 &&
-          !HIDDEN_NODES.has(entry.name.toLowerCase()),
-      )
-  }, [globalGroup?.all])
+          : (item as ProxyEntry)
+      if (
+        !entry ||
+        typeof entry.name !== 'string' ||
+        entry.name.length === 0 ||
+        HIDDEN_NODES.has(entry.name.toLowerCase())
+      ) {
+        continue
+      }
+
+      const displayName = getProxyDisplayName(entry.name)
+      const key = getProxyDisplayKey(entry.name)
+      if (!displayName) continue
+
+      const existing = byKey.get(key)
+      if (!existing || entry.name === currentNode) {
+        byKey.set(key, { ...entry, displayName })
+      }
+    }
+
+    return Array.from(byKey.values())
+  }, [currentNode, globalGroup?.all])
 
   const nodeOptions = useMemo(
-    () => nodeEntries.map((entry) => entry.name),
+    () => nodeEntries.map((entry) => entry.displayName),
     [nodeEntries],
   )
+
+  const displayToNodeMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const entry of nodeEntries) {
+      map.set(entry.displayName, entry.name)
+    }
+    return map
+  }, [nodeEntries])
+
+  const currentNodeDisplay = useMemo(() => {
+    const match = nodeEntries.find((entry) => entry.name === currentNode)
+    return (
+      match?.displayName ??
+      (currentNode ? getProxyDisplayName(currentNode) : '')
+    )
+  }, [currentNode, nodeEntries])
 
   const latencyMap = useMemo(() => {
     const map = new Map<string, number>()
     for (const entry of nodeEntries) {
       const delay = getLatency(entry)
-      if (delay !== undefined) map.set(entry.name, delay)
+      if (delay !== undefined) map.set(entry.displayName, delay)
     }
     return map
   }, [nodeEntries])
@@ -234,14 +412,16 @@ const ConnectPage = () => {
   // Self-healing: re-fires whenever the selection becomes invalid (e.g. after
   // a force-rebuild) but is idempotent when the current selection is valid.
   useEffect(() => {
-    if (!globalGroup?.name || nodeOptions.length === 0) return
-    if (currentNode && nodeOptions.includes(currentNode)) return
+    if (!globalGroup?.name || nodeEntries.length === 0) return
+    if (currentNode && nodeEntries.some((entry) => entry.name === currentNode))
+      return
     const target =
-      nodeOptions.find((n) => n.toLowerCase() === 'auto') ?? nodeOptions[0]
-    if (target && target !== currentNode) {
-      changeProxy(globalGroup.name, target, currentNode, true)
+      nodeEntries.find((entry) => entry.displayName.toLowerCase() === 'auto') ??
+      nodeEntries[0]
+    if (target && target.name !== currentNode) {
+      changeProxy(globalGroup.name, target.name, currentNode, true)
     }
-  }, [globalGroup?.name, nodeOptions, currentNode, changeProxy])
+  }, [globalGroup?.name, nodeEntries, currentNode, changeProxy])
 
   const handleModeChange = useCallback((next: ConnectMode) => {
     setMode(next)
@@ -292,9 +472,10 @@ const ConnectPage = () => {
   const handleNodeChange = useCallback(
     (_event: unknown, newProxy: string | null) => {
       if (!newProxy || !globalGroup?.name) return
-      changeProxy(globalGroup.name, newProxy, currentNode, true)
+      const actualProxy = displayToNodeMap.get(newProxy) ?? newProxy
+      changeProxy(globalGroup.name, actualProxy, currentNode, true)
     },
-    [changeProxy, currentNode, globalGroup?.name],
+    [changeProxy, currentNode, displayToNodeMap, globalGroup?.name],
   )
 
   const handleRefresh = useLockFn(async () => {
@@ -306,8 +487,12 @@ const ConnectPage = () => {
       // Re-probe subscription status in case the user just bought a plan
       // outside the app (e.g. browser checkout) before hitting Refresh.
       try {
-        const sub = await api.subscription.current()
+        const [sub, benefit] = await Promise.all([
+          api.subscription.current(),
+          api.user.publicBenefit().catch(() => null),
+        ])
         setHasSubscription(isSubscriptionActiveNow(sub))
+        if (benefit) setPublicBenefit(benefit)
       } catch {
         /* leave existing state */
       }
@@ -343,6 +528,10 @@ const ConnectPage = () => {
     void handleRefresh()
   }, [handleDismissStartupSyncError, handleRefresh])
 
+  const handleOpenDashboard = useCallback(() => {
+    void open(DASHBOARD_URL)
+  }, [])
+
   // Button colors
   const getButtonColor = () => {
     if (errorFlash) return theme.palette.error.main
@@ -352,6 +541,14 @@ const ConnectPage = () => {
   }
 
   const buttonColor = getButtonColor()
+  const trialNeedsClaim =
+    publicBenefit?.visible === true &&
+    publicBenefit.isTrial &&
+    getNumericBytes(publicBenefit.activeBonusBytes) <= 0
+
+  const connectedDurationLabel = connectionSession.connectedAt
+    ? formatDuration(durationNow - connectionSession.connectedAt)
+    : '0:00'
 
   const statusLabel = busy
     ? t('layout.components.connect.actions.connecting')
@@ -378,6 +575,24 @@ const ConnectPage = () => {
           width: '100%',
         }}
       >
+        {trialNeedsClaim && (
+          <Alert
+            severity="info"
+            sx={{ width: '100%', borderRadius: 2 }}
+            action={
+              <Button
+                color="inherit"
+                size="small"
+                onClick={handleOpenDashboard}
+              >
+                {t('layout.components.connect.trial.openDashboard')}
+              </Button>
+            }
+          >
+            {t('layout.components.connect.trial.claimPrompt')}
+          </Alert>
+        )}
+
         {isEmpty ? (
           <>
             {hasSubscription === true && startupSyncError && (
@@ -415,12 +630,20 @@ const ConnectPage = () => {
             >
               <Stack spacing={2} alignItems="center">
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  {t('layout.components.connect.empty.title')}
+                  {t(
+                    trialNeedsClaim
+                      ? 'layout.components.connect.trial.emptyTitle'
+                      : 'layout.components.connect.empty.title',
+                  )}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {t('layout.components.connect.empty.subtitle')}
+                  {t(
+                    trialNeedsClaim
+                      ? 'layout.components.connect.trial.emptySubtitle'
+                      : 'layout.components.connect.empty.subtitle',
+                  )}
                 </Typography>
-                {hasSubscription !== true && (
+                {hasSubscription !== true && !trialNeedsClaim && (
                   <Chip
                     size="small"
                     label={t('layout.components.connect.empty.noSubscription')}
@@ -431,9 +654,17 @@ const ConnectPage = () => {
                 <Stack direction="row" spacing={2} sx={{ pt: 1 }}>
                   <Button
                     variant="contained"
-                    onClick={() => navigate('/plans')}
+                    onClick={
+                      trialNeedsClaim
+                        ? handleOpenDashboard
+                        : () => navigate('/plans')
+                    }
                   >
-                    {t('layout.components.connect.empty.goToPlans')}
+                    {t(
+                      trialNeedsClaim
+                        ? 'layout.components.connect.trial.openDashboard'
+                        : 'layout.components.connect.empty.goToPlans',
+                    )}
                   </Button>
                   {hasSubscription === true && (
                     <Button
@@ -444,13 +675,13 @@ const ConnectPage = () => {
                         refreshing ? (
                           <CircularProgress size={16} />
                         ) : (
-                          <RefreshRounded />
+                          <AutoFixHighRounded />
                         )
                       }
                     >
                       {refreshing
                         ? t('layout.components.connect.empty.refreshing')
-                        : t('layout.components.connect.empty.refresh')}
+                        : t('layout.components.connect.empty.rebuild')}
                     </Button>
                   )}
                 </Stack>
@@ -528,7 +759,7 @@ const ConnectPage = () => {
               size="small"
               disableClearable
               options={nodeOptions}
-              value={currentNode || undefined}
+              value={currentNodeDisplay || undefined}
               onChange={handleNodeChange}
               disabled={
                 !globalGroup?.name ||
@@ -635,6 +866,59 @@ const ConnectPage = () => {
               </ButtonGroup>
             </Box>
 
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1.2}
+              sx={{ width: '100%' }}
+            >
+              <Paper
+                elevation={0}
+                sx={{
+                  flex: 1,
+                  p: 1.5,
+                  borderRadius: 2,
+                  border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
+                  bgcolor: alpha(theme.palette.primary.main, 0.04),
+                }}
+              >
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <AccessTimeRounded color="primary" fontSize="small" />
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      {t('layout.components.connect.session.duration')}
+                    </Typography>
+                    <Typography variant="body2" fontWeight={800}>
+                      {connected ? connectedDurationLabel : '0:00'}
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Paper>
+
+              <Paper
+                elevation={0}
+                sx={{
+                  flex: 1,
+                  p: 1.5,
+                  borderRadius: 2,
+                  border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
+                  bgcolor: alpha(theme.palette.success.main, 0.05),
+                }}
+              >
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <DataUsageRounded color="success" fontSize="small" />
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      {t('layout.components.connect.session.traffic')}
+                    </Typography>
+                    <Typography variant="body2" fontWeight={800}>
+                      ↑ {formatTrafficTotal(connectionSession.traffic.up)} / ↓{' '}
+                      {formatTrafficTotal(connectionSession.traffic.down)}
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Paper>
+            </Stack>
+
             {/* Traffic */}
             <Stack
               direction="row"
@@ -687,6 +971,30 @@ const ConnectPage = () => {
                 </Typography>
               </Stack>
             </Stack>
+
+            <Button
+              fullWidth
+              variant="outlined"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              startIcon={
+                refreshing ? (
+                  <CircularProgress size={16} />
+                ) : (
+                  <AutoFixHighRounded />
+                )
+              }
+              sx={{
+                borderRadius: 2,
+                py: 1,
+                borderStyle: 'dashed',
+                bgcolor: alpha(theme.palette.primary.main, 0.03),
+              }}
+            >
+              {refreshing
+                ? t('layout.components.connect.empty.rebuilding')
+                : t('layout.components.connect.empty.rebuild')}
+            </Button>
           </>
         )}
       </Stack>

@@ -22,6 +22,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router'
 
 import brandIcon from '@/assets/image/brand-icon.png'
 import { BaseErrorBoundary } from '@/components/base'
+import { AnnouncementPrompt } from '@/components/layout/announcement-prompt'
 import { LayoutItem } from '@/components/layout/layout-item'
 import { LayoutTraffic } from '@/components/layout/layout-traffic'
 import { NoticeManager } from '@/components/layout/notice-manager'
@@ -250,6 +251,7 @@ const Layout = () => {
       {/* 左侧底部窗口控制按钮 */}
       <NoticeManager position={verge?.notice_position} />
       <UpdatePrompt />
+      <AnnouncementPrompt />
       <Paper
         square
         elevation={0}

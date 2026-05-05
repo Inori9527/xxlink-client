@@ -11,6 +11,7 @@
         "logs": "Logs",
         "unlock": "Test",
         "plans": "Plans",
+        "promoCode": "Promo Code",
         "apiKeys": "API Keys",
         "settings": "Settings"
       },
@@ -55,8 +56,20 @@
         "subtitle": "Please purchase a plan or refresh your subscription",
         "goToPlans": "Go to Plans",
         "refresh": "Refresh subscription",
+        "rebuild": "Rebuild subscription",
+        "rebuilding": "Rebuilding subscription...",
         "refreshing": "Refreshing...",
         "noSubscription": "You don't have a subscription yet"
+      },
+      "trial": {
+        "claimPrompt": "Please claim this month's Trial traffic in the dashboard",
+        "emptyTitle": "Trial traffic is ready to claim",
+        "emptySubtitle": "Your Trial currently has no usable traffic. Claim this month's Trial traffic in the dashboard, then rebuild the subscription.",
+        "openDashboard": "Open dashboard"
+      },
+      "session": {
+        "duration": "Connected time",
+        "traffic": "Session traffic"
       },
       "startupSyncFailed": "Subscription sync failed. Click to retry.",
       "feedback": {
@@ -64,6 +77,35 @@
         "refreshFailed": "Failed to refresh subscription",
         "refreshed": "Subscription refreshed"
       }
+    },
+    "promoCode": {
+      "title": "Promo Code",
+      "heading": "Redeem traffic promo code",
+      "subtitle": "Enter a promo code issued by the dashboard. After redemption, XXLink will refresh your subscription and sync nodes.",
+      "placeholder": "Enter promo code",
+      "redeem": "Redeem",
+      "redeeming": "Redeeming...",
+      "syncing": "Syncing...",
+      "retrySync": "Retry sync",
+      "syncWarning": "The promo code was redeemed, but subscription sync failed. Retry sync, or open Connect and rebuild the subscription.",
+      "chips": {
+        "autoSync": "Auto-sync after traffic is added",
+        "trafficCode": "For traffic codes issued by admin"
+      },
+      "errors": {
+        "empty": "Enter a promo code",
+        "redeemFailed": "Failed to redeem promo code"
+      },
+      "result": {
+        "traffic": "traffic",
+        "success": "Redeemed {{traffic}}, valid for {{days}} days."
+      }
+    },
+    "announcement": {
+      "label": "XXLink Announcement",
+      "dismissHint": "After closing, this announcement will not appear again. You will be notified when a new announcement is published.",
+      "viewDetails": "View details",
+      "dismiss": "Do not show again"
     }
   }
 }
