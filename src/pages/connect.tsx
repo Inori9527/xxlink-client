@@ -626,54 +626,50 @@ const ConnectPage = () => {
     return 'error'
   }
 
+  const refreshControl = hasSubscription === true && (
+    <Tooltip title={t('layout.components.connect.empty.rebuild')}>
+      <span>
+        <IconButton
+          aria-label={t('layout.components.connect.empty.rebuild')}
+          onClick={handleRefresh}
+          disabled={refreshing}
+          size="small"
+          sx={{
+            width: 34,
+            height: 34,
+            border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
+            bgcolor: alpha(theme.palette.primary.main, 0.08),
+            color: 'primary.main',
+            '&:hover': {
+              bgcolor: alpha(theme.palette.primary.main, 0.16),
+            },
+          }}
+        >
+          {refreshing ? <CircularProgress size={18} /> : <RefreshRounded />}
+        </IconButton>
+      </span>
+    </Tooltip>
+  )
+
   return (
-    <BasePage title={t('layout.components.connect.title')}>
+    <BasePage
+      title={t('layout.components.connect.title')}
+      header={refreshControl}
+      contentStyle={{ height: '100%' }}
+    >
       <Stack
-        spacing={4}
+        spacing={2}
         alignItems="center"
         sx={{
-          pt: 4,
-          pb: 4,
+          pt: { xs: 1.5, sm: 2 },
+          pb: { xs: 1.5, sm: 2 },
           maxWidth: 480,
           mx: 'auto',
           width: '100%',
+          minHeight: '100%',
+          justifyContent: 'center',
         }}
       >
-        {hasSubscription === true && (
-          <Box
-            sx={{
-              width: '100%',
-              display: 'flex',
-              justifyContent: 'flex-end',
-              mb: -2,
-            }}
-          >
-            <Tooltip title={t('layout.components.connect.empty.rebuild')}>
-              <span>
-                <IconButton
-                  aria-label={t('layout.components.connect.empty.rebuild')}
-                  onClick={handleRefresh}
-                  disabled={refreshing}
-                  sx={{
-                    border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
-                    bgcolor: alpha(theme.palette.primary.main, 0.06),
-                    color: 'primary.main',
-                    '&:hover': {
-                      bgcolor: alpha(theme.palette.primary.main, 0.12),
-                    },
-                  }}
-                >
-                  {refreshing ? (
-                    <CircularProgress size={20} />
-                  ) : (
-                    <RefreshRounded />
-                  )}
-                </IconButton>
-              </span>
-            </Tooltip>
-          </Box>
-        )}
-
         {trialNeedsClaim && (
           <Alert
             severity="info"
@@ -784,9 +780,9 @@ const ConnectPage = () => {
                 onClick={handleToggle}
                 disabled={busy}
                 sx={{
-                  width: 180,
-                  height: 180,
-                  minWidth: 180,
+                  width: { xs: 132, sm: 148 },
+                  height: { xs: 132, sm: 148 },
+                  minWidth: { xs: 132, sm: 148 },
                   borderRadius: '50%',
                   bgcolor: buttonColor,
                   color: theme.palette.getContrastText(buttonColor),
@@ -810,18 +806,20 @@ const ConnectPage = () => {
               >
                 {busy ? (
                   <CircularProgress
-                    size={56}
+                    size={48}
                     thickness={4}
                     sx={{ color: 'inherit' }}
                   />
                 ) : (
-                  <PowerSettingsNewRounded sx={{ fontSize: 72 }} />
+                  <PowerSettingsNewRounded
+                    sx={{ fontSize: { xs: 58, sm: 64 } }}
+                  />
                 )}
               </Button>
             </Box>
 
             <Typography
-              variant="h6"
+              variant="subtitle1"
               sx={{ fontWeight: 600, textAlign: 'center' }}
               color={
                 errorFlash
@@ -948,15 +946,20 @@ const ConnectPage = () => {
             </Box>
 
             <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={1.2}
-              sx={{ width: '100%' }}
+              sx={{
+                width: '100%',
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  sm: 'repeat(2, minmax(0, 1fr))',
+                },
+                gap: 1,
+              }}
             >
               <Paper
                 elevation={0}
                 sx={{
-                  flex: 1,
-                  p: 1.5,
+                  p: 1.25,
                   borderRadius: 2,
                   border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
                   bgcolor: alpha(theme.palette.primary.main, 0.04),
@@ -978,8 +981,7 @@ const ConnectPage = () => {
               <Paper
                 elevation={0}
                 sx={{
-                  flex: 1,
-                  p: 1.5,
+                  p: 1.25,
                   borderRadius: 2,
                   border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
                   bgcolor: alpha(theme.palette.success.main, 0.05),
@@ -987,7 +989,7 @@ const ConnectPage = () => {
               >
                 <Stack direction="row" spacing={1} alignItems="center">
                   <DataUsageRounded color="success" fontSize="small" />
-                  <Box>
+                  <Box sx={{ minWidth: 0, width: '100%' }}>
                     <Typography variant="caption" color="text.secondary">
                       {t('layout.components.connect.session.traffic')}
                     </Typography>
@@ -1012,59 +1014,64 @@ const ConnectPage = () => {
                   </Box>
                 </Stack>
               </Paper>
-            </Stack>
 
-            {/* Traffic */}
-            <Stack
-              direction="row"
-              spacing={3}
-              justifyContent="center"
-              sx={{ width: '100%' }}
-            >
-              <Stack
-                direction="row"
-                alignItems="center"
-                spacing={0.5}
+              <Paper
+                elevation={0}
                 sx={{
-                  minWidth: 96,
-                  fontVariantNumeric: 'tabular-nums',
-                  justifyContent: 'center',
+                  p: 1.25,
+                  borderRadius: 2,
+                  border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
+                  bgcolor: alpha(theme.palette.secondary.main, 0.05),
                 }}
               >
-                <ArrowUpwardRounded
-                  fontSize="small"
-                  sx={{ color: theme.palette.secondary.main }}
-                />
-                <Typography
-                  variant="body2"
-                  fontWeight={600}
-                  sx={{ fontVariantNumeric: 'tabular-nums' }}
-                >
-                  {upVal} {upUnit}/s
-                </Typography>
-              </Stack>
-              <Stack
-                direction="row"
-                alignItems="center"
-                spacing={0.5}
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <ArrowUpwardRounded
+                    fontSize="small"
+                    sx={{ color: theme.palette.secondary.main }}
+                  />
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      {t('layout.components.connect.labels.upload')}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      fontWeight={800}
+                      sx={{ fontVariantNumeric: 'tabular-nums' }}
+                    >
+                      {upVal} {upUnit}/s
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Paper>
+
+              <Paper
+                elevation={0}
                 sx={{
-                  minWidth: 96,
-                  fontVariantNumeric: 'tabular-nums',
-                  justifyContent: 'center',
+                  p: 1.25,
+                  borderRadius: 2,
+                  border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
+                  bgcolor: alpha(theme.palette.primary.main, 0.05),
                 }}
               >
-                <ArrowDownwardRounded
-                  fontSize="small"
-                  sx={{ color: theme.palette.primary.main }}
-                />
-                <Typography
-                  variant="body2"
-                  fontWeight={600}
-                  sx={{ fontVariantNumeric: 'tabular-nums' }}
-                >
-                  {downVal} {downUnit}/s
-                </Typography>
-              </Stack>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <ArrowDownwardRounded
+                    fontSize="small"
+                    sx={{ color: theme.palette.primary.main }}
+                  />
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      {t('layout.components.connect.labels.download')}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      fontWeight={800}
+                      sx={{ fontVariantNumeric: 'tabular-nums' }}
+                    >
+                      {downVal} {downUnit}/s
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Paper>
             </Stack>
           </>
         )}
