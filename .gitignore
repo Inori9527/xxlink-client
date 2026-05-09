@@ -3,6 +3,7 @@ node_modules
 .DS_Store
 dist
 dist-ssr
+builds/
 *.local
 .env
 .env.local
