@@ -53,11 +53,20 @@ export interface Node {
 }
 
 export interface UsageData {
-  trafficUsed: string
-  trafficLimit: string
-  trafficRemaining: string
+  trafficUsed: string | number
+  trafficLimit: string | number
+  baseTrafficLimit?: string | number
+  bonusTrafficLimit?: string | number
+  trafficRemaining: string | number
   percentUsed: number
   plan: { id: string; name: string; duration: number }
+  entitlement?: {
+    speedLimitMbps?: number | null
+    maxDevices?: number | null
+    accessTier?: string | null
+    nodeTier?: string | null
+    [key: string]: unknown
+  }
   status: string
   expireAt: string
   startAt: string
@@ -71,8 +80,10 @@ export interface PublicBenefitStatus {
   emailVerified: boolean
   claimBytes: string | number
   activeBonusBytes: string | number
-  cooldownDays: number
-  validDays: number
+  cooldownHours?: number
+  validHours?: number
+  cooldownDays?: number
+  validDays?: number
   lastClaimedAt?: string | null
   nextClaimAt?: string | null
   activeBonusExpiresAt?: string | null
@@ -127,6 +138,35 @@ export interface ApiKeyUsage {
   todayRequests: number
   todayCost: number
   models: Array<{ name: string; requests: number; tokens: number }>
+}
+
+export interface TrafficReportInput {
+  nodeId: string
+  bytes_up: number
+  bytes_down: number
+  timestamp: number
+}
+
+export interface TrafficReportResult {
+  trafficUsed: string | number
+  trafficLimit: string | number
+  remaining: string | number
+}
+
+export class ApiError extends Error {
+  status: number
+  code?: string
+
+  constructor(message: string, status: number, code?: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.code = code
+  }
+}
+
+export function isTrafficExceededError(error: unknown): boolean {
+  return error instanceof ApiError && error.code === 'TRAFFIC_EXCEEDED'
 }
 
 // Keep the announcement path centralized so deployments can override it if needed.
@@ -221,7 +261,11 @@ async function request<T>(
   }
 
   if (!res.ok || !json.success) {
-    throw new Error(json.error?.message ?? `Request failed (${res.status})`)
+    throw new ApiError(
+      json.error?.message ?? `Request failed (${res.status})`,
+      res.status,
+      json.error?.code,
+    )
   }
 
   return json.data as T
@@ -301,6 +345,14 @@ export const api = {
 
   nodes: {
     list: () => request<Node[]>('/nodes'),
+  },
+
+  traffic: {
+    report: (body: TrafficReportInput) =>
+      request<TrafficReportResult>('/traffic/report', {
+        method: 'POST',
+        body,
+      }),
   },
 
   announcements: {

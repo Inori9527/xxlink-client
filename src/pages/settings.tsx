@@ -1,32 +1,37 @@
-import { GitHub, HelpOutlineRounded, Telegram } from '@mui/icons-material'
+import {
+  ArticleRounded,
+  BugReportRounded,
+  ChevronRightRounded,
+  DarkModeRounded,
+  DesktopWindowsRounded,
+  LanguageRounded,
+  RocketLaunchRounded,
+  RouteRounded,
+  SettingsApplicationsRounded,
+  ShieldRounded,
+  TuneRounded,
+} from '@mui/icons-material'
 import {
   Box,
-  Button,
-  ButtonGroup,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-  IconButton,
-  Grid,
+  MenuItem,
+  Paper,
+  Select,
+  Stack,
+  Switch,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
+  alpha,
+  useTheme,
 } from '@mui/material'
-import { useLockFn } from 'ahooks'
-import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import type { ReactNode } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 
-import { BasePage } from '@/components/base'
-import SettingClash from '@/components/setting/setting-clash'
-import SettingSystem from '@/components/setting/setting-system'
-import SettingVergeAdvanced from '@/components/setting/setting-verge-advanced'
-import SettingVergeBasic from '@/components/setting/setting-verge-basic'
-import { apiLogout } from '@/services/auth'
-import { useAuth } from '@/services/auth-store'
-import { openWebUrl } from '@/services/cmds'
-import { showNotice } from '@/services/notice-service'
-import { useThemeMode } from '@/services/states'
+import { BasePage, type DialogRef } from '@/components/base'
+import { SysproxyViewer } from '@/components/setting/mods/sysproxy-viewer'
+import { useVerge } from '@/hooks/use-verge'
+import { supportedLanguages } from '@/services/i18n'
 
 const ADVANCED_SETTINGS_STORAGE_KEY = 'xxlink:show-advanced-settings'
 
@@ -38,34 +43,120 @@ const readAdvancedSettingsFlag = (): boolean => {
   }
 }
 
-const SettingPage = () => {
-  const { t } = useTranslation()
-  const navigate = useNavigate()
-  const { user, refreshToken, clearAuth } = useAuth()
-
-  const onError = (err: unknown) => {
-    showNotice.error(err)
+const writeAdvancedSettingsFlag = (value: boolean) => {
+  try {
+    localStorage.setItem(ADVANCED_SETTINGS_STORAGE_KEY, String(value))
+    window.dispatchEvent(
+      new CustomEvent('xxlink:advanced-settings-changed', { detail: value }),
+    )
+  } catch {
+    /* ignore */
   }
+}
 
-  const toGithubRepo = useLockFn(() => {
-    return openWebUrl('https://github.com/xxlink')
-  })
+const languageOptions = supportedLanguages.map((code) => {
+  const labels: Record<string, string> = {
+    zh: '中文',
+    en: 'English',
+  }
+  return { code, label: labels[code] ?? code }
+})
 
-  const toGithubDoc = useLockFn(() => {
-    return openWebUrl('https://xxlink.dev/docs')
-  })
+interface SettingsRowProps {
+  icon: ReactNode
+  title: string
+  description: string
+  control?: ReactNode
+  onClick?: () => void
+}
 
-  const toTelegramChannel = useLockFn(() => {
-    return openWebUrl('https://t.me/xxlink_official')
-  })
+const SettingsRow = ({
+  icon,
+  title,
+  description,
+  control,
+  onClick,
+}: SettingsRowProps) => {
+  const theme = useTheme()
+  return (
+    <Box
+      onClick={onClick}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1.5,
+        px: 2,
+        py: 1.6,
+        borderRadius: 2.5,
+        cursor: onClick ? 'pointer' : 'default',
+        '&:hover': onClick
+          ? { bgcolor: alpha(theme.palette.primary.main, 0.08) }
+          : undefined,
+      }}
+    >
+      <Box
+        sx={{
+          width: 40,
+          height: 40,
+          borderRadius: 2,
+          display: 'grid',
+          placeItems: 'center',
+          color: 'primary.light',
+          bgcolor: alpha(theme.palette.primary.main, 0.12),
+        }}
+      >
+        {icon}
+      </Box>
+      <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Typography fontWeight={900}>{title}</Typography>
+        <Typography variant="body2" color="text.secondary">
+          {description}
+        </Typography>
+      </Box>
+      {control ?? <ChevronRightRounded color="disabled" />}
+    </Box>
+  )
+}
 
-  const [logoutOpen, setLogoutOpen] = useState(false)
-  const [showAdvanced, setShowAdvanced] = useState<boolean>(
+const SettingsSection = ({
+  title,
+  children,
+}: {
+  title: string
+  children: ReactNode
+}) => {
+  const theme = useTheme()
+  return (
+    <Stack spacing={1}>
+      <Typography variant="overline" color="text.secondary" sx={{ px: 1 }}>
+        {title}
+      </Typography>
+      <Paper
+        elevation={0}
+        sx={{
+          p: 1,
+          borderRadius: 4,
+          border: `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
+          bgcolor: theme.palette.mode === 'dark' ? '#181B24' : '#fff',
+        }}
+      >
+        {children}
+      </Paper>
+    </Stack>
+  )
+}
+
+const SettingsPage = () => {
+  const theme = useTheme()
+  const navigate = useNavigate()
+  const { verge, mutateVerge, patchVerge } = useVerge()
+  const sysproxyRef = useRef<DialogRef>(null)
+  const [advancedVisible, setAdvancedVisible] = useState(
     readAdvancedSettingsFlag,
   )
 
   useEffect(() => {
-    const sync = () => setShowAdvanced(readAdvancedSettingsFlag())
+    const sync = () => setAdvancedVisible(readAdvancedSettingsFlag())
     window.addEventListener('xxlink:advanced-settings-changed', sync)
     window.addEventListener('storage', sync)
     return () => {
@@ -74,154 +165,198 @@ const SettingPage = () => {
     }
   }, [])
 
-  const confirmLogout = useLockFn(async () => {
-    try {
-      if (refreshToken) {
-        await apiLogout(refreshToken)
-      }
-    } catch {
-      // Ignore API errors on logout — clear local state regardless
-    } finally {
-      clearAuth()
-      setLogoutOpen(false)
-      navigate('/login')
-    }
-  })
+  const patchOptimistic = async (patch: Partial<IVergeConfig>) => {
+    mutateVerge({ ...verge, ...patch }, false)
+    await patchVerge(patch)
+  }
 
-  const mode = useThemeMode()
-  const isDark = mode === 'light' ? false : true
+  const setAdvanced = (checked: boolean) => {
+    setAdvancedVisible(checked)
+    writeAdvancedSettingsFlag(checked)
+  }
 
   return (
-    <BasePage
-      title={t('settings.page.title')}
-      header={
-        <ButtonGroup variant="contained" aria-label="Basic button group">
-          <IconButton
-            size="medium"
-            color="inherit"
-            title={t('settings.page.actions.manual')}
-            aria-label={t('settings.page.actions.manual')}
-            onClick={toGithubDoc}
-          >
-            <HelpOutlineRounded fontSize="inherit" />
-          </IconButton>
-          <IconButton
-            size="medium"
-            color="inherit"
-            title={t('settings.page.actions.telegram')}
-            aria-label={t('settings.page.actions.telegram')}
-            onClick={toTelegramChannel}
-          >
-            <Telegram fontSize="inherit" />
-          </IconButton>
-
-          <IconButton
-            size="medium"
-            color="inherit"
-            title={t('settings.page.actions.github')}
-            aria-label={t('settings.page.actions.github')}
-            onClick={toGithubRepo}
-          >
-            <GitHub fontSize="inherit" />
-          </IconButton>
-        </ButtonGroup>
-      }
-    >
-      <Grid container spacing={1.5} columns={{ xs: 6, sm: 6, md: 12 }}>
-        <Grid size={6}>
-          <Box
-            sx={{
-              borderRadius: 2,
-              marginBottom: 1.5,
-              backgroundColor: isDark ? '#282a36' : '#ffffff',
-            }}
-          >
-            <SettingSystem onError={onError} />
-          </Box>
-          <Box
-            sx={{
-              borderRadius: 2,
-              backgroundColor: isDark ? '#282a36' : '#ffffff',
-            }}
-          >
-            <SettingClash onError={onError} />
-          </Box>
-        </Grid>
-        <Grid size={6}>
-          <Box
-            sx={{
-              borderRadius: 2,
-              marginBottom: 1.5,
-              backgroundColor: isDark ? '#282a36' : '#ffffff',
-            }}
-          >
-            <SettingVergeBasic onError={onError} />
-          </Box>
-          {showAdvanced && (
-            <Box
-              sx={{
-                borderRadius: 2,
-                backgroundColor: isDark ? '#282a36' : '#ffffff',
-              }}
-            >
-              <SettingVergeAdvanced onError={onError} />
-            </Box>
-          )}
-        </Grid>
-      </Grid>
-
-      {/* Logout section */}
-      <Box
+    <BasePage title="设置">
+      <SysproxyViewer ref={sysproxyRef} />
+      <Stack
+        spacing={2}
         sx={{
-          mt: 2,
-          px: 1,
-          py: 1.5,
-          borderRadius: 2,
-          backgroundColor: isDark ? '#282a36' : '#ffffff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          maxWidth: 880,
+          mx: 'auto',
+          py: 2,
         }}
       >
-        <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-          {user?.email ?? ''}
-        </Typography>
-        <Button
-          variant="outlined"
-          color="error"
-          size="small"
-          onClick={() => setLogoutOpen(true)}
-          sx={{ mr: 1 }}
+        <Paper
+          elevation={0}
+          sx={{
+            p: 2.5,
+            borderRadius: 4,
+            border: `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
+            background:
+              theme.palette.mode === 'dark'
+                ? 'linear-gradient(135deg, rgba(24,27,36,0.98), rgba(14,16,22,0.96))'
+                : '#fff',
+          }}
         >
-          {t('settings.actions.logout')}
-        </Button>
-      </Box>
+          <Typography variant="overline" color="primary.light">
+            Settings
+          </Typography>
+          <Typography variant="h5" fontWeight={950}>
+            保留常用项，收起复杂项
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            默认只展示日常会用到的设置；排障和底层配置放在高级入口里。
+          </Typography>
+        </Paper>
 
-      <Dialog
-        open={logoutOpen}
-        onClose={() => setLogoutOpen(false)}
-        aria-labelledby="logout-confirm-title"
-        aria-describedby="logout-confirm-description"
-      >
-        <DialogTitle id="logout-confirm-title">
-          {t('settings.actions.logoutConfirmTitle')}
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText id="logout-confirm-description">
-            {t('settings.actions.logoutConfirmBody')}
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setLogoutOpen(false)}>
-            {t('settings.actions.cancel')}
-          </Button>
-          <Button onClick={confirmLogout} color="error" autoFocus>
-            {t('settings.actions.confirm')}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        <SettingsSection title="常用">
+          <SettingsRow
+            icon={<LanguageRounded />}
+            title="语言"
+            description="切换客户端界面语言。"
+            control={
+              <Select
+                size="small"
+                value={verge?.language ?? 'zh'}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => {
+                  void patchOptimistic({ language: event.target.value })
+                }}
+                sx={{ minWidth: 112 }}
+              >
+                {languageOptions.map((item) => (
+                  <MenuItem key={item.code} value={item.code}>
+                    {item.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            }
+          />
+          <SettingsRow
+            icon={<DarkModeRounded />}
+            title="主题"
+            description="跟随系统，或手动选择浅色/深色。"
+            control={
+              <ToggleButtonGroup
+                exclusive
+                size="small"
+                value={verge?.theme_mode ?? 'system'}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(_, value: IVergeConfig['theme_mode'] | null) => {
+                  if (value) void patchOptimistic({ theme_mode: value })
+                }}
+                sx={{
+                  '& .MuiToggleButton-root': {
+                    px: 1.3,
+                    fontWeight: 900,
+                  },
+                }}
+              >
+                <ToggleButton value="system">系统</ToggleButton>
+                <ToggleButton value="light">亮</ToggleButton>
+                <ToggleButton value="dark">暗</ToggleButton>
+              </ToggleButtonGroup>
+            }
+          />
+          <SettingsRow
+            icon={<RocketLaunchRounded />}
+            title="开机启动"
+            description="Windows 登录后自动启动 XXLink。"
+            control={
+              <Switch
+                checked={verge?.enable_auto_launch ?? false}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(_, checked) => {
+                  void patchOptimistic({ enable_auto_launch: checked })
+                }}
+              />
+            }
+          />
+          <SettingsRow
+            icon={<DesktopWindowsRounded />}
+            title="自动检查更新"
+            description="启动后自动检查 Windows 客户端新版本。"
+            control={
+              <Switch
+                checked={verge?.auto_check_update ?? true}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(_, checked) => {
+                  void patchOptimistic({ auto_check_update: checked })
+                }}
+              />
+            }
+          />
+          <SettingsRow
+            icon={<TuneRounded />}
+            title="显示高级配置"
+            description="仅在排障或手动配置时打开。"
+            control={
+              <Switch
+                checked={advancedVisible}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(_, checked) => setAdvanced(checked)}
+              />
+            }
+          />
+        </SettingsSection>
+
+        {advancedVisible && (
+          <SettingsSection title="高级">
+            <SettingsRow
+              icon={<ShieldRounded />}
+              title="全局加速"
+              description="让系统流量走加密通道；通常在连接页切换即可。"
+              control={
+                <Switch
+                  checked={verge?.enable_tun_mode ?? false}
+                  onClick={(event) => event.stopPropagation()}
+                  onChange={(_, checked) => {
+                    void patchOptimistic({ enable_tun_mode: checked })
+                  }}
+                />
+              }
+            />
+            <SettingsRow
+              icon={<RouteRounded />}
+              title="代理绕过"
+              description="配置不经过代理的域名和本地网络规则。"
+              onClick={() => sysproxyRef.current?.open()}
+            />
+            <SettingsRow
+              icon={<BugReportRounded />}
+              title="诊断日志"
+              description="连接失败或加载异常时查看日志。"
+              onClick={() => navigate('/logs')}
+            />
+            <SettingsRow
+              icon={<ArticleRounded />}
+              title="订阅 / Profile"
+              description="仅用于排障或手动修复订阅。"
+              onClick={() => navigate('/profile')}
+            />
+            <SettingsRow
+              icon={<SettingsApplicationsRounded />}
+              title="API Keys"
+              description="开发者和自动化场景使用。"
+              onClick={() => navigate('/api-keys')}
+            />
+            <SettingsRow
+              icon={<DesktopWindowsRounded />}
+              title="连接列表"
+              description="查看底层连接详情。"
+              onClick={() => navigate('/connections')}
+            />
+            <SettingsRow
+              icon={<RouteRounded />}
+              title="规则"
+              description="查看底层规则列表，仅用于排障。"
+              onClick={() => navigate('/rules')}
+            />
+          </SettingsSection>
+        )}
+      </Stack>
     </BasePage>
   )
 }
 
-export default SettingPage
+export default SettingsPage

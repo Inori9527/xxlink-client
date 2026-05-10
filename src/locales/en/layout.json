@@ -4,7 +4,7 @@
       "tabs": {
         "connect": "Connect",
         "home": "Home",
-        "proxies": "Proxies",
+        "proxies": "Nodes",
         "profiles": "Profiles",
         "connections": "Connections",
         "rules": "Rules",
@@ -13,7 +13,8 @@
         "plans": "Plans",
         "promoCode": "Promo Code",
         "apiKeys": "API Keys",
-        "settings": "Settings"
+        "settings": "Settings",
+        "mine": "Mine"
       },
       "menu": {
         "reorderMode": "Menu reorder mode",
@@ -53,41 +54,47 @@
       "modeTooltip": "Browser: proxy only browser and apps honoring the system proxy. Full VPN: route all system traffic through an encrypted tunnel (recommended).",
       "empty": {
         "title": "No nodes available",
-        "subtitle": "Please purchase a plan or refresh your subscription",
+        "subtitle": "Please purchase a plan or refresh nodes",
         "goToPlans": "Go to Plans",
-        "refresh": "Refresh subscription",
-        "rebuild": "Rebuild subscription",
-        "rebuilding": "Rebuilding subscription...",
+        "refresh": "Refresh nodes",
+        "rebuild": "Refresh nodes",
+        "rebuilding": "Refreshing nodes...",
         "refreshing": "Refreshing...",
         "noSubscription": "You don't have a subscription yet"
       },
       "trial": {
-        "claimPrompt": "Please claim this month's Trial traffic in the dashboard",
+        "claimPrompt": "Please claim today's Trial public benefit traffic in the dashboard",
         "emptyTitle": "Trial traffic is ready to claim",
-        "emptySubtitle": "Your Trial currently has no usable traffic. Claim this month's Trial traffic in the dashboard, then rebuild the subscription.",
+        "emptySubtitle": "Your Trial currently has no usable traffic. Claim today's Trial public benefit traffic in the dashboard, then refresh nodes.",
+        "trafficExceeded": "Today's public benefit traffic is used up. Please wait for the next refresh or upgrade your plan.",
+        "exceededTitle": "Today's Trial traffic is used up",
+        "exceededSubtitle": "Please wait for the next 24-hour refresh, or upgrade your plan to continue.",
         "openDashboard": "Open dashboard"
       },
       "session": {
         "duration": "Connected time",
-        "traffic": "Current cycle usage"
+        "traffic": "Current cycle usage",
+        "localTraffic": "This connection",
+        "packageTraffic": "Plan cycle usage"
       },
-      "startupSyncFailed": "Subscription sync failed. Click to retry.",
+      "startupSyncFailed": "Node sync failed. Click to retry.",
       "feedback": {
         "toggleFailed": "Failed to toggle connection",
-        "refreshFailed": "Failed to refresh subscription",
-        "refreshed": "Subscription refreshed"
+        "refreshFailed": "Failed to refresh nodes",
+        "trafficExceeded": "Today's public benefit traffic is used up. Please wait for the next refresh or upgrade your plan.",
+        "refreshed": "Nodes refreshed"
       }
     },
     "promoCode": {
       "title": "Promo Code",
       "heading": "Redeem promo code",
-      "subtitle": "Enter a promo code issued by the dashboard. After redemption, XXLink will refresh your account benefits, subscription, and nodes.",
+      "subtitle": "Enter a promo code issued by the dashboard. After redemption, XXLink will refresh your account benefits and nodes.",
       "placeholder": "Enter promo code",
       "redeem": "Redeem",
       "redeeming": "Redeeming...",
       "syncing": "Syncing...",
       "retrySync": "Retry sync",
-      "syncWarning": "The promo code was redeemed, but subscription sync failed. Retry sync, or open Connect and rebuild the subscription.",
+      "syncWarning": "The promo code was redeemed, but node sync failed. Retry sync, or open Connect and refresh nodes.",
       "chips": {
         "autoSync": "Auto-sync after redemption",
         "trafficCode": "Supports traffic codes; plan trial codes can be added later"

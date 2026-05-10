@@ -1,24 +1,23 @@
 import AssignmentRoundedIcon from '@mui/icons-material/AssignmentRounded'
-import HomeRoundedIcon from '@mui/icons-material/HomeRounded'
-import LocalOfferRoundedIcon from '@mui/icons-material/LocalOfferRounded'
-import LockOpenRoundedIcon from '@mui/icons-material/LockOpenRounded'
+import PersonRoundedIcon from '@mui/icons-material/PersonRounded'
 import PowerSettingsNewRoundedIcon from '@mui/icons-material/PowerSettingsNewRounded'
-import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded'
 import WifiRoundedIcon from '@mui/icons-material/WifiRounded'
 import { createBrowserRouter, type RouteObject } from 'react-router'
 import { Navigate } from 'react-router'
 
 import HomeSvg from '@/assets/image/itemicon/home.svg?react'
 import ProxiesSvg from '@/assets/image/itemicon/proxies.svg?react'
-import SettingsSvg from '@/assets/image/itemicon/settings.svg?react'
 import { RequireAuth } from '@/components/require-auth'
 
 import Layout from './_layout'
+import AnnouncementCenterPage from './announcement-center'
 import ApiKeysPage from './api-keys'
 import ConnectPage from './connect'
 import ConnectionsPage from './connections'
 import HomePage from './home'
 import LoginPage from './login'
+import MinePage from './mine'
+import NodesPage from './nodes'
 import PlansPage from './plans'
 import ProfilesPage from './profiles'
 import PromoCodePage from './promo-code'
@@ -47,25 +46,10 @@ export const navItems = [
     Component: ConnectPage,
   },
   {
-    label: 'layout.components.navigation.tabs.home',
-    path: '/home',
-    icon: [<HomeRoundedIcon key="mui" />, <HomeSvg key="svg" />],
-    Component: HomePage,
-  },
-  {
     label: 'layout.components.navigation.tabs.proxies',
-    path: '/proxies',
+    path: '/nodes',
     icon: [<WifiRoundedIcon key="mui" />, <ProxiesSvg key="svg" />],
-    Component: ProxiesPage,
-  },
-  {
-    label: 'layout.components.navigation.tabs.unlock',
-    path: '/unlock',
-    icon: [
-      <LockOpenRoundedIcon key="mui" />,
-      <LockOpenRoundedIcon key="svg" />,
-    ],
-    Component: UnlockPage,
+    Component: NodesPage,
   },
   {
     label: 'layout.components.navigation.tabs.plans',
@@ -77,27 +61,24 @@ export const navItems = [
     Component: PlansPage,
   },
   {
-    label: 'layout.components.navigation.tabs.promoCode',
-    path: '/promo-code',
-    icon: [
-      <LocalOfferRoundedIcon key="mui" />,
-      <LocalOfferRoundedIcon key="svg" />,
-    ],
-    Component: PromoCodePage,
-  },
-  {
-    label: 'layout.components.navigation.tabs.settings',
-    path: '/settings',
-    icon: [<SettingsRoundedIcon key="mui" />, <SettingsSvg key="svg" />],
-    Component: SettingsPage,
+    label: 'layout.components.navigation.tabs.mine',
+    path: '/mine',
+    icon: [<PersonRoundedIcon key="mui" />, <HomeSvg key="svg" />],
+    Component: MinePage,
   },
 ]
 
 /** Routes for pages hidden from the nav bar but still routable. */
 const hiddenRoutes: RouteObject[] = [
+  { path: '/home', Component: HomePage },
+  { path: '/proxies', Component: ProxiesPage },
   { path: '/profile', Component: ProfilesPage },
   { path: '/connections', Component: ConnectionsPage },
   { path: '/rules', Component: RulesPage },
+  { path: '/unlock', Component: UnlockPage },
+  { path: '/promo-code', Component: PromoCodePage },
+  { path: '/settings', Component: SettingsPage },
+  { path: '/announcements', Component: AnnouncementCenterPage },
   {
     path: '/logs',
     Component: () => null /* KeepAlive: real LogsPage rendered in Layout */,

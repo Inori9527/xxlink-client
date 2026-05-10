@@ -17,13 +17,17 @@ export const BasePage: React.FC<Props> = (props) => {
   const theme = useTheme()
 
   const isDark = theme.palette.mode === 'dark'
+  const pageBg = isDark
+    ? 'radial-gradient(circle at 88% 0%, rgba(139, 92, 246, 0.10), transparent 30%), #0D0E11'
+    : 'linear-gradient(135deg, #F8FAFF 0%, #EEF4FF 100%)'
+  const panelBg = isDark ? '#0B0C0F' : '#FFFFFF'
 
   return (
     <BaseErrorBoundary>
       <div className="base-page">
         <header data-tauri-drag-region="true" style={{ userSelect: 'none' }}>
           <Typography
-            sx={{ fontSize: '20px', fontWeight: '700 ' }}
+            sx={{ fontSize: '20px', fontWeight: 800, letterSpacing: '-0.02em' }}
             data-tauri-drag-region="true"
           >
             {title}
@@ -34,11 +38,11 @@ export const BasePage: React.FC<Props> = (props) => {
 
         <div
           className={full ? 'base-container no-padding' : 'base-container'}
-          style={{ backgroundColor: isDark ? '#1e1f27' : '#ffffff' }}
+          style={{ backgroundColor: panelBg }}
         >
           <section
             style={{
-              backgroundColor: isDark ? '#1e1f27' : 'var(--background-color)',
+              background: pageBg,
             }}
           >
             <div className="base-content" style={contentStyle}>

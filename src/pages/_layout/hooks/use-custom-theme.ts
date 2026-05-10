@@ -144,9 +144,9 @@ export const useCustomTheme = () => {
 
     const rootEle = document.documentElement
     if (rootEle) {
-      const backgroundColor = mode === 'light' ? '#ECECEC' : dt.background_color
-      const selectColor = mode === 'light' ? '#f5f5f5' : '#3E3E3E'
-      const scrollColor = mode === 'light' ? '#90939980' : '#555555'
+      const backgroundColor = mode === 'light' ? '#F4F7FB' : dt.background_color
+      const selectColor = mode === 'light' ? '#EAF1FF' : '#23242B'
+      const scrollColor = mode === 'light' ? '#A7B2C380' : '#3F414A'
       const dividerColor =
         mode === 'light' ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.06)'
       rootEle.style.setProperty('--divider-color', dividerColor)
@@ -160,15 +160,15 @@ export const useCustomTheme = () => {
       )
       rootEle.style.setProperty(
         '--window-border-color',
-        mode === 'light' ? '#cccccc' : '#1E1E1E',
+        mode === 'light' ? '#D7DFEA' : '#23242B',
       )
       rootEle.style.setProperty(
         '--scrollbar-bg',
-        mode === 'light' ? '#f1f1f1' : '#2E303D',
+        mode === 'light' ? '#EEF3FA' : '#0D0E11',
       )
       rootEle.style.setProperty(
         '--scrollbar-thumb',
-        mode === 'light' ? '#c1c1c1' : '#555555',
+        mode === 'light' ? '#B8C3D4' : '#3F414A',
       )
     }
 
@@ -192,7 +192,7 @@ export const useCustomTheme = () => {
           border-radius: 4px;
         }
         ::-webkit-scrollbar-thumb:hover {
-          background-color: ${mode === 'light' ? '#a1a1a1' : '#666666'};
+          background-color: ${mode === 'light' ? '#94A3B8' : '#555865'};
         }
 
         /* 背景色 */
@@ -207,7 +207,7 @@ export const useCustomTheme = () => {
 
         /* 确保模态框和对话框也使用暗色主题 */
         .MuiDialog-paper {
-          background-color: ${mode === 'light' ? '#ffffff' : '#2E303D'} !important;
+          background-color: ${mode === 'light' ? '#ffffff' : '#191A1F'} !important;
         }
 
         /* 移除可能的白色点或线条 */

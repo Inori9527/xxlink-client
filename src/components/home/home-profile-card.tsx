@@ -20,11 +20,12 @@ import {
 } from '@mui/material'
 import { useLockFn } from 'ahooks'
 import dayjs from 'dayjs'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 
 import { useAppData } from '@/providers/app-data-context'
+import { api, type UsageData } from '@/services/api'
 import { openWebUrl, updateProfile } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
 import parseTraffic from '@/utils/parse-traffic'
@@ -44,9 +45,13 @@ const parseUrl = (url?: string) => {
   return 'local'
 }
 
-const parseExpire = (expire?: number) => {
-  if (!expire) return '-'
-  return dayjs(expire * 1000).format('YYYY-MM-DD')
+const getNumericBytes = (value: string | number | undefined): number => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+  return 0
 }
 
 // 使用类型定义，而不是导入
@@ -80,24 +85,31 @@ const ProfileDetails = ({
   current,
   onUpdateProfile,
   updating,
+  usage,
 }: {
   current: ProfileItem
   onUpdateProfile: () => void
   updating: boolean
+  usage: UsageData | null
 }) => {
   const { t } = useTranslation()
   const theme = useTheme()
 
   const usedTraffic = useMemo(() => {
-    if (!current.extra) return 0
-    return current.extra.upload + current.extra.download
-  }, [current.extra])
+    return getNumericBytes(usage?.trafficUsed)
+  }, [usage?.trafficUsed])
+
+  const totalTraffic = useMemo(() => {
+    return getNumericBytes(usage?.trafficLimit)
+  }, [usage?.trafficLimit])
 
   const trafficPercentage = useMemo(() => {
-    if (!current.extra || !current.extra.total || current.extra.total <= 0)
-      return 0
-    return Math.min(Math.round((usedTraffic / current.extra.total) * 100), 100)
-  }, [current.extra, usedTraffic])
+    if (typeof usage?.percentUsed === 'number') {
+      return Math.min(Math.max(Math.round(usage.percentUsed), 0), 100)
+    }
+    if (totalTraffic <= 0) return 0
+    return Math.min(Math.round((usedTraffic / totalTraffic) * 100), 100)
+  }, [totalTraffic, usage?.percentUsed, usedTraffic])
 
   return (
     <Box>
@@ -194,26 +206,25 @@ const ProfileDetails = ({
           </Stack>
         )}
 
-        {current.extra && (
+        {usage && (
           <>
             <Stack direction="row" alignItems="center" spacing={1}>
               <SpeedOutlined fontSize="small" color="action" />
               <Typography variant="body2" color="text.secondary">
                 {t('shared.labels.usedTotal')}:{' '}
                 <Box component="span" fontWeight="medium">
-                  {parseTraffic(usedTraffic)} /{' '}
-                  {parseTraffic(current.extra.total)}
+                  {parseTraffic(usedTraffic)} / {parseTraffic(totalTraffic)}
                 </Box>
               </Typography>
             </Stack>
 
-            {current.extra.expire > 0 && (
+            {usage.expireAt && (
               <Stack direction="row" alignItems="center" spacing={1}>
                 <EventOutlined fontSize="small" color="action" />
                 <Typography variant="body2" color="text.secondary">
                   {t('shared.labels.expireTime')}:{' '}
                   <Box component="span" fontWeight="medium">
-                    {parseExpire(current.extra.expire)}
+                    {new Date(usage.expireAt).toLocaleDateString()}
                   </Box>
                 </Typography>
               </Stack>
@@ -285,6 +296,19 @@ export const HomeProfileCard = ({
 
   // 更新当前订阅
   const [updating, setUpdating] = useState(false)
+  const [usage, setUsage] = useState<UsageData | null>(null)
+
+  const refreshUsage = useCallback(async () => {
+    try {
+      setUsage(await api.user.usage())
+    } catch (error) {
+      console.debug('[HomeProfileCard] usage refresh failed', error)
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshUsage()
+  }, [refreshUsage])
 
   const onUpdateProfile = useLockFn(async () => {
     if (!current?.uid) return
@@ -296,6 +320,7 @@ export const HomeProfileCard = ({
 
       // 刷新首页数据
       refreshAll()
+      await refreshUsage()
     } catch (err) {
       showNotice.error(err, 3000)
     } finally {
@@ -380,6 +405,7 @@ export const HomeProfileCard = ({
           current={current}
           onUpdateProfile={onUpdateProfile}
           updating={updating}
+          usage={usage}
         />
       ) : (
         <EmptyProfile onClick={goToProfiles} />

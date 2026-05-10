@@ -1,15 +1,11 @@
 import {
   AccessTimeRounded,
-  ArrowDownwardRounded,
-  ArrowUpwardRounded,
   DataUsageRounded,
-  InfoOutlineRounded,
   PowerSettingsNewRounded,
   RefreshRounded,
 } from '@mui/icons-material'
 import {
   Alert,
-  Autocomplete,
   Box,
   Button,
   ButtonGroup,
@@ -19,7 +15,6 @@ import {
   LinearProgress,
   Paper,
   Stack,
-  TextField,
   Tooltip,
   Typography,
   alpha,
@@ -48,8 +43,11 @@ import { useVisibility } from '@/hooks/use-visibility'
 import { useAppData } from '@/providers/app-data-context'
 import {
   api,
+  isTrafficExceededError,
   isSubscriptionActiveNow,
+  type Node,
   type PublicBenefitStatus,
+  type UsageData,
 } from '@/services/api'
 import { showNotice } from '@/services/notice-service'
 import { syncSubscription } from '@/services/subscription-sync'
@@ -92,6 +90,8 @@ const pulse = keyframes`
 
 type ProxyEntry = {
   name: string
+  now?: string
+  all?: Array<ProxyEntry | string> | string[]
   history?: { time: string; delay: number }[]
 }
 
@@ -106,6 +106,17 @@ const getLatency = (entry: ProxyEntry | undefined): number | undefined => {
   if (!last || typeof last.delay !== 'number' || last.delay <= 0)
     return undefined
   return last.delay
+}
+
+const resolveLeafProxyName = (
+  records: Record<string, ProxyEntry> | undefined,
+  name: string,
+  depth = 0,
+): string => {
+  if (!records || !name || depth > 8) return name
+  const next = records[name]?.now
+  if (!next || next === name) return name
+  return resolveLeafProxyName(records, next, depth + 1)
 }
 
 const formatDuration = (durationMs: number): string => {
@@ -145,6 +156,8 @@ type ConnectionSessionState = {
 type PeriodUsageState = {
   used: number
   limit: number
+  remaining: number
+  percentUsed: number
 }
 
 type ConnectionSessionAction =
@@ -174,20 +187,21 @@ const connectionSessionReducer = (
   }
 }
 
-const getBestTrafficLimit = (
-  usage: PeriodUsageState | null,
-  publicBenefit: PublicBenefitStatus | null,
-): number => {
-  const usageLimit = usage?.limit ?? 0
-  if (usageLimit > 0) return usageLimit
-  if (publicBenefit?.visible && publicBenefit.isTrial) {
-    const activeBonusBytes = getNumericBytes(publicBenefit.activeBonusBytes)
-    if (activeBonusBytes > 0) return activeBonusBytes
-    if (publicBenefit.subscriptionCreated || publicBenefit.bonusGranted) {
-      return getNumericBytes(publicBenefit.claimBytes)
-    }
-  }
-  return 0
+const toPeriodUsageState = (usage: UsageData): PeriodUsageState => {
+  const used = getNumericBytes(usage.trafficUsed)
+  const limit = getNumericBytes(usage.trafficLimit)
+  const remainingFromServer = getNumericBytes(usage.trafficRemaining)
+  const remaining =
+    usage.trafficRemaining !== undefined
+      ? remainingFromServer
+      : Math.max(0, limit - used)
+  const percentUsed =
+    typeof usage.percentUsed === 'number' && Number.isFinite(usage.percentUsed)
+      ? Math.min(Math.max(usage.percentUsed, 0), 100)
+      : limit > 0
+        ? Math.min((used / limit) * 100, 100)
+        : 0
+  return { used, limit, remaining, percentUsed }
 }
 
 const ConnectPage = () => {
@@ -211,7 +225,7 @@ const ConnectPage = () => {
   const [publicBenefit, setPublicBenefit] =
     useState<PublicBenefitStatus | null>(null)
   const [periodUsage, setPeriodUsage] = useState<PeriodUsageState | null>(null)
-  const [periodTrafficDelta, setPeriodTrafficDelta] = useState(0)
+  const [accountNodes, setAccountNodes] = useState<Node[]>([])
   const [durationNow, setDurationNow] = useState(() => Date.now())
   const [connectionSession, updateConnectionSession] = useReducer(
     connectionSessionReducer,
@@ -231,11 +245,37 @@ const ConnectPage = () => {
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const wasConnectedRef = useRef(false)
   const currentTrafficRateRef = useRef({ up: 0, down: 0 })
+  const heartbeatTrafficRef = useRef({ up: 0, down: 0 })
   const lastTrafficSampleRef = useRef<{
     ts: number
     up: number
     down: number
   } | null>(null)
+
+  const refreshAccountState = useCallback(async () => {
+    const [subscriptionResult, benefitResult, usageResult, nodesResult] =
+      await Promise.allSettled([
+        api.subscription.current(),
+        api.user.publicBenefit(),
+        api.user.usage(),
+        api.nodes.list(),
+      ])
+
+    if (subscriptionResult.status === 'fulfilled') {
+      setHasSubscription(isSubscriptionActiveNow(subscriptionResult.value))
+    } else {
+      setHasSubscription(false)
+    }
+    if (benefitResult.status === 'fulfilled') {
+      setPublicBenefit(benefitResult.value)
+    }
+    if (usageResult.status === 'fulfilled') {
+      setPeriodUsage(toPeriodUsageState(usageResult.value))
+    }
+    if (nodesResult.status === 'fulfilled') {
+      setAccountNodes(nodesResult.value)
+    }
+  }, [])
 
   // Probe current subscription status every time the page becomes visible.
   // This ensures users who buy a plan on /plans and return to Connect see
@@ -244,28 +284,9 @@ const ConnectPage = () => {
   useEffect(() => {
     if (!pageVisible) return
     let cancelled = false
-    Promise.allSettled([
-      api.subscription.current(),
-      api.user.publicBenefit(),
-      api.user.usage(),
-    ])
-      .then(([subscriptionResult, benefitResult, usageResult]) => {
+    refreshAccountState()
+      .then(() => {
         if (cancelled) return
-        if (subscriptionResult.status === 'fulfilled') {
-          setHasSubscription(isSubscriptionActiveNow(subscriptionResult.value))
-        } else {
-          setHasSubscription(false)
-        }
-        if (benefitResult.status === 'fulfilled') {
-          setPublicBenefit(benefitResult.value)
-        }
-        if (usageResult.status === 'fulfilled') {
-          setPeriodUsage({
-            used: getNumericBytes(usageResult.value.trafficUsed),
-            limit: getNumericBytes(usageResult.value.trafficLimit),
-          })
-          setPeriodTrafficDelta(0)
-        }
       })
       .catch(() => {
         if (!cancelled) setHasSubscription(false)
@@ -273,7 +294,7 @@ const ConnectPage = () => {
     return () => {
       cancelled = true
     }
-  }, [pageVisible])
+  }, [pageVisible, refreshAccountState])
 
   // Listen for startup-sync-error changes (written async by main.tsx or
   // cleared by subscription-sync success). Keeps the Alert in sync with
@@ -332,20 +353,24 @@ const ConnectPage = () => {
     if (connected && !wasConnectedRef.current) {
       const now = Date.now()
       updateConnectionSession({ type: 'start', ts: now })
+      heartbeatTrafficRef.current = { up: 0, down: 0 }
       lastTrafficSampleRef.current = {
         ts: now,
         up: currentTrafficRateRef.current.up,
         down: currentTrafficRateRef.current.down,
       }
+      void refreshAccountState()
     }
 
     if (!connected && wasConnectedRef.current) {
       updateConnectionSession({ type: 'stop' })
+      heartbeatTrafficRef.current = { up: 0, down: 0 }
       lastTrafficSampleRef.current = null
+      void refreshAccountState()
     }
 
     wasConnectedRef.current = connected
-  }, [connected])
+  }, [connected, refreshAccountState])
 
   useEffect(() => {
     if (!connected) return
@@ -364,12 +389,13 @@ const ConnectPage = () => {
         up: Math.max(0, last.up) * deltaSeconds,
         down: Math.max(0, last.down) * deltaSeconds,
       })
-      setPeriodTrafficDelta(
-        (prev) =>
-          prev +
-          Math.max(0, last.up) * deltaSeconds +
+      heartbeatTrafficRef.current = {
+        up:
+          heartbeatTrafficRef.current.up + Math.max(0, last.up) * deltaSeconds,
+        down:
+          heartbeatTrafficRef.current.down +
           Math.max(0, last.down) * deltaSeconds,
-      )
+      }
       lastTrafficSampleRef.current = { ts: now, ...rate }
     }, 1000)
     return () => window.clearInterval(timer)
@@ -383,8 +409,15 @@ const ConnectPage = () => {
         all?: Array<ProxyEntry | string>
       }
     | undefined
+  const proxyRecords = proxies?.records as
+    | Record<string, ProxyEntry>
+    | undefined
 
   const currentNode = globalGroup?.now || ''
+  const currentRuntimeNode = useMemo(
+    () => resolveLeafProxyName(proxyRecords, currentNode),
+    [currentNode, proxyRecords],
+  )
 
   const nodeEntries = useMemo<DisplayProxyEntry[]>(() => {
     const all = globalGroup?.all || []
@@ -422,14 +455,6 @@ const ConnectPage = () => {
     [nodeEntries],
   )
 
-  const displayToNodeMap = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const entry of nodeEntries) {
-      map.set(entry.displayName, entry.name)
-    }
-    return map
-  }, [nodeEntries])
-
   const currentNodeDisplay = useMemo(() => {
     const match = nodeEntries.find((entry) => entry.name === currentNode)
     return (
@@ -437,6 +462,30 @@ const ConnectPage = () => {
       (currentNode ? getProxyDisplayName(currentNode) : '')
     )
   }, [currentNode, nodeEntries])
+
+  const currentNodeId = useMemo(() => {
+    if (!currentRuntimeNode && !currentNode && !currentNodeDisplay) return null
+    const currentKey = currentNode ? getProxyDisplayKey(currentNode) : ''
+    const runtimeKey = currentRuntimeNode
+      ? getProxyDisplayKey(currentRuntimeNode)
+      : ''
+    const displayKey = currentNodeDisplay
+      ? getProxyDisplayKey(currentNodeDisplay)
+      : ''
+    const match = accountNodes.find((node) => {
+      const nodeDisplay = getProxyDisplayName(node.name)
+      const nodeKey = getProxyDisplayKey(node.name)
+      return (
+        node.name === currentRuntimeNode ||
+        node.name === currentNode ||
+        nodeDisplay === currentNodeDisplay ||
+        (runtimeKey && nodeKey === runtimeKey) ||
+        (currentKey && nodeKey === currentKey) ||
+        (displayKey && getProxyDisplayKey(nodeDisplay) === displayKey)
+      )
+    })
+    return match?.id ?? null
+  }, [accountNodes, currentNode, currentNodeDisplay, currentRuntimeNode])
 
   const latencyMap = useMemo(() => {
     const map = new Map<string, number>()
@@ -454,7 +503,7 @@ const ConnectPage = () => {
   // Self-healing: re-fires whenever the selection becomes invalid (e.g. after
   // a force-rebuild) but is idempotent when the current selection is valid.
   useEffect(() => {
-    if (!globalGroup?.name || nodeEntries.length === 0) return
+    if (connected || !globalGroup?.name || nodeEntries.length === 0) return
     if (currentNode && nodeEntries.some((entry) => entry.name === currentNode))
       return
     const target =
@@ -463,7 +512,7 @@ const ConnectPage = () => {
     if (target && target.name !== currentNode) {
       changeProxy(globalGroup.name, target.name, currentNode, true)
     }
-  }, [globalGroup?.name, nodeEntries, currentNode, changeProxy])
+  }, [connected, globalGroup?.name, nodeEntries, currentNode, changeProxy])
 
   const handleModeChange = useCallback((next: ConnectMode) => {
     setMode(next)
@@ -499,9 +548,11 @@ const ConnectPage = () => {
       // a `rule`-mode subscription would ignore our selection and route
       // through whatever the rules dictate (often a different country).
       if (next) {
+        await refreshAccountState()
         await patchClash({ mode: 'global' })
       }
       await patchVerge(payload)
+      await refreshAccountState()
     } catch (error) {
       console.error('[Connect] toggle failed', error)
       showNotice.error('layout.components.connect.feedback.toggleFailed', error)
@@ -511,41 +562,13 @@ const ConnectPage = () => {
     }
   })
 
-  const handleNodeChange = useCallback(
-    (_event: unknown, newProxy: string | null) => {
-      if (!newProxy || !globalGroup?.name) return
-      const actualProxy = displayToNodeMap.get(newProxy) ?? newProxy
-      changeProxy(globalGroup.name, actualProxy, currentNode, true)
-    },
-    [changeProxy, currentNode, displayToNodeMap, globalGroup?.name],
-  )
-
   const handleRefresh = useLockFn(async () => {
     if (refreshing) return
     setRefreshing(true)
     try {
       await syncSubscription({ force: true })
       await refreshProxy()
-      // Re-probe subscription status in case the user just bought a plan
-      // outside the app (e.g. browser checkout) before hitting Refresh.
-      try {
-        const [sub, benefit] = await Promise.all([
-          api.subscription.current(),
-          api.user.publicBenefit().catch(() => null),
-        ])
-        setHasSubscription(isSubscriptionActiveNow(sub))
-        if (benefit) setPublicBenefit(benefit)
-        const usage = await api.user.usage().catch(() => null)
-        if (usage) {
-          setPeriodUsage({
-            used: getNumericBytes(usage.trafficUsed),
-            limit: getNumericBytes(usage.trafficLimit),
-          })
-          setPeriodTrafficDelta(0)
-        }
-      } catch {
-        /* leave existing state */
-      }
+      await refreshAccountState()
       try {
         localStorage.removeItem(STARTUP_SYNC_ERROR_KEY)
       } catch {
@@ -582,43 +605,103 @@ const ConnectPage = () => {
     void open(DASHBOARD_URL)
   }, [])
 
+  const disconnectForTrafficExceeded = useCallback(async () => {
+    setBusy(true)
+    try {
+      await patchVerge({
+        enable_tun_mode: false,
+        enable_system_proxy: false,
+      })
+      updateConnectionSession({ type: 'stop' })
+      heartbeatTrafficRef.current = { up: 0, down: 0 }
+      lastTrafficSampleRef.current = null
+      await refreshProxy()
+      await refreshAccountState()
+      showNotice.error('layout.components.connect.feedback.trafficExceeded')
+    } catch (error) {
+      console.error('[Connect] disconnect after traffic exceeded failed', error)
+      showNotice.error('layout.components.connect.feedback.trafficExceeded')
+    } finally {
+      setBusy(false)
+    }
+  }, [patchVerge, refreshAccountState, refreshProxy])
+
+  useEffect(() => {
+    if (!connected || !currentNodeId) return
+    const reportHeartbeat = async () => {
+      const bytes = heartbeatTrafficRef.current
+      const bytesUp = Math.floor(bytes.up)
+      const bytesDown = Math.floor(bytes.down)
+      heartbeatTrafficRef.current = {
+        up: Math.max(0, bytes.up - bytesUp),
+        down: Math.max(0, bytes.down - bytesDown),
+      }
+      try {
+        await api.traffic.report({
+          nodeId: currentNodeId,
+          bytes_up: bytesUp,
+          bytes_down: bytesDown,
+          timestamp: Date.now(),
+        })
+        const usage = await api.user.usage().catch(() => null)
+        if (usage) setPeriodUsage(toPeriodUsageState(usage))
+      } catch (error) {
+        if (isTrafficExceededError(error)) {
+          await disconnectForTrafficExceeded()
+          return
+        }
+        heartbeatTrafficRef.current = {
+          up: heartbeatTrafficRef.current.up + bytesUp,
+          down: heartbeatTrafficRef.current.down + bytesDown,
+        }
+        console.warn('[Connect] traffic heartbeat failed', error)
+      }
+    }
+
+    void reportHeartbeat()
+    const timer = window.setInterval(() => {
+      void reportHeartbeat()
+    }, 30_000)
+    return () => {
+      window.clearInterval(timer)
+      void reportHeartbeat()
+    }
+  }, [connected, currentNodeId, disconnectForTrafficExceeded])
+
   // Button colors
   const getButtonColor = () => {
     if (errorFlash) return theme.palette.error.main
     if (busy) return theme.palette.warning.main
     if (connected) return theme.palette.success.main
-    return theme.palette.grey[500]
+    return theme.palette.primary.main
   }
 
   const buttonColor = getButtonColor()
   const trialNeedsClaim =
     publicBenefit?.visible === true &&
     publicBenefit.isTrial &&
-    getNumericBytes(publicBenefit.activeBonusBytes) <= 0 &&
-    !publicBenefit.subscriptionCreated &&
-    !publicBenefit.bonusGranted
+    publicBenefit.canClaim &&
+    (periodUsage?.limit ?? 0) <= 0
+  const trialOutOfTraffic =
+    publicBenefit?.visible === true &&
+    publicBenefit.isTrial &&
+    (periodUsage?.limit ?? 0) > 0 &&
+    (periodUsage?.remaining ?? 0) <= 0
 
   const connectedDurationLabel = connectionSession.connectedAt
     ? formatDuration(durationNow - connectionSession.connectedAt)
     : '0:00'
-  const realtimePeriodUsed = (periodUsage?.used ?? 0) + periodTrafficDelta
-  const periodTrafficLimit = getBestTrafficLimit(periodUsage, publicBenefit)
-  const periodTrafficPct =
-    periodTrafficLimit > 0
-      ? Math.min((realtimePeriodUsed / periodTrafficLimit) * 100, 100)
-      : 0
+  const sessionTrafficLabel = formatTrafficTotal(
+    connectionSession.traffic.up + connectionSession.traffic.down,
+  )
+  const periodTrafficLimit = periodUsage?.limit ?? 0
+  const periodTrafficPct = periodUsage?.percentUsed ?? 0
   const periodTrafficLabel =
     periodTrafficLimit > 0
-      ? `${formatTrafficTotal(realtimePeriodUsed)} / ${formatTrafficTotal(
+      ? `${formatTrafficTotal(periodUsage?.used ?? 0)} / ${formatTrafficTotal(
           periodTrafficLimit,
         )}`
-      : `${formatTrafficTotal(realtimePeriodUsed)} / --`
-
-  const statusLabel = busy
-    ? t('layout.components.connect.actions.connecting')
-    : connected
-      ? t('layout.components.connect.actions.clickToDisconnect')
-      : t('layout.components.connect.actions.clickToConnect')
+      : `${formatTrafficTotal(periodUsage?.used ?? 0)} / --`
 
   const getChipColor = (delay: number): 'success' | 'warning' | 'error' => {
     if (delay < 200) return 'success'
@@ -658,50 +741,49 @@ const ConnectPage = () => {
       contentStyle={{ height: '100%' }}
     >
       <Stack
-        spacing={2}
-        alignItems="center"
+        spacing={1.5}
         sx={{
-          pt: { xs: 1.5, sm: 2 },
-          pb: { xs: 1.5, sm: 2 },
-          maxWidth: 480,
+          maxWidth: 900,
           mx: 'auto',
-          width: '100%',
-          minHeight: '100%',
-          justifyContent: 'center',
+          py: 1,
         }}
       >
-        {trialNeedsClaim && (
-          <Alert
-            severity="info"
-            sx={{ width: '100%', borderRadius: 2 }}
-            action={
-              <Button
-                color="inherit"
-                size="small"
-                onClick={handleOpenDashboard}
+        {(trialNeedsClaim || trialOutOfTraffic || startupSyncError) && (
+          <Stack spacing={1}>
+            {trialNeedsClaim && (
+              <Alert
+                severity="info"
+                sx={{ borderRadius: 3 }}
+                action={
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={handleOpenDashboard}
+                  >
+                    {t('layout.components.connect.trial.openDashboard')}
+                  </Button>
+                }
               >
-                {t('layout.components.connect.trial.openDashboard')}
-              </Button>
-            }
-          >
-            {t('layout.components.connect.trial.claimPrompt')}
-          </Alert>
-        )}
-
-        {isEmpty ? (
-          <>
+                {t('layout.components.connect.trial.claimPrompt')}
+              </Alert>
+            )}
+            {trialOutOfTraffic && (
+              <Alert severity="warning" sx={{ borderRadius: 3 }}>
+                {t('layout.components.connect.trial.trafficExceeded')}
+              </Alert>
+            )}
             {hasSubscription === true && startupSyncError && (
               <Alert
                 severity="error"
                 onClose={handleDismissStartupSyncError}
-                sx={{ width: '100%', cursor: 'pointer' }}
+                sx={{ cursor: 'pointer', borderRadius: 3 }}
                 onClick={handleRetryStartupSync}
                 action={
                   <Button
                     size="small"
                     color="inherit"
-                    onClick={(e) => {
-                      e.stopPropagation()
+                    onClick={(event) => {
+                      event.stopPropagation()
                       handleRetryStartupSync()
                     }}
                   >
@@ -712,369 +794,306 @@ const ConnectPage = () => {
                 {t('layout.components.connect.startupSyncFailed')}
               </Alert>
             )}
-            <Paper
-              elevation={0}
+          </Stack>
+        )}
+
+        <Paper
+          elevation={0}
+          sx={{
+            position: 'relative',
+            p: { xs: 1.5, md: 2.25 },
+            borderRadius: 5,
+            overflow: 'visible',
+            border: `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
+            background:
+              theme.palette.mode === 'dark'
+                ? 'radial-gradient(circle at 88% 2%, rgba(139,92,246,0.20), transparent 32%), radial-gradient(circle at 4% 100%, rgba(34,211,238,0.12), transparent 26%), rgba(14,16,22,0.96)'
+                : 'linear-gradient(135deg,#ffffff,#f6f8ff)',
+          }}
+        >
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            spacing={2}
+            justifyContent="space-between"
+            alignItems={{ xs: 'stretch', md: 'flex-start' }}
+            sx={{ mb: 1.5 }}
+          >
+            <Box>
+              <Typography
+                variant="overline"
+                sx={{ color: 'primary.light', fontWeight: 900 }}
+              >
+                连接
+              </Typography>
+              <Typography variant="h5" fontWeight={950}>
+                安静、稳定地连接
+              </Typography>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: 0.25 }}
+              >
+                自动选择稳定节点，不展示协议和端口。
+              </Typography>
+            </Box>
+            <ButtonGroup
+              size="small"
               sx={{
-                width: '100%',
-                p: 4,
-                borderRadius: 3,
-                textAlign: 'center',
-                bgcolor: alpha(theme.palette.primary.main, 0.04),
-                border: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
-              }}
-            >
-              <Stack spacing={2} alignItems="center">
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  {t(
-                    trialNeedsClaim
-                      ? 'layout.components.connect.trial.emptyTitle'
-                      : 'layout.components.connect.empty.title',
-                  )}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {t(
-                    trialNeedsClaim
-                      ? 'layout.components.connect.trial.emptySubtitle'
-                      : 'layout.components.connect.empty.subtitle',
-                  )}
-                </Typography>
-                {hasSubscription !== true && !trialNeedsClaim && (
-                  <Chip
-                    size="small"
-                    label={t('layout.components.connect.empty.noSubscription')}
-                    color="default"
-                    variant="outlined"
-                  />
-                )}
-                <Stack direction="row" spacing={2} sx={{ pt: 1 }}>
-                  <Button
-                    variant="contained"
-                    onClick={
-                      trialNeedsClaim
-                        ? handleOpenDashboard
-                        : () => navigate('/plans')
-                    }
-                  >
-                    {t(
-                      trialNeedsClaim
-                        ? 'layout.components.connect.trial.openDashboard'
-                        : 'layout.components.connect.empty.goToPlans',
-                    )}
-                  </Button>
-                </Stack>
-              </Stack>
-            </Paper>
-          </>
-        ) : (
-          <>
-            {/* Big round button */}
-            <Box
-              sx={{
-                position: 'relative',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                alignSelf: { xs: 'flex-start', md: 'center' },
+                p: 0.5,
+                borderRadius: 999,
+                bgcolor: alpha(theme.palette.primary.main, 0.09),
+                '& .MuiButton-root': {
+                  border: '0 !important',
+                  borderRadius: '999px !important',
+                  px: 2,
+                  fontWeight: 900,
+                },
               }}
             >
               <Button
+                variant={mode === 'system' ? 'contained' : 'text'}
+                onClick={() => handleModeChange('system')}
+              >
+                {t('layout.components.connect.mode.system')}
+              </Button>
+              <Button
+                variant={mode === 'both' ? 'contained' : 'text'}
+                onClick={() => handleModeChange('both')}
+              >
+                {t('layout.components.connect.mode.both')}
+              </Button>
+            </ButtonGroup>
+          </Stack>
+
+          <Paper
+            elevation={0}
+            sx={{
+              p: { xs: 1.75, md: 2.25 },
+              mb: 1.5,
+              borderRadius: 4,
+              border: `1px solid ${alpha(theme.palette.common.white, 0.1)}`,
+              background:
+                theme.palette.mode === 'dark'
+                  ? 'linear-gradient(135deg,rgba(24,27,36,0.98),rgba(33,36,48,0.94))'
+                  : '#fff',
+            }}
+          >
+            <Stack direction="column" spacing={1.5} alignItems="center">
+              <Button
                 onClick={handleToggle}
-                disabled={busy}
+                disabled={busy || isEmpty}
                 sx={{
-                  width: { xs: 132, sm: 148 },
-                  height: { xs: 132, sm: 148 },
-                  minWidth: { xs: 132, sm: 148 },
+                  width: 116,
+                  height: 116,
+                  minWidth: 116,
                   borderRadius: '50%',
                   bgcolor: buttonColor,
                   color: theme.palette.getContrastText(buttonColor),
-                  transition: 'all 0.3s ease-in-out',
+                  border: `10px solid ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.08 : 0.72)}`,
+                  transition: 'all 0.28s ease-in-out',
                   boxShadow: connected
-                    ? `0 0 28px 4px ${alpha(theme.palette.success.main, 0.45)}`
-                    : `0 4px 16px ${alpha(theme.palette.common.black, 0.2)}`,
+                    ? `0 0 0 18px ${alpha(theme.palette.success.main, 0.12)}`
+                    : `0 0 0 18px ${alpha(theme.palette.primary.main, 0.08)}`,
                   animation: busy ? `${pulse} 1.4s infinite` : 'none',
                   '&:hover': {
                     bgcolor: buttonColor,
                     filter: 'brightness(1.08)',
                   },
                   '&.Mui-disabled': {
-                    bgcolor: buttonColor,
-                    color: theme.palette.getContrastText(buttonColor),
+                    bgcolor: isEmpty
+                      ? theme.palette.action.disabledBackground
+                      : buttonColor,
+                    color: isEmpty
+                      ? theme.palette.action.disabled
+                      : theme.palette.getContrastText(buttonColor),
                     opacity: busy ? 0.75 : 0.9,
-                    cursor: busy ? 'wait' : 'default',
-                    animation: busy ? `${pulse} 1.4s infinite` : 'none',
                   },
                 }}
               >
                 {busy ? (
                   <CircularProgress
-                    size={48}
+                    size={38}
                     thickness={4}
                     sx={{ color: 'inherit' }}
                   />
                 ) : (
-                  <PowerSettingsNewRounded
-                    sx={{ fontSize: { xs: 58, sm: 64 } }}
-                  />
+                  <PowerSettingsNewRounded sx={{ fontSize: 50 }} />
                 )}
               </Button>
-            </Box>
 
-            <Typography
-              variant="subtitle1"
-              sx={{ fontWeight: 600, textAlign: 'center' }}
-              color={
-                errorFlash
-                  ? 'error.main'
-                  : connected
-                    ? 'success.main'
-                    : 'text.secondary'
-              }
-            >
-              {statusLabel}
-            </Typography>
-
-            {/* Node selector (Autocomplete with latency chip) */}
-            <Autocomplete
-              fullWidth
-              size="small"
-              disableClearable
-              options={nodeOptions}
-              value={currentNodeDisplay || undefined}
-              onChange={handleNodeChange}
-              disabled={
-                !globalGroup?.name ||
-                nodeOptions.length === 0 ||
-                connected ||
-                busy
-              }
-              getOptionLabel={(option) => option ?? ''}
-              renderOption={(props, option) => {
-                const delay = latencyMap.get(option)
-                const { key, ...liProps } = props as typeof props & {
-                  key: string
-                }
-                return (
-                  <li key={key ?? option} {...liProps}>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        width: '100%',
-                        gap: 1,
-                      }}
-                    >
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {option}
-                      </Typography>
-                      {delay !== undefined && (
-                        <Chip
-                          size="small"
-                          label={`${delay}ms`}
-                          color={getChipColor(delay)}
-                          sx={{ height: 20, fontSize: 11 }}
-                        />
-                      )}
-                    </Box>
-                  </li>
-                )
-              }}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  placeholder={t('layout.components.connect.labels.selectNode')}
-                  helperText={
-                    connected
-                      ? t('layout.components.connect.labels.disconnectFirst')
-                      : undefined
+              <Box sx={{ minWidth: 0, flex: 1, textAlign: 'center' }}>
+                <Typography
+                  variant="h4"
+                  fontWeight={950}
+                  color={
+                    errorFlash
+                      ? 'error.main'
+                      : connected
+                        ? 'success.main'
+                        : 'text.primary'
                   }
-                />
-              )}
-              slotProps={{
-                listbox: { style: { maxHeight: 320 } },
-                paper: { sx: { borderRadius: 2 } },
-              }}
-              sx={{ width: '100%' }}
-            />
-
-            {/* Mode selector */}
-            <Box sx={{ width: '100%' }}>
-              <Stack
-                direction="row"
-                spacing={0.5}
-                alignItems="center"
-                justifyContent="center"
-                sx={{ mb: 1 }}
-              >
-                <Typography variant="caption" color="text.secondary">
-                  {t('layout.components.connect.labels.mode')}
+                >
+                  {connected
+                    ? t('layout.components.connect.labels.connected')
+                    : t('layout.components.connect.labels.disconnected')}
                 </Typography>
-                <Tooltip
-                  title={t('layout.components.connect.modeTooltip')}
-                  arrow
-                  placement="top"
+                <Typography
+                  color="text.secondary"
+                  sx={{ mt: 0.5, mb: isEmpty ? 1.5 : 0 }}
                 >
-                  <InfoOutlineRounded
-                    sx={{
-                      fontSize: 14,
-                      color: 'text.secondary',
-                      cursor: 'help',
-                    }}
-                  />
-                </Tooltip>
-              </Stack>
-              <ButtonGroup fullWidth size="small">
-                <Button
-                  variant={mode === 'system' ? 'contained' : 'outlined'}
-                  onClick={() => handleModeChange('system')}
-                >
-                  {t('layout.components.connect.mode.system')}
-                </Button>
-                <Button
-                  variant={mode === 'both' ? 'contained' : 'outlined'}
-                  onClick={() => handleModeChange('both')}
-                >
-                  {t('layout.components.connect.mode.both')}
-                </Button>
-              </ButtonGroup>
-            </Box>
-
-            <Stack
-              sx={{
-                width: '100%',
-                display: 'grid',
-                gridTemplateColumns: {
-                  xs: '1fr',
-                  sm: 'repeat(2, minmax(0, 1fr))',
-                },
-                gap: 1,
-              }}
-            >
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 1.25,
-                  borderRadius: 2,
-                  border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
-                  bgcolor: alpha(theme.palette.primary.main, 0.04),
-                }}
-              >
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <AccessTimeRounded color="primary" fontSize="small" />
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('layout.components.connect.session.duration')}
-                    </Typography>
-                    <Typography variant="body2" fontWeight={800}>
-                      {connected ? connectedDurationLabel : '0:00'}
-                    </Typography>
-                  </Box>
-                </Stack>
-              </Paper>
-
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 1.25,
-                  borderRadius: 2,
-                  border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
-                  bgcolor: alpha(theme.palette.success.main, 0.05),
-                }}
-              >
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <DataUsageRounded color="success" fontSize="small" />
-                  <Box sx={{ minWidth: 0, width: '100%' }}>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('layout.components.connect.session.traffic')}
-                    </Typography>
-                    <Typography variant="body2" fontWeight={800}>
-                      {periodTrafficLabel}
-                    </Typography>
-                    {periodTrafficLimit > 0 && (
-                      <LinearProgress
-                        variant="determinate"
-                        value={periodTrafficPct}
-                        sx={{
-                          mt: 0.6,
-                          height: 4,
-                          borderRadius: 999,
-                          bgcolor: alpha(theme.palette.success.main, 0.16),
-                          '& .MuiLinearProgress-bar': {
-                            borderRadius: 999,
-                          },
-                        }}
-                      />
-                    )}
-                  </Box>
-                </Stack>
-              </Paper>
-
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 1.25,
-                  borderRadius: 2,
-                  border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
-                  bgcolor: alpha(theme.palette.secondary.main, 0.05),
-                }}
-              >
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <ArrowUpwardRounded
-                    fontSize="small"
-                    sx={{ color: theme.palette.secondary.main }}
-                  />
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('layout.components.connect.labels.upload')}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      fontWeight={800}
-                      sx={{ fontVariantNumeric: 'tabular-nums' }}
-                    >
-                      {upVal} {upUnit}/s
-                    </Typography>
-                  </Box>
-                </Stack>
-              </Paper>
-
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 1.25,
-                  borderRadius: 2,
-                  border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
-                  bgcolor: alpha(theme.palette.primary.main, 0.05),
-                }}
-              >
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <ArrowDownwardRounded
-                    fontSize="small"
-                    sx={{ color: theme.palette.primary.main }}
-                  />
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('layout.components.connect.labels.download')}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      fontWeight={800}
-                      sx={{ fontVariantNumeric: 'tabular-nums' }}
-                    >
-                      {downVal} {downUnit}/s
-                    </Typography>
-                  </Box>
-                </Stack>
-              </Paper>
+                  {isEmpty
+                    ? t('layout.components.connect.empty.subtitle')
+                    : connected
+                      ? '连接已建立，套餐剩余流量以服务端为准。'
+                      : '点击按钮后将按当前模式建立连接。'}
+                </Typography>
+                {isEmpty ? (
+                  <Button
+                    variant="contained"
+                    size="large"
+                    onClick={() => navigate('/plans')}
+                    sx={{ borderRadius: 2.5, px: 4, fontWeight: 950 }}
+                  >
+                    {t('layout.components.connect.empty.goToPlans')}
+                  </Button>
+                ) : null}
+              </Box>
             </Stack>
-          </>
-        )}
+          </Paper>
+
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                md: 'repeat(3, minmax(0, 1fr))',
+              },
+              gap: 1.5,
+              mb: 1.5,
+            }}
+          >
+            {[
+              {
+                icon: <AccessTimeRounded color="primary" />,
+                label: t('layout.components.connect.session.duration'),
+                value: connected ? connectedDurationLabel : '0:00',
+                color: 'text.primary',
+              },
+              {
+                icon: <DataUsageRounded sx={{ color: 'primary.light' }} />,
+                label: t('layout.components.connect.session.localTraffic'),
+                value: connected ? sessionTrafficLabel : formatTrafficTotal(0),
+                color: 'primary.light',
+              },
+              {
+                icon: <DataUsageRounded color="success" />,
+                label: t('layout.components.connect.session.packageTraffic'),
+                value: periodTrafficLabel,
+                color: 'success.main',
+              },
+            ].map((metric) => (
+              <Paper
+                key={metric.label}
+                elevation={0}
+                sx={{
+                  p: 2,
+                  borderRadius: 3,
+                  border: `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
+                  bgcolor:
+                    theme.palette.mode === 'dark'
+                      ? 'rgba(24,27,36,0.96)'
+                      : '#fff',
+                }}
+              >
+                <Stack direction="row" spacing={1.2} alignItems="center">
+                  {metric.icon}
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      {metric.label}
+                    </Typography>
+                    <Typography
+                      variant="h6"
+                      fontWeight={950}
+                      color={metric.color}
+                      noWrap
+                    >
+                      {metric.value}
+                    </Typography>
+                  </Box>
+                </Stack>
+                {metric.label ===
+                  t('layout.components.connect.session.packageTraffic') &&
+                  periodTrafficLimit > 0 && (
+                    <LinearProgress
+                      variant="determinate"
+                      value={periodTrafficPct}
+                      sx={{
+                        mt: 1.2,
+                        height: 5,
+                        borderRadius: 999,
+                        bgcolor: alpha(theme.palette.success.main, 0.16),
+                        '& .MuiLinearProgress-bar': { borderRadius: 999 },
+                      }}
+                    />
+                  )}
+              </Paper>
+            ))}
+          </Box>
+
+          <Paper
+            elevation={0}
+            sx={{
+              px: 2,
+              py: 1.4,
+              borderRadius: 3,
+              border: `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
+              bgcolor:
+                theme.palette.mode === 'dark' ? 'rgba(24,27,36,0.96)' : '#fff',
+            }}
+          >
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1}
+              justifyContent="space-between"
+              alignItems={{ xs: 'stretch', sm: 'center' }}
+            >
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Typography variant="body2" color="text.secondary">
+                  当前节点
+                </Typography>
+                <Typography variant="body1" fontWeight={950} noWrap>
+                  {currentNodeDisplay ||
+                    t('layout.components.connect.labels.selectNode')}
+                </Typography>
+                {latencyMap.get(currentNodeDisplay) !== undefined && (
+                  <Chip
+                    size="small"
+                    color={getChipColor(latencyMap.get(currentNodeDisplay)!)}
+                    label={`${latencyMap.get(currentNodeDisplay)}ms`}
+                  />
+                )}
+              </Stack>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ fontVariantNumeric: 'tabular-nums' }}
+                >
+                  ↑ {upVal} {upUnit}/s · ↓ {downVal} {downUnit}/s
+                </Typography>
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={() => navigate('/nodes')}
+                  sx={{ borderRadius: 999, fontWeight: 950 }}
+                >
+                  更换 →
+                </Button>
+              </Stack>
+            </Stack>
+          </Paper>
+        </Paper>
       </Stack>
     </BasePage>
   )

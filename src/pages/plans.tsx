@@ -1,6 +1,5 @@
 import CardGiftcardRoundedIcon from '@mui/icons-material/CardGiftcardRounded'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
-import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded'
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded'
 import ScheduleRoundedIcon from '@mui/icons-material/ScheduleRounded'
@@ -15,12 +14,10 @@ import {
   Paper,
   Skeleton,
   Stack,
-  Tooltip,
   Typography,
   alpha,
   useTheme,
 } from '@mui/material'
-import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { open } from '@tauri-apps/plugin-shell'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -31,6 +28,7 @@ import {
   isSubscriptionActiveNow,
   type PublicBenefitStatus,
   type Subscription,
+  type UsageData,
 } from '@/services/api'
 
 const WEB_RECHARGE_URL = 'https://xxlink.net/dashboard/recharge'
@@ -52,30 +50,35 @@ function getNumericBytes(value: string | number | undefined): number {
   return 0
 }
 
-function getEffectiveTrafficLimit(
-  subscription: Subscription | null,
-  publicBenefit: PublicBenefitStatus | null,
-): number {
-  const planLimit = subscription?.plan.trafficLimit ?? 0
-  if (planLimit > 0) return planLimit
-  if (publicBenefit?.visible && publicBenefit.isTrial) {
-    const activeBonusBytes = getNumericBytes(publicBenefit.activeBonusBytes)
-    if (activeBonusBytes > 0) return activeBonusBytes
-    if (publicBenefit.subscriptionCreated || publicBenefit.bonusGranted) {
-      return getNumericBytes(publicBenefit.claimBytes)
-    }
-  }
-  return 0
-}
-
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString()
+  return new Date(iso).toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
 }
 
 function getRemainingDays(iso: string): number {
   const diff = Date.parse(iso) - Date.now()
   if (!Number.isFinite(diff)) return 0
   return Math.max(0, Math.ceil(diff / (24 * 60 * 60 * 1000)))
+}
+
+function formatRemainingDays(days: number): string {
+  if (days <= 0) return '今天到期'
+  return `还剩 ${days} 天`
+}
+
+function formatCooldownHours(status: PublicBenefitStatus): string {
+  const hours =
+    typeof status.cooldownHours === 'number'
+      ? status.cooldownHours
+      : typeof status.cooldownDays === 'number'
+        ? status.cooldownDays * 24
+        : 0
+  if (hours <= 0) return '0 小时'
+  if (hours < 24) return `${Math.ceil(hours)} 小时`
+  return `${Math.ceil(hours / 24)} 天`
 }
 
 const PlansPage = () => {
@@ -85,20 +88,22 @@ const PlansPage = () => {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [claimingBenefit, setClaimingBenefit] = useState(false)
-  const [copySuccess, setCopySuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [publicBenefit, setPublicBenefit] =
     useState<PublicBenefitStatus | null>(null)
+  const [usage, setUsage] = useState<UsageData | null>(null)
 
   const loadSubscription = async () => {
     setError(null)
     try {
-      const [subData, benefitData] = await Promise.all([
+      const [subData, benefitData, usageData] = await Promise.all([
         api.subscription.current(),
         api.user.publicBenefit().catch(() => null),
+        api.user.usage().catch(() => null),
       ])
       setSubscription(subData)
       setPublicBenefit(benefitData)
+      setUsage(usageData)
     } catch {
       setError('套餐状态加载失败，请稍后重试。')
     }
@@ -140,32 +145,21 @@ const PlansPage = () => {
     }
   }
 
-  const handleCopy = async () => {
-    if (!activeSubscription?.subUrl) return
-    await writeText(activeSubscription.subUrl)
-    setCopySuccess(true)
-    setTimeout(() => setCopySuccess(false), 2000)
-  }
-
-  const used = activeSubscription?.trafficUsed ?? 0
-  const total = getEffectiveTrafficLimit(activeSubscription, publicBenefit)
-  const pct = total > 0 ? Math.min((used / total) * 100, 100) : 0
+  const used = getNumericBytes(usage?.trafficUsed)
+  const total = getNumericBytes(usage?.trafficLimit)
+  const remaining = getNumericBytes(usage?.trafficRemaining)
+  const pct =
+    typeof usage?.percentUsed === 'number'
+      ? Math.min(Math.max(usage.percentUsed, 0), 100)
+      : total > 0
+        ? Math.min((used / total) * 100, 100)
+        : 0
   const remainingDays = activeSubscription
     ? getRemainingDays(activeSubscription.expireAt)
     : 0
 
   return (
     <BasePage title="套餐与续费" contentStyle={{ padding: 16 }}>
-      {copySuccess && (
-        <Alert
-          severity="success"
-          sx={{ mb: 2 }}
-          onClose={() => setCopySuccess(false)}
-        >
-          订阅链接已复制到剪贴板
-        </Alert>
-      )}
-
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
           {error}
@@ -241,7 +235,7 @@ const PlansPage = () => {
         </Stack>
       </Paper>
 
-      {publicBenefit?.visible && (
+      {publicBenefit?.visible && publicBenefit.isTrial && (
         <Paper
           elevation={0}
           sx={{
@@ -286,12 +280,10 @@ const PlansPage = () => {
                     ),
                   })}
                 </Typography>
-                {publicBenefit.activeBonusBytes && (
+                {usage && (
                   <Typography variant="caption" color="text.secondary">
                     {t('plans.trial.remaining', {
-                      traffic: formatTraffic(
-                        Number(publicBenefit.activeBonusBytes || 0),
-                      ),
+                      traffic: formatTraffic(remaining),
                     })}
                   </Typography>
                 )}
@@ -315,7 +307,7 @@ const PlansPage = () => {
                   ? t('plans.trial.claim')
                   : publicBenefit.emailVerified
                     ? t('plans.trial.cooldown', {
-                        days: publicBenefit.cooldownDays,
+                        time: formatCooldownHours(publicBenefit),
                       })
                     : t('plans.trial.verifyEmail')}
             </Button>
@@ -372,8 +364,8 @@ const PlansPage = () => {
                 </Stack>
               </Box>
               <Typography variant="body2" color="text.secondary">
-                到期 {formatDate(activeSubscription.expireAt)}，剩余{' '}
-                {remainingDays} 天
+                到期 {formatDate(activeSubscription.expireAt)} ·{' '}
+                {formatRemainingDays(remainingDays)}
               </Typography>
             </Stack>
 
@@ -417,20 +409,15 @@ const PlansPage = () => {
                 variant="outlined"
               />
               <Chip
+                icon={<StorageRoundedIcon />}
+                label={`剩余 ${formatTraffic(remaining)}`}
+                variant="outlined"
+              />
+              <Chip
                 icon={<ScheduleRoundedIcon />}
                 label={`开始于 ${formatDate(activeSubscription.startAt)}`}
                 variant="outlined"
               />
-              <Tooltip title="复制订阅链接">
-                <Button
-                  variant="outlined"
-                  startIcon={<ContentCopyIcon />}
-                  onClick={handleCopy}
-                  sx={{ borderRadius: 1.5 }}
-                >
-                  复制订阅链接
-                </Button>
-              </Tooltip>
             </Stack>
           </Stack>
         </Paper>

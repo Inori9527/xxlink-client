@@ -1,7 +1,12 @@
-const SPEED_SUFFIX_RE =
-  /\s*(?:[-|/·,])?\s*(?:50|150|300)\s*(?:m|mb|mbps|Mbps)\b/gi
-const BRACKETED_SPEED_RE =
-  /\s*(?:\(|（|\[)\s*(?:50|150|300)\s*(?:m|mb|mbps|Mbps)\s*(?:\)|）|\])\s*/gi
+const SPEED_TOKEN = String.raw`\d+(?:\.\d+)?\s*(?:g|gb|gbps|m|mb|mbps)`
+const SPEED_SUFFIX_RE = new RegExp(
+  String.raw`\s*(?:[-|/·,])?\s*${SPEED_TOKEN}\b`,
+  'gi',
+)
+const BRACKETED_SPEED_RE = new RegExp(
+  String.raw`\s*(?:\(|（|\[)\s*${SPEED_TOKEN}\s*(?:\)|）|\])\s*`,
+  'gi',
+)
 const PORT_SUFFIX_RE = /\s*[:：]\d{2,5}\b/g
 
 export function getProxyDisplayName(name: string): string {

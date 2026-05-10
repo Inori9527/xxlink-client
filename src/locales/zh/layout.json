@@ -4,7 +4,7 @@
       "tabs": {
         "connect": "连接",
         "home": "首页",
-        "proxies": "代理",
+        "proxies": "节点",
         "profiles": "订阅",
         "connections": "连接列表",
         "rules": "规则",
@@ -13,7 +13,8 @@
         "plans": "套餐",
         "promoCode": "优惠码",
         "apiKeys": "API 密钥",
-        "settings": "设置"
+        "settings": "设置",
+        "mine": "我的"
       },
       "menu": {
         "reorderMode": "菜单排序模式",
@@ -53,41 +54,47 @@
       "modeTooltip": "浏览器：只代理浏览器和遵守系统代理的应用。全局加速：整机所有流量都走加密通道（推荐）。",
       "empty": {
         "title": "暂无可用节点",
-        "subtitle": "请先购买套餐或刷新订阅",
+        "subtitle": "请先购买套餐或刷新节点",
         "goToPlans": "前往套餐",
-        "refresh": "刷新订阅",
-        "rebuild": "重构订阅",
-        "rebuilding": "正在重构订阅...",
+        "refresh": "刷新节点",
+        "rebuild": "刷新节点",
+        "rebuilding": "正在刷新节点...",
         "refreshing": "刷新中...",
         "noSubscription": "您还没有订阅"
       },
       "trial": {
-        "claimPrompt": "请到控制台领取本月 Trial 流量",
+        "claimPrompt": "请到控制台领取今日 Trial 公益流量",
         "emptyTitle": "Trial 流量待领取",
-        "emptySubtitle": "当前 Trial 暂无可用流量，请到控制台领取本月 Trial 流量后再重构订阅。",
+        "emptySubtitle": "当前 Trial 暂无可用流量，请到控制台领取今日 Trial 公益流量后再刷新节点。",
+        "trafficExceeded": "今日公益流量已用完，请等待下次刷新或升级套餐",
+        "exceededTitle": "今日公益流量已用完",
+        "exceededSubtitle": "请等待下次 24 小时刷新，或升级套餐继续使用。",
         "openDashboard": "打开控制台"
       },
       "session": {
         "duration": "已连接时长",
-        "traffic": "当前周期用量"
+        "traffic": "当前周期用量",
+        "localTraffic": "本次连接",
+        "packageTraffic": "套餐周期用量"
       },
-      "startupSyncFailed": "订阅同步失败，点击重试",
+      "startupSyncFailed": "节点同步失败，点击重试",
       "feedback": {
         "toggleFailed": "连接切换失败",
-        "refreshFailed": "刷新订阅失败",
-        "refreshed": "订阅已刷新"
+        "refreshFailed": "刷新节点失败",
+        "trafficExceeded": "今日公益流量已用完，请等待下次刷新或升级套餐",
+        "refreshed": "节点已刷新"
       }
     },
     "promoCode": {
       "title": "优惠码",
       "heading": "兑换优惠码",
-      "subtitle": "输入后台发放的优惠码，成功后会自动刷新账号权益、订阅和节点。",
+      "subtitle": "输入后台发放的优惠码，成功后会自动刷新账号权益和节点。",
       "placeholder": "请输入优惠码",
       "redeem": "立即兑换",
       "redeeming": "兑换中...",
       "syncing": "同步中...",
       "retrySync": "重试同步",
-      "syncWarning": "优惠码已兑换，但订阅同步失败。请重试同步，或到连接页点击重构订阅。",
+      "syncWarning": "优惠码已兑换，但节点同步失败。请重试同步，或到连接页点击刷新节点。",
       "chips": {
         "autoSync": "兑换成功后自动同步",
         "trafficCode": "支持流量码，后续可扩展套餐体验码"

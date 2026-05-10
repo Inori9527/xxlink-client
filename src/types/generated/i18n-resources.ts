@@ -206,6 +206,7 @@ export interface TranslationResources {
             refreshed: string
             refreshFailed: string
             toggleFailed: string
+            trafficExceeded: string
           }
           labels: {
             both: string
@@ -227,6 +228,8 @@ export interface TranslationResources {
           modeTooltip: string
           session: {
             duration: string
+            localTraffic: string
+            packageTraffic: string
             traffic: string
           }
           startupSyncFailed: string
@@ -235,7 +238,10 @@ export interface TranslationResources {
             claimPrompt: string
             emptySubtitle: string
             emptyTitle: string
+            exceededSubtitle: string
+            exceededTitle: string
             openDashboard: string
+            trafficExceeded: string
           }
         }
         navigation: {
@@ -253,6 +259,7 @@ export interface TranslationResources {
             connections: string
             home: string
             logs: string
+            mine: string
             plans: string
             profiles: string
             promoCode: string

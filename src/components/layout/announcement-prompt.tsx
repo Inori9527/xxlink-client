@@ -20,6 +20,22 @@ import { useTranslation } from 'react-i18next'
 import { api, type Announcement } from '@/services/api'
 
 const DISMISSED_ANNOUNCEMENT_KEY = 'xxlink:dismissed-announcement-id'
+const ANNOUNCEMENT_HISTORY_KEY = 'xxlink:announcement-history'
+
+const rememberAnnouncement = (announcement: Announcement) => {
+  if (!announcement.id) return
+  try {
+    const raw = localStorage.getItem(ANNOUNCEMENT_HISTORY_KEY)
+    const list = raw ? (JSON.parse(raw) as Announcement[]) : []
+    const next = [
+      announcement,
+      ...list.filter((item) => item?.id !== announcement.id),
+    ].slice(0, 20)
+    localStorage.setItem(ANNOUNCEMENT_HISTORY_KEY, JSON.stringify(next))
+  } catch {
+    /* ignore */
+  }
+}
 
 export const AnnouncementPrompt = () => {
   const { t } = useTranslation()
@@ -34,6 +50,7 @@ export const AnnouncementPrompt = () => {
       .latest()
       .then((latest) => {
         if (cancelled || !latest?.id) return
+        rememberAnnouncement(latest)
         try {
           if (localStorage.getItem(DISMISSED_ANNOUNCEMENT_KEY) === latest.id) {
             return

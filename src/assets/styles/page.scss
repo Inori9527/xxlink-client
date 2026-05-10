@@ -17,7 +17,9 @@
   }
 
   .base-container {
-    height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
     overflow: hidden;
     // border-radius: 10px;
     // border-top-left-radius: var(--border-radius);
