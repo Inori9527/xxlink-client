@@ -471,7 +471,7 @@ const ApiKeysPage = () => {
 
   return (
     <BasePage
-      title="API 密钥"
+      title="开发者访问"
       contentStyle={{ padding: 16 }}
       header={
         <Button

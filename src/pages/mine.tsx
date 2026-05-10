@@ -295,7 +295,7 @@ const MinePage = () => {
                   {user?.email ?? text.userFallback}
                 </Typography>
                 <Stack direction="row" spacing={1} sx={{ mt: 0.8 }}>
-                  <Chip size="small" label={usage?.plan?.name ?? 'Account'} />
+                  <Chip size="small" label={usage?.plan?.name ?? '当前账号'} />
                   <Chip
                     size="small"
                     color="success"

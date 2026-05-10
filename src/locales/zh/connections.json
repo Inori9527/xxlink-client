@@ -13,7 +13,7 @@
       "time": "连接时间",
       "source": "源地址",
       "destination": "目标地址",
-      "destinationPort": "目标端口",
+      "destinationPort": "目标入口",
       "type": "类型"
     },
     "order": {

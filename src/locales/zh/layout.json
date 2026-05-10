@@ -6,13 +6,13 @@
         "home": "首页",
         "proxies": "节点",
         "profiles": "订阅",
-        "connections": "连接列表",
+        "connections": "实时连接",
         "rules": "规则",
         "logs": "日志",
         "unlock": "解锁测试",
         "plans": "套餐",
         "promoCode": "优惠码",
-        "apiKeys": "API 密钥",
+        "apiKeys": "开发者访问",
         "settings": "设置",
         "mine": "我的"
       },
@@ -39,8 +39,8 @@
         "noNode": "暂无节点",
         "disconnectFirst": "已连接，请先断开再切换节点",
         "mode": "模式",
-        "system": "系统代理",
-        "tun": "TUN",
+        "system": "浏览器加速",
+        "tun": "全局加速",
         "both": "两者",
         "upload": "上传",
         "download": "下载",
@@ -51,7 +51,7 @@
         "system": "浏览器",
         "both": "全局加速"
       },
-      "modeTooltip": "浏览器：只代理浏览器和遵守系统代理的应用。全局加速：整机所有流量都走加密通道（推荐）。",
+      "modeTooltip": "浏览器：适合浏览器和常见应用。全局加速：让大多数应用都通过 XXLink 连接，推荐使用。",
       "empty": {
         "title": "暂无可用节点",
         "subtitle": "请先购买套餐或刷新节点",
@@ -63,9 +63,9 @@
         "noSubscription": "您还没有订阅"
       },
       "trial": {
-        "claimPrompt": "请到控制台领取今日 Trial 公益流量",
-        "emptyTitle": "Trial 流量待领取",
-        "emptySubtitle": "当前 Trial 暂无可用流量，请到控制台领取今日 Trial 公益流量后再刷新节点。",
+        "claimPrompt": "请到控制台领取今日公益流量",
+        "emptyTitle": "公益流量待领取",
+        "emptySubtitle": "当前账号暂无可用公益流量，请到控制台领取今日流量后再刷新节点。",
         "trafficExceeded": "今日公益流量已用完，请等待下次刷新或升级套餐",
         "exceededTitle": "今日公益流量已用完",
         "exceededSubtitle": "请等待下次 24 小时刷新，或升级套餐继续使用。",

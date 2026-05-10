@@ -199,13 +199,13 @@ const SettingsPage = () => {
           }}
         >
           <Typography variant="overline" color="primary.light">
-            Settings
+            设置
           </Typography>
           <Typography variant="h5" fontWeight={950}>
             保留常用项，收起复杂项
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            默认只展示日常会用到的设置；排障和底层配置放在高级入口里。
+            默认只展示日常会用到的设置；排障工具放在高级入口里。
           </Typography>
         </Paper>
 
@@ -318,8 +318,8 @@ const SettingsPage = () => {
             />
             <SettingsRow
               icon={<RouteRounded />}
-              title="代理绕过"
-              description="配置不经过代理的域名和本地网络规则。"
+              title="直连名单"
+              description="让指定网站或本地网络直接访问。"
               onClick={() => sysproxyRef.current?.open()}
             />
             <SettingsRow
@@ -330,26 +330,26 @@ const SettingsPage = () => {
             />
             <SettingsRow
               icon={<ArticleRounded />}
-              title="订阅 / Profile"
-              description="仅用于排障或手动修复订阅。"
+              title="节点修复"
+              description="仅在客服指导或节点异常时使用。"
               onClick={() => navigate('/profile')}
             />
             <SettingsRow
               icon={<SettingsApplicationsRounded />}
-              title="API Keys"
-              description="开发者和自动化场景使用。"
+              title="开发者密钥"
+              description="仅供高级用户和自动化场景使用。"
               onClick={() => navigate('/api-keys')}
             />
             <SettingsRow
               icon={<DesktopWindowsRounded />}
-              title="连接列表"
-              description="查看底层连接详情。"
+              title="实时连接"
+              description="查看当前网络连接明细。"
               onClick={() => navigate('/connections')}
             />
             <SettingsRow
               icon={<RouteRounded />}
-              title="规则"
-              description="查看底层规则列表，仅用于排障。"
+              title="分流明细"
+              description="查看网络走向明细，仅用于排障。"
               onClick={() => navigate('/rules')}
             />
           </SettingsSection>

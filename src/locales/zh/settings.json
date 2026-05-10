@@ -19,7 +19,7 @@
       "title": "系统设置",
       "toggles": {
         "tunMode": "虚拟网卡模式",
-        "systemProxy": "系统代理"
+        "systemProxy": "浏览器加速"
       },
       "tooltips": {
         "silentStart": "程序启动时以后台模式运行，不显示程序面板"
@@ -30,24 +30,24 @@
       },
       "notifications": {
         "tunMode": {
-          "autoDisabled": "由于服务不可用，TUN 模式已自动关闭",
-          "autoDisableFailed": "自动关闭 TUN 模式失败"
+          "autoDisabled": "由于服务不可用，全局加速已自动关闭",
+          "autoDisableFailed": "自动关闭全局加速失败"
         }
       }
     },
     "proxyControl": {
       "tooltips": {
-        "systemProxy": "修改操作系统的代理设置，如果开启失败，可手动修改操作系统的代理设置",
-        "tunMode": "TUN（虚拟网卡）模式接管系统所有流量，启用时无须打开系统代理",
-        "tunUnavailable": "TUN 模式需要安装服务模式或管理员模式"
+        "systemProxy": "适合浏览器和常见应用使用",
+        "tunMode": "让大多数应用都通过 XXLink 连接",
+        "tunUnavailable": "全局加速需要启用服务模式或管理员模式"
       },
       "actions": {
         "installService": "安装服务",
         "uninstallService": "卸载服务"
       },
       "fields": {
-        "systemProxy": "系统代理",
-        "tunMode": "虚拟网卡模式"
+        "systemProxy": "浏览器加速",
+        "tunMode": "全局加速"
       }
     },
     "externalController": {
@@ -55,7 +55,7 @@
       "fields": {
         "enable": "启用外部控制器",
         "address": "外部控制器监听地址",
-        "secret": "API 访问密钥"
+        "secret": "访问密码"
       },
       "placeholders": {
         "address": "必填",
@@ -97,7 +97,7 @@
       "system": "系统"
     },
     "clash": {
-      "title": "内核设置",
+      "title": "连接高级设置",
       "form": {
         "fields": {
           "allowLan": "局域网连接",
@@ -105,30 +105,30 @@
           "ipv6": "IPv6",
           "unifiedDelay": "统一延迟",
           "logLevel": "日志等级",
-          "portConfig": "端口设置",
+          "portConfig": "本地连接设置",
           "external": "外部控制",
           "webUI": "网页界面",
-          "clashCore": "本地内核",
-          "openUwpTool": "UWP 工具",
-          "updateGeoData": "更新 GeoData",
+          "clashCore": "连接引擎",
+          "openUwpTool": "修复微软商店应用联网",
+          "updateGeoData": "更新地区数据",
           "tunnels": {
             "title": "流量隧道管理",
             "localAddr": "本地监听地址",
-            "localPort": "本地监听端口",
-            "targetAddr": "目标地址",
-            "targetPort": "目标端口",
-            "proxyGroup": "代理组",
-            "proxyNode": "代理节点",
-            "protocols": "协议",
+            "localPort": "本机入口",
+            "targetAddr": "目标服务",
+            "targetPort": "目标入口",
+            "proxyGroup": "线路组",
+            "proxyNode": "线路节点",
+            "protocols": "连接方式",
             "existing": "已配置的隧道",
             "default": "跟随当前配置",
             "optional": "可选",
             "messages": {
               "incomplete": "请完整填写隧道信息",
               "invalidLocalAddr": "无效的本地监听地址",
-              "invalidLocalPort": "无效的本地监听端口",
+              "invalidLocalPort": "无效的本机入口",
               "invalidTargetAddr": "无效的目标地址",
-              "invalidTargetPort": "无效的目标端口"
+              "invalidTargetPort": "无效的目标入口"
             },
             "actions": {
               "add": "添加",
@@ -248,8 +248,8 @@
           "proxyGroupsDisplayMode": "托盘代理组显示模式",
           "showOutboundModesInline": "将出站模式显示在托盘一级菜单",
           "commonTrayIcon": "常规托盘图标",
-          "systemProxyTrayIcon": "系统代理托盘图标",
-          "tunTrayIcon": "TUN 模式托盘图标",
+          "systemProxyTrayIcon": "浏览器加速托盘图标",
+          "tunTrayIcon": "全局加速托盘图标",
           "enableTrayIcon": "启用托盘图标",
           "enableTraySpeed": "启用托盘速率",
           "pauseRenderTrafficStatsOnBlur": "失去焦点时暂停渲染流量统计"
@@ -281,21 +281,21 @@
   },
   "modals": {
     "clashPort": {
-      "title": "端口设置",
+      "title": "本地连接设置",
       "fields": {
-        "mixed": "混合代理端口",
-        "socks": "SOCKS 代理端口",
-        "http": "HTTP(S) 代理端口",
-        "redir": "Redir 透明代理端口",
-        "tproxy": "Tproxy 透明代理端口"
+        "mixed": "默认入口",
+        "socks": "应用入口",
+        "http": "浏览器入口",
+        "redir": "高级入口",
+        "tproxy": "高级透明入口"
       },
       "actions": {
-        "random": "随机端口"
+        "random": "随机入口"
       },
       "messages": {
-        "portInUse": "端口 {{port}} 已被占用",
-        "saved": "端口设置已保存",
-        "saveFailed": "端口设置保存失败"
+        "portInUse": "入口 {{port}} 已被占用",
+        "saved": "本地连接设置已保存",
+        "saveFailed": "本地连接设置保存失败"
       }
     },
     "clashCore": {
@@ -445,9 +445,9 @@
       }
     },
     "sysproxy": {
-      "title": "系统代理设置",
+      "title": "浏览器加速设置",
       "fieldsets": {
-        "currentStatus": "当前系统代理"
+        "currentStatus": "当前浏览器加速"
       },
       "fields": {
         "enableStatus": "开启状态：",
@@ -455,11 +455,11 @@
         "pacUrl": "PAC 地址：",
         "proxyHost": "代理主机",
         "usePacMode": "使用 PAC 模式",
-        "proxyGuard": "系统代理守卫",
+        "proxyGuard": "连接守护",
         "guardDuration": "代理守卫间隔",
         "alwaysUseDefaultBypass": "始终使用默认绕过",
-        "enableBypassCheck": "验证代理绕过格式",
-        "proxyBypass": "代理绕过设置：",
+        "enableBypassCheck": "验证直连名单格式",
+        "proxyBypass": "直连名单设置：",
         "bypass": "当前绕过：",
         "pacScriptContent": "PAC 脚本内容"
       },
@@ -467,30 +467,30 @@
         "proxyGuard": "开启以防止其他软件修改操作系统的代理设置"
       },
       "messages": {
-        "durationTooShort": "代理守护间隔时间不得低于 1 秒",
-        "invalidBypass": "无效的代理绕过格式",
-        "invalidProxyHost": "代理主机格式无效"
+        "durationTooShort": "连接守护间隔时间不得低于 1 秒",
+        "invalidBypass": "无效的直连名单格式",
+        "invalidProxyHost": "连接主机格式无效"
       },
       "actions": {
         "editPac": "编辑 PAC"
       }
     },
     "tun": {
-      "title": "虚拟网卡模式",
+      "title": "全局加速",
       "fields": {
-        "stack": "TUN 模式堆栈",
-        "device": "虚拟网卡名称",
-        "autoRoute": "自动设置全局路由",
+        "stack": "全局加速模式",
+        "device": "连接设备名称",
+        "autoRoute": "自动设置全局连接",
         "routeExcludeAddress": "排除自定义网段",
-        "strictRoute": "严格路由",
-        "autoDetectInterface": "自动选择流量出口接口",
-        "dnsHijack": "DNS 劫持",
+        "strictRoute": "严格连接模式",
+        "autoDetectInterface": "自动选择网络出口",
+        "dnsHijack": "DNS 接管",
         "mtu": "最大传输单元",
-        "autoRedirect": "自动重定向"
+        "autoRedirect": "自动接管连接"
       },
       "tooltips": {
         "dnsHijack": "多个 DNS 服务器请使用 , 分隔",
-        "autoRedirect": "自动配置 nftables/iptables 的 TCP 重定向"
+        "autoRedirect": "自动完成全局加速所需的系统连接设置"
       },
       "messages": {
         "applied": "设置已应用",
@@ -519,8 +519,8 @@
           "description": "启用 IPv6 DNS 解析"
         },
         "preferH3": {
-          "label": "优先使用 HTTP/3",
-          "description": "DNS DOH 使用 HTTP/3 协议"
+          "label": "优先使用快速连接",
+          "description": "优先使用更快的 DNS 连接方式"
         },
         "respectRules": {
           "label": "遵循路由规则",
@@ -599,8 +599,8 @@
       },
       "title": "网页界面",
       "messages": {
-        "supportedPlaceholders": "支持 %host, %port, %secret",
-        "placeholderInstruction": "使用 %host, %port, %secret 表示 主机, 端口, 访问密钥"
+        "supportedPlaceholders": "支持主机、入口和访问密码占位符",
+        "placeholderInstruction": "可使用占位符表示主机、入口和访问密码"
       }
     },
     "hotkey": {
@@ -612,8 +612,8 @@
         "rule": "规则模式",
         "global": "全局模式",
         "openOrCloseDashboard": "打开/关闭面板",
-        "toggleSystemProxy": "打开/关闭系统代理",
-        "toggleTunMode": "打开/关闭 TUN 模式",
+        "toggleSystemProxy": "打开/关闭浏览器加速",
+        "toggleTunMode": "打开/关闭全局加速",
         "entryLightweightMode": "进入轻量模式",
         "direct": "直连模式",
         "reactivateProfiles": "重新激活订阅"
@@ -635,12 +635,12 @@
   "feedback": {
     "notifications": {
       "clash": {
-        "restartSuccess": "已重启本地内核",
-        "versionUpdated": "内核版本已更新",
-        "alreadyLatestVersion": "已经是最新内核版本",
-        "changeSuccess": "内核切换成功",
-        "changeFailed": "无法切换内核",
-        "geoDataUpdated": "已更新 GeoData"
+        "restartSuccess": "已重启连接引擎",
+        "versionUpdated": "连接引擎已更新",
+        "alreadyLatestVersion": "已经是最新连接引擎",
+        "changeSuccess": "连接引擎切换成功",
+        "changeFailed": "无法切换连接引擎",
+        "geoDataUpdated": "已更新地区数据"
       },
       "clashService": {
         "installSuccess": "已成功安装服务",

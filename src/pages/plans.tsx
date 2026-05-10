@@ -138,7 +138,7 @@ const PlansPage = () => {
       const message =
         claimError instanceof Error
           ? claimError.message
-          : 'Trial 流量领取失败，请稍后重试。'
+          : '公益流量领取失败，请稍后重试。'
       setError(message)
     } finally {
       setClaimingBenefit(false)

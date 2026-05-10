@@ -59,7 +59,7 @@
     }
   },
   "trial": {
-    "title": "Trial 专属流量",
+    "title": "公益流量",
     "subtitle": "邮箱验证后，每 24 小时可领取一次 {{traffic}} 公益流量。",
     "remaining": "当前套餐剩余流量 {{traffic}}",
     "claim": "领取今日公益流量",

@@ -833,7 +833,7 @@ const ConnectPage = () => {
                 color="text.secondary"
                 sx={{ mt: 0.25 }}
               >
-                自动选择稳定节点，不展示协议和端口。
+                保持简单连接，节点细节由 XXLink 自动整理。
               </Typography>
             </Box>
             <ButtonGroup
