@@ -306,8 +306,7 @@ const Layout = () => {
                     mt: '-5px',
                     mr: 1,
                     ml: '-4px',
-                    borderRadius: 1,
-                    objectFit: 'cover',
+                    objectFit: 'contain',
                   }}
                 />
                 <Box
