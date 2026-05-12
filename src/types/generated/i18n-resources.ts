@@ -306,13 +306,62 @@ export interface TranslationResources {
         title: string
       }
     }
+    mine: {
+      cancel: string
+      currentAccount: string
+      openDashboard: string
+      pageTitle: string
+      remaining: string
+      rows: {
+        announcements: {
+          description: string
+          title: string
+        }
+        logout: {
+          confirmBody: string
+          confirmTitle: string
+          description: string
+          title: string
+        }
+        promo: {
+          description: string
+          title: string
+        }
+        settings: {
+          description: string
+          title: string
+        }
+        update: {
+          check: string
+          checking: string
+          description: string
+          found: string
+          latest: string
+          title: string
+        }
+      }
+      sections: {
+        account: string
+        common: string
+        management: string
+      }
+      usage: string
+      userFallback: string
+      view: string
+    }
     plans: {
       page: {
+        actions: {
+          openDashboard: string
+          refresh: string
+        }
         card: {
           actions: {
             current: string
+            opening: string
             processing: string
             purchase: string
+            subscribe: string
           }
           badge: string
           features: {
@@ -322,12 +371,17 @@ export interface TranslationResources {
             speed: string
             speedMbps: string
             traffic: string
+            trafficValue: string
             unlimited: string
+            validUntilExpire: string
           }
         }
         current: {
+          expirePrefix: string
+          fallback: string
           labels: {
             expireAt: string
+            remaining: string
             startAt: string
             subUrl: string
             trafficUsage: string
@@ -337,14 +391,20 @@ export interface TranslationResources {
             cancelled: string
             expired: string
           }
+          syncHint: string
           title: string
           tooltips: {
             copy: string
           }
         }
         duration: {
+          days: string
           month: string
           months: string
+        }
+        empty: {
+          subtitle: string
+          title: string
         }
         feedback: {
           copied: string
@@ -354,22 +414,34 @@ export interface TranslationResources {
             networkError: string
             purchaseFailed: string
             sessionExpired: string
+            untrustedCheckout: string
           }
         }
         form: {
           promoHelp: string
           promoPlaceholder: string
         }
+        periods: {
+          month: string
+          quarter: string
+          year: string
+        }
         sections: {
           available: string
+          availableHint: string
           promo: string
         }
         title: string
       }
       trial: {
+        available: string
         claim: string
+        claimFailed: string
         claiming: string
+        claimSuccess: string
         cooldown: string
+        cooldownDays: string
+        cooldownHours: string
         remaining: string
         subtitle: string
         title: string
@@ -1397,6 +1469,69 @@ export interface TranslationResources {
           tooltips: {
             silentStart: string
           }
+        }
+      }
+      simplified: {
+        hero: {
+          eyebrow: string
+          subtitle: string
+          title: string
+        }
+        pageTitle: string
+        rows: {
+          advancedToggle: {
+            description: string
+            title: string
+          }
+          autoLaunch: {
+            description: string
+            title: string
+          }
+          autoUpdate: {
+            description: string
+            title: string
+          }
+          bypass: {
+            description: string
+            title: string
+          }
+          connections: {
+            description: string
+            title: string
+          }
+          language: {
+            description: string
+            title: string
+          }
+          logs: {
+            description: string
+            title: string
+          }
+          profileRepair: {
+            description: string
+            title: string
+          }
+          rules: {
+            description: string
+            title: string
+          }
+          theme: {
+            description: string
+            title: string
+          }
+          tun: {
+            description: string
+            title: string
+          }
+        }
+        sections: {
+          advanced: string
+          common: string
+        }
+        theme: {
+          dark: string
+          light: string
+          system: string
         }
       }
       statuses: {

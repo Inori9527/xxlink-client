@@ -1,12 +1,20 @@
 {
   "page": {
     "title": "Plans",
+    "actions": {
+      "refresh": "Refresh",
+      "openDashboard": "Open dashboard"
+    },
     "sections": {
-      "available": "Available Plans",
-      "promo": "Promo Code"
+      "available": "Available plans",
+      "availableHint": "Choose in XXLink, then complete checkout in your browser.",
+      "promo": "Promo code"
     },
     "current": {
       "title": "Current plan: {{name}}",
+      "fallback": "Choose a plan",
+      "expirePrefix": "Expires {{date}}",
+      "syncHint": "Purchases sync to the client automatically.",
       "status": {
         "active": "Active",
         "expired": "Expired",
@@ -14,6 +22,7 @@
       },
       "labels": {
         "trafficUsage": "Traffic usage",
+        "remaining": "Remaining {{traffic}}",
         "startAt": "Start date",
         "expireAt": "Expire date",
         "subUrl": "Subscription URL"
@@ -23,21 +32,29 @@
       }
     },
     "card": {
-      "badge": "Current plan",
+      "badge": "Current",
       "features": {
         "traffic": "Traffic",
+        "trafficValue": "{{traffic}} traffic",
         "speed": "Speed limit",
         "unlimited": "Unlimited",
         "speedMbps": "{{value}} Mbps",
         "devices": "Devices",
         "devicesValue": "{{count}} devices",
-        "duration": "Duration"
+        "duration": "Duration",
+        "validUntilExpire": "Available until expiry"
       },
       "actions": {
         "purchase": "Purchase",
-        "processing": "Processing…",
-        "current": "Current plan"
+        "processing": "Processing...",
+        "current": "Current plan",
+        "subscribe": "Subscribe",
+        "opening": "Opening"
       }
+    },
+    "empty": {
+      "title": "No plans available",
+      "subtitle": "Open the dashboard to view plans."
     },
     "form": {
       "promoPlaceholder": "Enter promo code (optional)",
@@ -48,23 +65,35 @@
       "errors": {
         "loadFailed": "Failed to load. Please try again later.",
         "purchaseFailed": "Failed to create order. Please try again later.",
+        "untrustedCheckout": "Checkout link failed the security check.",
         "sessionExpired": "Session expired. Please log in again.",
         "networkError": "Network error. Please try again later.",
         "generic": "An unknown error occurred. Please try again later."
       }
     },
+    "periods": {
+      "month": "Monthly",
+      "quarter": "Quarterly",
+      "year": "Annual"
+    },
     "duration": {
       "month": "month",
-      "months": "{{count}} months"
+      "months": "{{count}} months",
+      "days": "{{count}} days"
     }
   },
   "trial": {
     "title": "Trial traffic",
-    "subtitle": "After email verification, you can claim {{traffic}} public benefit traffic every 24 hours.",
+    "subtitle": "{{traffic}} daily. ",
     "remaining": "Remaining plan traffic: {{traffic}}",
-    "claim": "Claim today's public benefit traffic",
+    "claim": "Claim",
     "claiming": "Claiming...",
+    "claimSuccess": "Trial traffic claimed",
+    "claimFailed": "Claim failed. Please try again later.",
+    "available": "Available now",
     "cooldown": "{{time}} remaining",
+    "cooldownHours": "In {{count}} hours",
+    "cooldownDays": "In {{count}} days",
     "verifyEmail": "Verify email first"
   }
 }

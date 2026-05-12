@@ -16,6 +16,8 @@ REMOTE_HOST="108.61.207.72"
 REMOTE_DL_DIR="/opt/vps-airport/infra/nginx/downloads"
 REMOTE_UPDATER_DIR="/opt/vps-airport/infra/nginx/updater"
 REMOTE_LANDING_FILE="/opt/vps-airport/landing/components/download.tsx"
+REMOTE_CN_DOWNLOAD_PAGE="/opt/vps-airport/landing/app/cn/download/page.tsx"
+REMOTE_EN_PRODUCT_PAGE="/opt/vps-airport/landing/app/en/[[...slug]]/page.tsx"
 REMOTE_INFRA_DIR="/opt/vps-airport/infra"
 DOWNLOAD_HOST="https://api.xxlink.net"
 LANDING_HOST="https://xxlink.net"
@@ -176,6 +178,22 @@ text = re.sub(
 )
 
 path.write_text(text, encoding="utf-8")
+
+cn_page = Path("${REMOTE_CN_DOWNLOAD_PAGE}")
+if cn_page.exists():
+    text = cn_page.read_text(encoding="utf-8-sig")
+    text = re.sub(
+        r"当前提供最新版 [0-9]+\.[0-9]+\.[0-9]+ 的 x64 与 x86 安装包",
+        f"当前提供最新版 {version} 的 x64 安装包",
+        text,
+    )
+    cn_page.write_text(text, encoding="utf-8")
+
+en_page = Path("${REMOTE_EN_PRODUCT_PAGE}")
+if en_page.exists():
+    text = en_page.read_text(encoding="utf-8")
+    text = re.sub(r"Windows [0-9]+\.[0-9]+\.[0-9]+", f"Windows {version}", text)
+    en_page.write_text(text, encoding="utf-8")
 PY
 REMOTE_EOF
 

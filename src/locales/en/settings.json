@@ -1,4 +1,67 @@
 {
+  "simplified": {
+    "pageTitle": "Settings",
+    "hero": {
+      "eyebrow": "Settings",
+      "title": "Common first, advanced when needed",
+      "subtitle": "Daily options stay visible. Diagnostic tools stay behind the advanced switch."
+    },
+    "sections": {
+      "common": "Common",
+      "advanced": "Advanced"
+    },
+    "theme": {
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "rows": {
+      "language": {
+        "title": "Language",
+        "description": "Change the client interface language."
+      },
+      "theme": {
+        "title": "Theme",
+        "description": "Follow the system, or choose light/dark manually."
+      },
+      "autoLaunch": {
+        "title": "Launch at startup",
+        "description": "Start XXLink after Windows sign-in."
+      },
+      "autoUpdate": {
+        "title": "Auto-check updates",
+        "description": "Check for new Windows client versions after launch."
+      },
+      "advancedToggle": {
+        "title": "Show advanced settings",
+        "description": "Turn this on only for troubleshooting or manual setup."
+      },
+      "tun": {
+        "title": "Global mode",
+        "description": "Route system traffic through XXLink. Usually switch this on the Connect page."
+      },
+      "bypass": {
+        "title": "Bypass list",
+        "description": "Let selected sites or local networks connect directly."
+      },
+      "logs": {
+        "title": "Diagnostic logs",
+        "description": "View logs when connection or loading fails."
+      },
+      "profileRepair": {
+        "title": "Node repair",
+        "description": "Use only when support asks, or when nodes look abnormal."
+      },
+      "connections": {
+        "title": "Live connections",
+        "description": "View current connection details."
+      },
+      "rules": {
+        "title": "Routing details",
+        "description": "Inspect routing details for troubleshooting."
+      }
+    }
+  },
   "actions": {
     "logout": "Log out",
     "logoutConfirmTitle": "Log out?",

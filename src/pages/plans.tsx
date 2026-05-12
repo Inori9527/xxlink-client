@@ -20,6 +20,8 @@ import {
   Skeleton,
   Stack,
   Typography,
+  ToggleButton,
+  ToggleButtonGroup,
   alpha,
   useTheme,
 } from '@mui/material'
@@ -46,6 +48,13 @@ const TRUSTED_URL_HOSTS = new Set([
   'api.xxlink.net',
 ])
 const TRUSTED_URL_SUFFIXES = ['.stripe.com', '.paypal.com']
+type BillingPeriod = 'month' | 'quarter' | 'year'
+
+const BILLING_PERIODS: Array<{ value: BillingPeriod; labelKey: string }> = [
+  { value: 'month', labelKey: 'plans.page.periods.month' },
+  { value: 'quarter', labelKey: 'plans.page.periods.quarter' },
+  { value: 'year', labelKey: 'plans.page.periods.year' },
+]
 
 function formatTraffic(bytes: number): string {
   if (bytes <= 0) return '0 GB'
@@ -64,22 +73,36 @@ function getNumericBytes(value: string | number | undefined): number {
   return 0
 }
 
-function formatDate(iso?: string | null): string {
+function formatDate(iso: string | null | undefined, locale: string): string {
   if (!iso) return '--'
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return '--'
-  return date.toLocaleDateString('zh-CN', {
+  return date.toLocaleDateString(locale.startsWith('zh') ? 'zh-CN' : 'en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   })
 }
 
-function formatDuration(days: number): string {
-  if (days >= 360) return '年卡'
-  if (days >= 88) return '季卡'
-  if (days >= 28) return '月卡'
-  return `${days} 天`
+function getBillingPeriod(days: number): BillingPeriod {
+  if (days >= 360) return 'year'
+  if (days >= 88) return 'quarter'
+  return 'month'
+}
+
+function formatDuration(
+  days: number,
+  labels: {
+    month: string
+    quarter: string
+    year: string
+    days: (count: number) => string
+  },
+): string {
+  if (days >= 360) return labels.year
+  if (days >= 88) return labels.quarter
+  if (days >= 28) return labels.month
+  return labels.days(days)
 }
 
 function formatPrice(price: number): string {
@@ -91,16 +114,23 @@ function formatPrice(price: number): string {
   }).format(normalized)
 }
 
-function formatCooldownHours(status: PublicBenefitStatus): string {
+function formatCooldownHours(
+  status: PublicBenefitStatus,
+  labels: {
+    available: string
+    hours: (count: number) => string
+    days: (count: number) => string
+  },
+): string {
   const hours =
     typeof status.cooldownHours === 'number'
       ? status.cooldownHours
       : typeof status.cooldownDays === 'number'
         ? status.cooldownDays * 24
         : 0
-  if (hours <= 0) return '可领取'
-  if (hours < 24) return `${Math.ceil(hours)} 小时后`
-  return `${Math.ceil(hours / 24)} 天后`
+  if (hours <= 0) return labels.available
+  if (hours < 24) return labels.hours(Math.ceil(hours))
+  return labels.days(Math.ceil(hours / 24))
 }
 
 function isTrustedUrl(rawUrl: string): boolean {
@@ -115,7 +145,7 @@ function isTrustedUrl(rawUrl: string): boolean {
 }
 
 const PlansPage = () => {
-  const { t } = useTranslation()
+  const { i18n, t } = useTranslation()
   const theme = useTheme()
   const [plans, setPlans] = useState<Plan[]>([])
   const [subscription, setSubscription] = useState<Subscription | null>(null)
@@ -127,6 +157,25 @@ const PlansPage = () => {
   const [claimingBenefit, setClaimingBenefit] = useState(false)
   const [checkoutPlanId, setCheckoutPlanId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [preferredBillingPeriod, setPreferredBillingPeriod] =
+    useState<BillingPeriod>('month')
+  const durationLabels = useMemo(
+    () => ({
+      month: t('plans.page.periods.month'),
+      quarter: t('plans.page.periods.quarter'),
+      year: t('plans.page.periods.year'),
+      days: (count: number) => t('plans.page.duration.days', { count }),
+    }),
+    [t],
+  )
+  const cooldownLabels = useMemo(
+    () => ({
+      available: t('plans.trial.available'),
+      hours: (count: number) => t('plans.trial.cooldownHours', { count }),
+      days: (count: number) => t('plans.trial.cooldownDays', { count }),
+    }),
+    [t],
+  )
 
   const loadPlans = useCallback(async () => {
     setError(null)
@@ -141,14 +190,14 @@ const PlansPage = () => {
     if (plansResult.status === 'fulfilled') {
       setPlans(plansResult.value)
     } else {
-      setError('套餐加载失败，请稍后重试。')
+      setError(t('plans.page.feedback.errors.loadFailed'))
     }
 
     if (subResult.status === 'fulfilled') setSubscription(subResult.value)
     if (usageResult.status === 'fulfilled') setUsage(usageResult.value)
     if (benefitResult.status === 'fulfilled')
       setPublicBenefit(benefitResult.value)
-  }, [])
+  }, [t])
 
   useEffect(() => {
     loadPlans().finally(() => setLoading(false))
@@ -167,6 +216,35 @@ const PlansPage = () => {
       }),
     [plans],
   )
+
+  const groupedPlans = useMemo(() => {
+    const groups: Record<BillingPeriod, Plan[]> = {
+      month: [],
+      quarter: [],
+      year: [],
+    }
+    for (const plan of sortedPlans) {
+      groups[getBillingPeriod(plan.duration)].push(plan)
+    }
+    return groups
+  }, [sortedPlans])
+
+  const availableBillingPeriods = useMemo(
+    () =>
+      BILLING_PERIODS.filter((period) => groupedPlans[period.value].length > 0),
+    [groupedPlans],
+  )
+
+  const currentBillingPeriod = activeSubscription
+    ? getBillingPeriod(activeSubscription.plan.duration)
+    : null
+  const selectedBillingPeriod =
+    groupedPlans[preferredBillingPeriod].length > 0
+      ? preferredBillingPeriod
+      : currentBillingPeriod && groupedPlans[currentBillingPeriod].length > 0
+        ? currentBillingPeriod
+        : (availableBillingPeriods[0]?.value ?? preferredBillingPeriod)
+  const visiblePlans = groupedPlans[selectedBillingPeriod]
 
   const used = getNumericBytes(usage?.trafficUsed)
   const limit = getNumericBytes(usage?.trafficLimit)
@@ -194,12 +272,12 @@ const PlansPage = () => {
       const benefitData = await api.user.claimPublicBenefit()
       setPublicBenefit(benefitData)
       await loadPlans()
-      showNotice.success('公益流量已领取')
+      showNotice.success(t('plans.trial.claimSuccess'))
     } catch (claimError) {
       const message =
         claimError instanceof Error
           ? claimError.message
-          : '领取失败，请稍后重试。'
+          : t('plans.trial.claimFailed')
       setError(message)
     } finally {
       setClaimingBenefit(false)
@@ -212,14 +290,14 @@ const PlansPage = () => {
     try {
       const { sessionUrl } = await api.payment.createCheckout(plan.id)
       if (!sessionUrl || !isTrustedUrl(sessionUrl)) {
-        throw new Error('支付链接未通过安全校验。')
+        throw new Error(t('plans.page.feedback.errors.untrustedCheckout'))
       }
       await open(sessionUrl)
     } catch (checkoutError) {
       const message =
         checkoutError instanceof Error
           ? checkoutError.message
-          : '创建订单失败，请稍后重试。'
+          : t('plans.page.feedback.errors.purchaseFailed')
       setError(message)
     } finally {
       setCheckoutPlanId(null)
@@ -228,7 +306,7 @@ const PlansPage = () => {
 
   return (
     <BasePage
-      title="套餐"
+      title={t('plans.page.title')}
       header={
         <Button
           size="small"
@@ -240,7 +318,7 @@ const PlansPage = () => {
           disabled={refreshing || loading}
           sx={{ borderRadius: 999, fontWeight: 900 }}
         >
-          刷新
+          {t('plans.page.actions.refresh')}
         </Button>
       }
       contentStyle={{ padding: '8px 12px 16px' }}
@@ -294,12 +372,17 @@ const PlansPage = () => {
                 <Typography variant="h5" fontWeight={950}>
                   {usage?.plan?.name ??
                     activeSubscription?.plan.name ??
-                    '选择适合你的套餐'}
+                    t('plans.page.current.fallback')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   {usage?.expireAt || activeSubscription?.expireAt
-                    ? `到期 ${formatDate(usage?.expireAt ?? activeSubscription?.expireAt)}`
-                    : '购买后会自动同步到客户端'}
+                    ? t('plans.page.current.expirePrefix', {
+                        date: formatDate(
+                          usage?.expireAt ?? activeSubscription?.expireAt,
+                          i18n.language,
+                        ),
+                      })
+                    : t('plans.page.current.syncHint')}
                 </Typography>
               </Box>
             </Stack>
@@ -307,7 +390,7 @@ const PlansPage = () => {
             <Box sx={{ minWidth: { md: 360 } }}>
               <Stack direction="row" justifyContent="space-between">
                 <Typography variant="body2" color="text.secondary">
-                  周期用量
+                  {t('plans.page.current.labels.trafficUsage')}
                 </Typography>
                 <Typography variant="body2" fontWeight={900}>
                   {formatTraffic(used)} /{' '}
@@ -332,7 +415,9 @@ const PlansPage = () => {
                 }}
               />
               <Typography variant="caption" color="text.secondary">
-                剩余 {formatTraffic(remaining)}
+                {t('plans.page.current.labels.remaining', {
+                  traffic: formatTraffic(remaining),
+                })}
               </Typography>
             </Box>
           </Stack>
@@ -376,11 +461,14 @@ const PlansPage = () => {
                     {t('plans.trial.title')}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    每日{' '}
-                    {formatTraffic(getNumericBytes(publicBenefit.claimBytes))}，
+                    {t('plans.trial.subtitle', {
+                      traffic: formatTraffic(
+                        getNumericBytes(publicBenefit.claimBytes),
+                      ),
+                    })}
                     {publicBenefit.canClaim
-                      ? '现在可领取'
-                      : formatCooldownHours(publicBenefit)}
+                      ? t('plans.trial.available')
+                      : formatCooldownHours(publicBenefit, cooldownLabels)}
                   </Typography>
                 </Box>
               </Stack>
@@ -400,7 +488,7 @@ const PlansPage = () => {
                   : publicBenefit.canClaim
                     ? t('plans.trial.claim')
                     : publicBenefit.emailVerified
-                      ? formatCooldownHours(publicBenefit)
+                      ? formatCooldownHours(publicBenefit, cooldownLabels)
                       : t('plans.trial.verifyEmail')}
               </Button>
             </Stack>
@@ -416,10 +504,10 @@ const PlansPage = () => {
         >
           <Box>
             <Typography variant="h6" fontWeight={950}>
-              选择套餐
+              {t('plans.page.sections.available')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              在客户端选择，浏览器完成支付。
+              {t('plans.page.sections.availableHint')}
             </Typography>
           </Box>
           <Button
@@ -428,9 +516,44 @@ const PlansPage = () => {
             onClick={() => void open(DASHBOARD_RECHARGE_URL)}
             sx={{ borderRadius: 999, fontWeight: 900 }}
           >
-            打开账户页
+            {t('plans.page.actions.openDashboard')}
           </Button>
         </Stack>
+
+        {availableBillingPeriods.length > 0 && (
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={selectedBillingPeriod}
+            onChange={(_, value: BillingPeriod | null) => {
+              if (value) setPreferredBillingPeriod(value)
+            }}
+            sx={{
+              alignSelf: 'center',
+              p: 0.4,
+              borderRadius: 999,
+              bgcolor: alpha(theme.palette.common.white, 0.06),
+              border: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+              '& .MuiToggleButton-root': {
+                minWidth: 92,
+                border: 0,
+                borderRadius: 999,
+                fontWeight: 950,
+                px: 2.4,
+              },
+              '& .Mui-selected': {
+                color: '#03151A !important',
+                bgcolor: '#0FEDD2 !important',
+              },
+            }}
+          >
+            {availableBillingPeriods.map((period) => (
+              <ToggleButton key={period.value} value={period.value}>
+                {t(period.labelKey)}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+        )}
 
         {loading ? (
           <Box
@@ -452,7 +575,7 @@ const PlansPage = () => {
               />
             ))}
           </Box>
-        ) : sortedPlans.length === 0 ? (
+        ) : visiblePlans.length === 0 ? (
           <Paper
             elevation={0}
             sx={{
@@ -467,14 +590,14 @@ const PlansPage = () => {
             }}
           >
             <Typography variant="h6" fontWeight={950}>
-              暂无可选套餐
+              {t('plans.page.empty.title')}
             </Typography>
             <Typography
               variant="body2"
               color="text.secondary"
               sx={{ mt: 0.75 }}
             >
-              可先在账户页查看套餐。
+              {t('plans.page.empty.subtitle')}
             </Typography>
             <Button
               variant="contained"
@@ -482,7 +605,7 @@ const PlansPage = () => {
               onClick={() => void open(DASHBOARD_RECHARGE_URL)}
               sx={{ mt: 2, borderRadius: 999, fontWeight: 950 }}
             >
-              打开账户页
+              {t('plans.page.actions.openDashboard')}
             </Button>
           </Paper>
         ) : (
@@ -496,7 +619,7 @@ const PlansPage = () => {
               gap: 1.5,
             }}
           >
-            {sortedPlans.map((plan, index) => {
+            {visiblePlans.map((plan, index) => {
               const isCurrent = activeSubscription?.planId === plan.id
               const processing = checkoutPlanId === plan.id
               const accent =
@@ -540,14 +663,14 @@ const PlansPage = () => {
                         {plan.name}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        {formatDuration(plan.duration)}
+                        {formatDuration(plan.duration, durationLabels)}
                       </Typography>
                     </Box>
                     {isCurrent && (
                       <Chip
                         size="small"
                         icon={<CheckCircleRounded />}
-                        label="当前"
+                        label={t('plans.page.card.badge')}
                         sx={{
                           bgcolor: alpha(accent, 0.16),
                           color: accent,
@@ -567,7 +690,7 @@ const PlansPage = () => {
                       color="text.secondary"
                       sx={{ ml: 0.5 }}
                     >
-                      / {formatDuration(plan.duration)}
+                      / {formatDuration(plan.duration, durationLabels)}
                     </Typography>
                   </Box>
 
@@ -575,25 +698,35 @@ const PlansPage = () => {
                     <Stack direction="row" spacing={1} alignItems="center">
                       <BoltRounded sx={{ color: accent, fontSize: 19 }} />
                       <Typography variant="body2" color="text.secondary">
-                        {formatTraffic(getNumericBytes(plan.trafficLimit))} 流量
+                        {t('plans.page.card.features.trafficValue', {
+                          traffic: formatTraffic(
+                            getNumericBytes(plan.trafficLimit),
+                          ),
+                        })}
                       </Typography>
                     </Stack>
                     <Stack direction="row" spacing={1} alignItems="center">
                       <SpeedRounded sx={{ color: accent, fontSize: 19 }} />
                       <Typography variant="body2" color="text.secondary">
-                        {plan.speedLimit ? `${plan.speedLimit} Mbps` : '不限速'}
+                        {plan.speedLimit
+                          ? t('plans.page.card.features.speedMbps', {
+                              value: plan.speedLimit,
+                            })
+                          : t('plans.page.card.features.unlimited')}
                       </Typography>
                     </Stack>
                     <Stack direction="row" spacing={1} alignItems="center">
                       <DevicesRounded sx={{ color: accent, fontSize: 19 }} />
                       <Typography variant="body2" color="text.secondary">
-                        {plan.maxDevices} 台设备
+                        {t('plans.page.card.features.devicesValue', {
+                          count: plan.maxDevices,
+                        })}
                       </Typography>
                     </Stack>
                     <Stack direction="row" spacing={1} alignItems="center">
                       <ShieldRounded sx={{ color: accent, fontSize: 19 }} />
                       <Typography variant="body2" color="text.secondary">
-                        到期前持续可用
+                        {t('plans.page.card.features.validUntilExpire')}
                       </Typography>
                     </Stack>
                   </Stack>
@@ -625,7 +758,11 @@ const PlansPage = () => {
                       },
                     }}
                   >
-                    {isCurrent ? '当前套餐' : processing ? '打开中' : '订阅'}
+                    {isCurrent
+                      ? t('plans.page.card.actions.current')
+                      : processing
+                        ? t('plans.page.card.actions.opening')
+                        : t('plans.page.card.actions.subscribe')}
                   </Button>
                 </Paper>
               )

@@ -1,0 +1,43 @@
+{
+  "pageTitle": "我的",
+  "userFallback": "XXLink 用户",
+  "usage": "套餐周期用量",
+  "remaining": "剩余",
+  "openDashboard": "打开控制台",
+  "view": "查看",
+  "cancel": "取消",
+  "currentAccount": "当前账号",
+  "sections": {
+    "common": "常用",
+    "management": "管理",
+    "account": "账户"
+  },
+  "rows": {
+    "announcements": {
+      "title": "公告中心",
+      "description": "最新公告和历史记录"
+    },
+    "promo": {
+      "title": "优惠码",
+      "description": "兑换流量或账号权益"
+    },
+    "update": {
+      "title": "检查更新",
+      "description": "检查 Windows 客户端新版本",
+      "found": "发现新版本",
+      "checking": "检查中",
+      "check": "检查",
+      "latest": "当前已是最新版本"
+    },
+    "settings": {
+      "title": "设置",
+      "description": "启动、主题与外观"
+    },
+    "logout": {
+      "title": "退出登录",
+      "description": "清除本机登录状态",
+      "confirmTitle": "退出登录？",
+      "confirmBody": "退出后需要重新登录才能同步节点和账号权益。"
+    }
+  }
+}

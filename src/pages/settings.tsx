@@ -7,7 +7,6 @@ import {
   LanguageRounded,
   RocketLaunchRounded,
   RouteRounded,
-  SettingsApplicationsRounded,
   ShieldRounded,
   TuneRounded,
 } from '@mui/icons-material'
@@ -26,6 +25,7 @@ import {
 } from '@mui/material'
 import type { ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 
 import { BasePage, type DialogRef } from '@/components/base'
@@ -147,6 +147,7 @@ const SettingsSection = ({
 }
 
 const SettingsPage = () => {
+  const { t } = useTranslation()
   const theme = useTheme()
   const navigate = useNavigate()
   const { verge, mutateVerge, patchVerge } = useVerge()
@@ -176,7 +177,7 @@ const SettingsPage = () => {
   }
 
   return (
-    <BasePage title="设置">
+    <BasePage title={t('settings.simplified.pageTitle')}>
       <SysproxyViewer ref={sysproxyRef} />
       <Stack
         spacing={2}
@@ -199,21 +200,21 @@ const SettingsPage = () => {
           }}
         >
           <Typography variant="overline" color="primary.light">
-            设置
+            {t('settings.simplified.hero.eyebrow')}
           </Typography>
           <Typography variant="h5" fontWeight={950}>
-            保留常用项，收起复杂项
+            {t('settings.simplified.hero.title')}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            默认只展示日常会用到的设置；排障工具放在高级入口里。
+            {t('settings.simplified.hero.subtitle')}
           </Typography>
         </Paper>
 
-        <SettingsSection title="常用">
+        <SettingsSection title={t('settings.simplified.sections.common')}>
           <SettingsRow
             icon={<LanguageRounded />}
-            title="语言"
-            description="切换客户端界面语言。"
+            title={t('settings.simplified.rows.language.title')}
+            description={t('settings.simplified.rows.language.description')}
             control={
               <Select
                 size="small"
@@ -234,8 +235,8 @@ const SettingsPage = () => {
           />
           <SettingsRow
             icon={<DarkModeRounded />}
-            title="主题"
-            description="跟随系统，或手动选择浅色/深色。"
+            title={t('settings.simplified.rows.theme.title')}
+            description={t('settings.simplified.rows.theme.description')}
             control={
               <ToggleButtonGroup
                 exclusive
@@ -252,16 +253,22 @@ const SettingsPage = () => {
                   },
                 }}
               >
-                <ToggleButton value="system">系统</ToggleButton>
-                <ToggleButton value="light">亮</ToggleButton>
-                <ToggleButton value="dark">暗</ToggleButton>
+                <ToggleButton value="system">
+                  {t('settings.simplified.theme.system')}
+                </ToggleButton>
+                <ToggleButton value="light">
+                  {t('settings.simplified.theme.light')}
+                </ToggleButton>
+                <ToggleButton value="dark">
+                  {t('settings.simplified.theme.dark')}
+                </ToggleButton>
               </ToggleButtonGroup>
             }
           />
           <SettingsRow
             icon={<RocketLaunchRounded />}
-            title="开机启动"
-            description="Windows 登录后自动启动 XXLink。"
+            title={t('settings.simplified.rows.autoLaunch.title')}
+            description={t('settings.simplified.rows.autoLaunch.description')}
             control={
               <Switch
                 checked={verge?.enable_auto_launch ?? false}
@@ -274,8 +281,8 @@ const SettingsPage = () => {
           />
           <SettingsRow
             icon={<DesktopWindowsRounded />}
-            title="自动检查更新"
-            description="启动后自动检查 Windows 客户端新版本。"
+            title={t('settings.simplified.rows.autoUpdate.title')}
+            description={t('settings.simplified.rows.autoUpdate.description')}
             control={
               <Switch
                 checked={verge?.auto_check_update ?? true}
@@ -288,8 +295,10 @@ const SettingsPage = () => {
           />
           <SettingsRow
             icon={<TuneRounded />}
-            title="显示高级配置"
-            description="仅在排障或手动配置时打开。"
+            title={t('settings.simplified.rows.advancedToggle.title')}
+            description={t(
+              'settings.simplified.rows.advancedToggle.description',
+            )}
             control={
               <Switch
                 checked={advancedVisible}
@@ -301,11 +310,11 @@ const SettingsPage = () => {
         </SettingsSection>
 
         {advancedVisible && (
-          <SettingsSection title="高级">
+          <SettingsSection title={t('settings.simplified.sections.advanced')}>
             <SettingsRow
               icon={<ShieldRounded />}
-              title="全局加速"
-              description="让系统流量走加密通道；通常在连接页切换即可。"
+              title={t('settings.simplified.rows.tun.title')}
+              description={t('settings.simplified.rows.tun.description')}
               control={
                 <Switch
                   checked={verge?.enable_tun_mode ?? false}
@@ -318,38 +327,36 @@ const SettingsPage = () => {
             />
             <SettingsRow
               icon={<RouteRounded />}
-              title="直连名单"
-              description="让指定网站或本地网络直接访问。"
+              title={t('settings.simplified.rows.bypass.title')}
+              description={t('settings.simplified.rows.bypass.description')}
               onClick={() => sysproxyRef.current?.open()}
             />
             <SettingsRow
               icon={<BugReportRounded />}
-              title="诊断日志"
-              description="连接失败或加载异常时查看日志。"
+              title={t('settings.simplified.rows.logs.title')}
+              description={t('settings.simplified.rows.logs.description')}
               onClick={() => navigate('/logs')}
             />
             <SettingsRow
               icon={<ArticleRounded />}
-              title="节点修复"
-              description="仅在客服指导或节点异常时使用。"
+              title={t('settings.simplified.rows.profileRepair.title')}
+              description={t(
+                'settings.simplified.rows.profileRepair.description',
+              )}
               onClick={() => navigate('/profile')}
             />
             <SettingsRow
-              icon={<SettingsApplicationsRounded />}
-              title="开发者密钥"
-              description="仅供高级用户和自动化场景使用。"
-              onClick={() => navigate('/api-keys')}
-            />
-            <SettingsRow
               icon={<DesktopWindowsRounded />}
-              title="实时连接"
-              description="查看当前网络连接明细。"
+              title={t('settings.simplified.rows.connections.title')}
+              description={t(
+                'settings.simplified.rows.connections.description',
+              )}
               onClick={() => navigate('/connections')}
             />
             <SettingsRow
               icon={<RouteRounded />}
-              title="分流明细"
-              description="查看网络走向明细，仅用于排障。"
+              title={t('settings.simplified.rows.rules.title')}
+              description={t('settings.simplified.rows.rules.description')}
               onClick={() => navigate('/rules')}
             />
           </SettingsSection>

@@ -1,0 +1,43 @@
+{
+  "pageTitle": "Account",
+  "userFallback": "XXLink user",
+  "usage": "Plan cycle usage",
+  "remaining": "Remaining",
+  "openDashboard": "Open dashboard",
+  "view": "View",
+  "cancel": "Cancel",
+  "currentAccount": "Current account",
+  "sections": {
+    "common": "Common",
+    "management": "Management",
+    "account": "Account"
+  },
+  "rows": {
+    "announcements": {
+      "title": "Announcements",
+      "description": "Latest notices and history"
+    },
+    "promo": {
+      "title": "Promo code",
+      "description": "Redeem traffic or account benefits"
+    },
+    "update": {
+      "title": "Check for updates",
+      "description": "Check for a new Windows client",
+      "found": "New version",
+      "checking": "Checking",
+      "check": "Check",
+      "latest": "You are on the latest version"
+    },
+    "settings": {
+      "title": "Settings",
+      "description": "Startup, theme, and appearance"
+    },
+    "logout": {
+      "title": "Log out",
+      "description": "Clear local sign-in state",
+      "confirmTitle": "Log out?",
+      "confirmBody": "After logging out, you need to sign in again to sync nodes and account benefits."
+    }
+  }
+}
