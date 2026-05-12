@@ -91,13 +91,92 @@ scp -q "${UPDATE_JSON}" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_UPDATER_DIR}/upd
 
 echo "[3/5] Updating landing download card..."
 DATE_LABEL=$(date +"%Y年%-m月" 2>/dev/null || date +"%Y年%m月")
+DATE_ISO=$(date +"%Y-%m-%d")
+LOCAL_SIZE_MB=$(awk "BEGIN { printf \"%.1f MB\", $(wc -c < "${INSTALLER}")/1024/1024 }")
 
 ssh "${REMOTE_USER}@${REMOTE_HOST}" bash <<REMOTE_EOF
 set -e
-sed -i -E 's|XXLink_[0-9]+\.[0-9]+\.[0-9]+_x64-setup\.exe|XXLink_${VERSION}_x64-setup.exe|g' "${REMOTE_LANDING_FILE}"
-sed -i -E 's|Windows 版本 [0-9]+\.[0-9]+\.[0-9]+|Windows 版本 ${VERSION}|g' "${REMOTE_LANDING_FILE}"
-sed -i -E 's|更新于 [0-9]{4}年[0-9]{1,2}月|更新于 ${DATE_LABEL}|g' "${REMOTE_LANDING_FILE}"
-sed -i -E 's|https://github\.com/[^"'\'' ]+/releases/tag/v[0-9]+\.[0-9]+\.[0-9]+|${LANDING_HOST}/|g' "${REMOTE_LANDING_FILE}"
+python3 - <<'PY'
+from pathlib import Path
+import re
+
+path = Path("${REMOTE_LANDING_FILE}")
+text = path.read_text(encoding="utf-8")
+version = "${VERSION}"
+size = "${LOCAL_SIZE_MB}"
+date_iso = "${DATE_ISO}"
+date_label = "${DATE_LABEL}"
+
+text = re.sub(
+    r'\{ version: "[^"]+", arch: "x64", size: "[^"]+", date: "[^"]+" \}',
+    f'{{ version: "{version}", arch: "x64", size: "{size}", date: "{date_iso}" }}',
+    text,
+)
+text = re.sub(
+    r'\n  \{ version: "[^"]+", arch: "x86", size: "[^"]+", date: "[^"]+" \},',
+    "",
+    text,
+)
+text = text.replace(
+    '  const windowsX86 = files.find((file) => file.arch === "x86")!\n',
+    "",
+)
+text = text.replace("x64 / x86", "x64")
+text = text.replace(
+    "大多数 Windows 10 / 11 电脑请选择 x64；只有较旧设备或 32 位系统才需要 x86。",
+    "Windows 10 / 11 电脑默认下载 x64。",
+)
+
+old_buttons = '''            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              <Button className="h-11 rounded-full bg-slate-950 hover:bg-slate-800" asChild>
+                <a href={getDownloadUrl(windowsX64.version, "x64")} download>
+                  <DownloadIcon className="mr-2 h-4 w-4" />
+                  下载 x64 · {windowsX64.size}
+                </a>
+              </Button>
+              <Button variant="outline" className="h-11 rounded-full border-slate-300" asChild>
+                <a href={getDownloadUrl(windowsX86.version, "x86")} download>
+                  <DownloadIcon className="mr-2 h-4 w-4" />
+                  下载 x86 · {windowsX86.size}
+                </a>
+              </Button>
+            </div>'''
+new_buttons = '''            <div className="mt-8">
+              <Button className="h-11 rounded-full bg-slate-950 px-6 hover:bg-slate-800" asChild>
+                <a href={getDownloadUrl(windowsX64.version, "x64")} download>
+                  <DownloadIcon className="mr-2 h-4 w-4" />
+                  下载 x64 · {windowsX64.size}
+                </a>
+              </Button>
+            </div>'''
+text = text.replace(old_buttons, new_buttons)
+
+text = re.sub(
+    r"现在只保留最新版 [0-9]+\.[0-9]+\.[0-9]+。默认选择 x64，只有旧机器或特殊环境再考虑 x86。",
+    f"现在只保留最新版 {version}。Windows 默认下载 x64。",
+    text,
+)
+text = re.sub(
+    r"当前版本：[0-9]+\.[0-9]+\.[0-9]+。Windows 10 / 11 默认下载 x64。",
+    f"当前版本：{version}。Windows 10 / 11 默认下载 x64。",
+    text,
+)
+
+text = re.sub(
+    r"XXLink_[0-9]+\.[0-9]+\.[0-9]+_x64-setup\.exe",
+    f"XXLink_{version}_x64-setup.exe",
+    text,
+)
+text = re.sub(r"Windows 版本 [0-9]+\.[0-9]+\.[0-9]+", f"Windows 版本 {version}", text)
+text = re.sub(r"更新于 [0-9]{4}年[0-9]{1,2}月", f"更新于 {date_label}", text)
+text = re.sub(
+    r"https://github\.com/[^\"' ]+/releases/tag/v[0-9]+\.[0-9]+\.[0-9]+",
+    "${LANDING_HOST}/",
+    text,
+)
+
+path.write_text(text, encoding="utf-8")
+PY
 REMOTE_EOF
 
 echo "[4/5] Rebuilding landing container..."
