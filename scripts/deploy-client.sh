@@ -69,7 +69,7 @@ const fs = require('fs')
 const signature = fs.readFileSync(process.env.SIGNATURE, 'utf8').trim()
 const data = {
   version: process.env.VERSION,
-  notes: '优化启动响应速度，修复首次打开未响应问题。',
+  notes: '修复任务栏图标刷新，优化套餐选择与英文界面。',
   pub_date: new Date().toISOString(),
   platforms: {
     win64: {
@@ -154,7 +154,7 @@ new_buttons = '''            <div className="mt-8">
 text = text.replace(old_buttons, new_buttons)
 
 text = re.sub(
-    r"现在只保留最新版 [0-9]+\.[0-9]+\.[0-9]+。默认选择 x64，只有旧机器或特殊环境再考虑 x86。",
+    r"现在只保留最新版 [0-9]+\.[0-9]+\.[0-9]+。[^。]*x64[^。]*。",
     f"现在只保留最新版 {version}。Windows 默认下载 x64。",
     text,
 )
