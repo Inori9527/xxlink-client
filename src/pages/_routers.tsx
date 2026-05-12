@@ -8,24 +8,15 @@ import { Navigate } from 'react-router'
 import HomeSvg from '@/assets/image/itemicon/home.svg?react'
 import ProxiesSvg from '@/assets/image/itemicon/proxies.svg?react'
 import { RequireAuth } from '@/components/require-auth'
+import { AppDataProvider } from '@/providers/app-data-provider'
 
 import Layout from './_layout'
-import AnnouncementCenterPage from './announcement-center'
-import ApiKeysPage from './api-keys'
 import ConnectPage from './connect'
-import ConnectionsPage from './connections'
-import HomePage from './home'
 import LoginPage from './login'
 import MinePage from './mine'
 import NodesPage from './nodes'
 import PlansPage from './plans'
-import ProfilesPage from './profiles'
-import PromoCodePage from './promo-code'
-import ProxiesPage from './proxies'
 import RegisterPage from './register'
-import RulesPage from './rules'
-import SettingsPage from './settings'
-import UnlockPage from './unlock'
 
 /**
  * navItems drives both the sidebar navigation and the router.
@@ -70,20 +61,52 @@ export const navItems = [
 
 /** Routes for pages hidden from the nav bar but still routable. */
 const hiddenRoutes: RouteObject[] = [
-  { path: '/home', Component: HomePage },
-  { path: '/proxies', Component: ProxiesPage },
-  { path: '/profile', Component: ProfilesPage },
-  { path: '/connections', Component: ConnectionsPage },
-  { path: '/rules', Component: RulesPage },
-  { path: '/unlock', Component: UnlockPage },
-  { path: '/promo-code', Component: PromoCodePage },
-  { path: '/settings', Component: SettingsPage },
-  { path: '/announcements', Component: AnnouncementCenterPage },
+  {
+    path: '/home',
+    lazy: async () => ({ Component: (await import('./home')).default }),
+  },
+  {
+    path: '/proxies',
+    lazy: async () => ({ Component: (await import('./proxies')).default }),
+  },
+  {
+    path: '/profile',
+    lazy: async () => ({ Component: (await import('./profiles')).default }),
+  },
+  {
+    path: '/connections',
+    lazy: async () => ({ Component: (await import('./connections')).default }),
+  },
+  {
+    path: '/rules',
+    lazy: async () => ({ Component: (await import('./rules')).default }),
+  },
+  {
+    path: '/unlock',
+    lazy: async () => ({ Component: (await import('./unlock')).default }),
+  },
+  {
+    path: '/promo-code',
+    lazy: async () => ({ Component: (await import('./promo-code')).default }),
+  },
+  {
+    path: '/settings',
+    lazy: async () => ({ Component: (await import('./settings')).default }),
+  },
+  {
+    path: '/announcements',
+    lazy: async () => ({
+      Component: (await import('./announcement-center')).default,
+    }),
+  },
   {
     path: '/logs',
     Component: () => null /* KeepAlive: real LogsPage rendered in Layout */,
   },
-  { path: '/api-keys', Component: ApiKeysPage },
+  {
+    path: '/api-keys',
+    lazy: async () => ({ Component: (await import('./api-keys')).default }),
+  },
 ]
 
 export const router = createBrowserRouter([
@@ -96,7 +119,9 @@ export const router = createBrowserRouter([
     path: '/',
     element: (
       <RequireAuth>
-        <Layout />
+        <AppDataProvider>
+          <Layout />
+        </AppDataProvider>
       </RequireAuth>
     ),
     children: [

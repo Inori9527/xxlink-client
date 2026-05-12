@@ -47,7 +47,7 @@ pub fn resolve_setup_sync() {
 
 pub fn resolve_setup_async() {
     AsyncHandler::spawn(|| async {
-    logging!(info, Type::XXLink, "Version: {}", env!("CARGO_PKG_VERSION"));
+        logging!(info, Type::XXLink, "Version: {}", env!("CARGO_PKG_VERSION"));
 
         init_verge_config().await;
         Config::verify_config_initialization().await;
@@ -124,14 +124,16 @@ async fn init_silent_updater() {
 
     let app_handle = Handle::app_handle();
 
-    // Check for cached update and attempt install before main app initialization.
-    // If install succeeds:
-    //   - Windows: NSIS takes over and the process exits automatically
-    //   - macOS/Linux: binary is replaced, we restart the app
-    if SilentUpdater::global().try_install_on_startup(app_handle).await {
-        logging!(info, Type::Setup, "Update installed at startup, restarting...");
-        app_handle.restart();
-    }
+    // Cached update installs may show a native dialog and touch the installer.
+    // Keep that work off the first-window path so cold startup stays responsive.
+    let install_handle = app_handle.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(8)).await;
+        if SilentUpdater::global().try_install_on_startup(&install_handle).await {
+            logging!(info, Type::Setup, "Update installed after startup, restarting...");
+            install_handle.restart();
+        }
+    });
 
     // No pending install — start background check/download loop
     let app_handle = app_handle.clone();

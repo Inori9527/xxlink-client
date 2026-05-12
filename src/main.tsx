@@ -1,5 +1,4 @@
 import './assets/styles/index.scss'
-import './services/monaco'
 
 import createCache from '@emotion/cache'
 import { CacheProvider } from '@emotion/react'
@@ -13,7 +12,6 @@ import { MihomoWebSocket } from 'tauri-plugin-mihomo-api'
 
 import { BaseErrorBoundary } from './components/base'
 import { router } from './pages/_routers'
-import { AppDataProvider } from './providers/app-data-provider'
 import { WindowProvider } from './providers/window'
 import { AuthProvider, authStore } from './services/auth-store'
 import { FALLBACK_LANGUAGE, initializeLanguage } from './services/i18n'
@@ -84,9 +82,7 @@ const initializeApp = (initialThemeMode: 'light' | 'dark') => {
             <QueryClientProvider client={queryClient}>
               <AuthProvider>
                 <WindowProvider>
-                  <AppDataProvider>
-                    <RouterProvider router={router} />
-                  </AppDataProvider>
+                  <RouterProvider router={router} />
                 </WindowProvider>
               </AuthProvider>
             </QueryClientProvider>
@@ -97,7 +93,7 @@ const initializeApp = (initialThemeMode: 'light' | 'dark') => {
   )
 }
 
-const BOOT_TIMEOUT_MS = 8000
+const BOOT_TIMEOUT_MS = 2500
 
 const renderSplashTimeoutFallback = (error: unknown) => {
   const overlay = document.getElementById('initial-loading-overlay')
@@ -162,10 +158,15 @@ const bootstrap = async () => {
     renderSplashTimeoutFallback(timeoutError)
     // Still attempt to render the app so the user can proceed if they dismiss.
     initializeApp(resolveThemeMode(getPreloadConfig()))
+    startBackgroundStartupTasks()
     return
   }
 
   initializeApp(result.initialThemeMode)
+  startBackgroundStartupTasks()
+}
+
+const startBackgroundStartupTasks = () => {
   startSubscriptionAutoSync()
 
   // Sync subscription in the background if the user is already logged in

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { listen } from '@tauri-apps/api/event'
-import React, { useCallback, useEffect, useMemo } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router'
 import {
   getBaseConfig,
   getRuleProviders,
@@ -22,8 +23,8 @@ const TQ_MIHOMO = {
   refetchOnWindowFocus: false,
   refetchOnReconnect: false,
   staleTime: 1500,
-  retry: 3,
-  retryDelay: 2000,
+  retry: 1,
+  retryDelay: 1200,
 } as const
 
 const TQ_DEFAULTS = {
@@ -33,6 +34,16 @@ const TQ_DEFAULTS = {
   retry: 2,
 } as const
 
+const STARTUP_QUERY_DELAY_MS = 800
+
+const ADVANCED_DATA_ROUTES = new Set([
+  '/home',
+  '/profile',
+  '/proxies',
+  '/rules',
+  '/settings',
+])
+
 // 全局数据提供者组件
 export const AppDataProvider = ({
   children,
@@ -40,34 +51,58 @@ export const AppDataProvider = ({
   children: React.ReactNode
 }) => {
   const { verge } = useVerge()
+  const { pathname } = useLocation()
+  const [startupQueriesEnabled, setStartupQueriesEnabled] = useState(false)
+
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setStartupQueriesEnabled(true),
+      STARTUP_QUERY_DELAY_MS,
+    )
+    return () => window.clearTimeout(timer)
+  }, [])
+
+  const shouldLoadAdvancedData = useMemo(
+    () =>
+      startupQueriesEnabled &&
+      Array.from(ADVANCED_DATA_ROUTES).some((route) =>
+        pathname.startsWith(route),
+      ),
+    [pathname, startupQueriesEnabled],
+  )
 
   const { data: proxiesData, refetch: refreshProxy } = useQuery({
     queryKey: ['getProxies'],
     queryFn: calcuProxies,
+    enabled: startupQueriesEnabled,
     ...TQ_MIHOMO,
   })
 
   const { data: clashConfig, refetch: refreshClashConfig } = useQuery({
     queryKey: ['getClashConfig'],
     queryFn: getBaseConfig,
+    enabled: startupQueriesEnabled,
     ...TQ_MIHOMO,
   })
 
   const { data: proxyProviders, refetch: refreshProxyProviders } = useQuery({
     queryKey: ['getProxyProviders'],
     queryFn: calcuProxyProviders,
+    enabled: shouldLoadAdvancedData,
     ...TQ_MIHOMO,
   })
 
   const { data: ruleProviders, refetch: refreshRuleProviders } = useQuery({
     queryKey: ['getRuleProviders'],
     queryFn: getRuleProviders,
+    enabled: shouldLoadAdvancedData,
     ...TQ_MIHOMO,
   })
 
   const { data: rulesData, refetch: refreshRules } = useQuery({
     queryKey: ['getRules'],
     queryFn: getRules,
+    enabled: shouldLoadAdvancedData,
     ...TQ_MIHOMO,
   })
 
@@ -133,6 +168,8 @@ export const AppDataProvider = ({
 
       lastProfileId = newProfileId
       lastUpdateTime = now
+
+      if (!shouldLoadAdvancedData) return
 
       scheduleTimeout(() => {
         refreshRules().catch((error) =>
@@ -234,23 +271,32 @@ export const AppDataProvider = ({
         )
       }
     }
-  }, [refreshProxy, refreshClashConfig, refreshRules, refreshRuleProviders])
+  }, [
+    refreshProxy,
+    refreshClashConfig,
+    refreshRules,
+    refreshRuleProviders,
+    shouldLoadAdvancedData,
+  ])
 
   const { data: sysproxy, refetch: refreshSysproxy } = useQuery({
     queryKey: ['getSystemProxy'],
     queryFn: getSystemProxy,
+    enabled: startupQueriesEnabled,
     ...TQ_DEFAULTS,
   })
 
   const { data: runningMode } = useQuery({
     queryKey: ['getRunningMode'],
     queryFn: getRunningMode,
+    enabled: startupQueriesEnabled,
     ...TQ_DEFAULTS,
   })
 
   const { data: uptimeData } = useQuery({
     queryKey: ['appUptime'],
     queryFn: getAppUptime,
+    enabled: startupQueriesEnabled,
     ...TQ_DEFAULTS,
     refetchInterval: 3000,
     retry: 1,
