@@ -55,6 +55,13 @@ const BILLING_PERIODS: Array<{ value: BillingPeriod; labelKey: string }> = [
   { value: 'quarter', labelKey: 'plans.page.periods.quarter' },
   { value: 'year', labelKey: 'plans.page.periods.year' },
 ]
+const PLAN_PERIOD_FIELD_KEYS = [
+  'billingPeriod',
+  'billingCycle',
+  'interval',
+  'period',
+  'cycle',
+] as const
 
 function formatTraffic(bytes: number): string {
   if (bytes <= 0) return '0 GB'
@@ -84,29 +91,43 @@ function formatDate(iso: string | null | undefined, locale: string): string {
   })
 }
 
-function getBillingPeriod(days: number): BillingPeriod {
-  if (days >= 360) return 'year'
-  if (days >= 88) return 'quarter'
+function normalizeBillingPeriod(
+  value: string | null | undefined,
+): BillingPeriod | null {
+  if (!value) return null
+  const text = value.trim().toLowerCase()
+  if (!text) return null
+  if (/(annual|yearly|year|年卡|年付|年度)/.test(text)) return 'year'
+  if (/(quarterly|quarter|season|季卡|季付|季度)/.test(text)) return 'quarter'
+  if (/(monthly|month|月卡|月付|月度)/.test(text)) return 'month'
+  return null
+}
+
+function getPlanPeriodField(plan: Plan): string | null {
+  const record = plan as unknown as Record<string, unknown>
+  for (const key of PLAN_PERIOD_FIELD_KEYS) {
+    const value = record[key]
+    if (typeof value === 'string') return value
+  }
+  return null
+}
+
+function getBillingPeriod(plan: Plan): BillingPeriod {
+  const explicitPeriod = normalizeBillingPeriod(getPlanPeriodField(plan))
+  if (explicitPeriod) return explicitPeriod
+
+  const visibleTextPeriod = normalizeBillingPeriod(
+    `${plan.name} ${plan.description ?? ''}`,
+  )
+  if (visibleTextPeriod) return visibleTextPeriod
+
+  if (plan.duration >= 360) return 'year'
+  if (plan.duration >= 88) return 'quarter'
   return 'month'
 }
 
-function formatDuration(
-  days: number,
-  labels: {
-    month: string
-    quarter: string
-    year: string
-    days: (count: number) => string
-  },
-): string {
-  if (days >= 360) return labels.year
-  if (days >= 88) return labels.quarter
-  if (days >= 28) return labels.month
-  return labels.days(days)
-}
-
 function formatPrice(price: number): string {
-  const normalized = price > 999 ? price / 100 : price
+  const normalized = Number.isFinite(price) ? price / 100 : 0
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -159,15 +180,6 @@ const PlansPage = () => {
   const [error, setError] = useState<string | null>(null)
   const [preferredBillingPeriod, setPreferredBillingPeriod] =
     useState<BillingPeriod>('month')
-  const durationLabels = useMemo(
-    () => ({
-      month: t('plans.page.periods.month'),
-      quarter: t('plans.page.periods.quarter'),
-      year: t('plans.page.periods.year'),
-      days: (count: number) => t('plans.page.duration.days', { count }),
-    }),
-    [t],
-  )
   const cooldownLabels = useMemo(
     () => ({
       available: t('plans.trial.available'),
@@ -224,7 +236,7 @@ const PlansPage = () => {
       year: [],
     }
     for (const plan of sortedPlans) {
-      groups[getBillingPeriod(plan.duration)].push(plan)
+      groups[getBillingPeriod(plan)].push(plan)
     }
     return groups
   }, [sortedPlans])
@@ -236,7 +248,7 @@ const PlansPage = () => {
   )
 
   const currentBillingPeriod = activeSubscription
-    ? getBillingPeriod(activeSubscription.plan.duration)
+    ? getBillingPeriod(activeSubscription.plan)
     : null
   const selectedBillingPeriod =
     groupedPlans[preferredBillingPeriod].length > 0
@@ -662,9 +674,6 @@ const PlansPage = () => {
                       <Typography variant="h6" fontWeight={950}>
                         {plan.name}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {formatDuration(plan.duration, durationLabels)}
-                      </Typography>
                     </Box>
                     {isCurrent && (
                       <Chip
@@ -684,13 +693,6 @@ const PlansPage = () => {
                   <Box sx={{ my: 2 }}>
                     <Typography component="span" variant="h3" fontWeight={950}>
                       {formatPrice(plan.price)}
-                    </Typography>
-                    <Typography
-                      component="span"
-                      color="text.secondary"
-                      sx={{ ml: 0.5 }}
-                    >
-                      / {formatDuration(plan.duration, durationLabels)}
                     </Typography>
                   </Box>
 

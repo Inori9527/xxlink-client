@@ -24,6 +24,11 @@ export interface Plan {
   description: string | null
   price: number
   duration: number
+  billingPeriod?: string | null
+  billingCycle?: string | null
+  interval?: string | null
+  period?: string | null
+  cycle?: string | null
   trafficLimit: number
   speedLimit: number | null
   maxDevices: number
