@@ -66,13 +66,9 @@ pub fn resolve_setup_async() {
             refresh_tray_menu().await;
         };
 
-        let _ = futures::join!(
-            core_init,
-            tray_init,
-            init_timer(),
-            init_auto_lightweight_boot(),
-            init_silent_updater(),
-        );
+        init_silent_updater();
+
+        let _ = futures::join!(core_init, tray_init, init_timer(), init_auto_lightweight_boot(),);
 
         refresh_tray_menu().await;
     });
@@ -116,7 +112,7 @@ pub(super) async fn init_auto_lightweight_boot() {
     logging_error!(Type::Setup, auto_lightweight_boot().await);
 }
 
-async fn init_silent_updater() {
+fn init_silent_updater() {
     use crate::core::SilentUpdater;
     use crate::core::handle::Handle;
 
@@ -135,7 +131,7 @@ async fn init_silent_updater() {
         }
     });
 
-    // No pending install — start background check/download loop
+    // No pending install; start background check/download loop.
     let app_handle = app_handle.clone();
     tokio::spawn(async move {
         SilentUpdater::global().start_background_check(app_handle).await;
