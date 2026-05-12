@@ -192,6 +192,15 @@ if cn_page.exists():
 en_page = Path("${REMOTE_EN_PRODUCT_PAGE}")
 if en_page.exists():
     text = en_page.read_text(encoding="utf-8")
+    text = re.sub(
+        r'const windowsDownload = \{\n  version: "[^"]+",\n  size: "[^"]+",\n  url: "[^"]+",\n\}',
+        'const windowsDownload = {\n'
+        f'  version: "{version}",\n'
+        f'  size: "{size}",\n'
+        f'  url: "${DOWNLOAD_URL}",\n'
+        '}',
+        text,
+    )
     text = re.sub(r"Windows [0-9]+\.[0-9]+\.[0-9]+", f"Windows {version}", text)
     en_page.write_text(text, encoding="utf-8")
 PY
