@@ -54,11 +54,9 @@ const text = {
   management: '\u7ba1\u7406',
   account: '\u8d26\u6237',
   announcements: '\u516c\u544a\u4e2d\u5fc3',
-  announcementsDesc:
-    '\u67e5\u770b\u6700\u65b0\u516c\u544a\uff1b\u5df2\u5173\u95ed\u7684\u516c\u544a\u4e0d\u4f1a\u91cd\u590d\u5f39\u51fa',
+  announcementsDesc: '\u6700\u65b0\u516c\u544a\u548c\u5386\u53f2\u8bb0\u5f55',
   promo: '\u4f18\u60e0\u7801',
-  promoDesc:
-    '\u5151\u6362\u6d41\u91cf\u3001\u5957\u9910\u4f53\u9a8c\u6216\u5176\u4ed6\u8d26\u53f7\u6743\u76ca',
+  promoDesc: '\u5151\u6362\u6d41\u91cf\u6216\u8d26\u53f7\u6743\u76ca',
   update: '\u68c0\u67e5\u66f4\u65b0',
   updateDesc: '\u68c0\u67e5 Windows \u5ba2\u6237\u7aef\u65b0\u7248\u672c',
   updateFound: '\u53d1\u73b0\u65b0\u7248\u672c',
@@ -66,8 +64,7 @@ const text = {
   check: '\u68c0\u67e5',
   alreadyLatest: '\u5f53\u524d\u5df2\u662f\u6700\u65b0\u7248\u672c',
   settings: '\u8bbe\u7f6e',
-  settingsDesc:
-    '\u542f\u52a8\u3001\u4e3b\u9898\u3001\u8bed\u8a00\u4e0e\u4e13\u4e1a\u9009\u9879',
+  settingsDesc: '\u542f\u52a8\u3001\u4e3b\u9898\u4e0e\u5916\u89c2',
   logout: '\u9000\u51fa\u767b\u5f55',
   logoutDesc: '\u6e05\u9664\u672c\u673a\u767b\u5f55\u72b6\u6001',
   logoutTitle: '\u9000\u51fa\u767b\u5f55\uff1f',
@@ -326,7 +323,7 @@ const MinePage = () => {
                     background:
                       percent > 80
                         ? 'linear-gradient(90deg,#FCD34D,#F87171)'
-                        : 'linear-gradient(90deg,#8B5CF6,#34D399)',
+                        : 'linear-gradient(90deg,#2F80ED,#0FEDD2)',
                   },
                 }}
               />

@@ -60,9 +60,9 @@
   },
   "trial": {
     "title": "公益流量",
-    "subtitle": "邮箱验证后，每 24 小时可领取一次 {{traffic}} 公益流量。",
-    "remaining": "当前套餐剩余流量 {{traffic}}",
-    "claim": "领取今日公益流量",
+    "subtitle": "每日可领取 {{traffic}}。",
+    "remaining": "剩余 {{traffic}}",
+    "claim": "领取",
     "claiming": "领取中...",
     "cooldown": "还需 {{time}}",
     "verifyEmail": "请先验证邮箱"

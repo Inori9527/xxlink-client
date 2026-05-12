@@ -25,7 +25,8 @@ async function resolveUpdater() {
   })
 
   const latestRelease = releases.find(
-    (release) => !release.draft && !release.prerelease && release.tag_name.startsWith('v'),
+    (release) =>
+      !release.draft && !release.prerelease && release.tag_name.startsWith('v'),
   )
 
   console.log(latestRelease?.tag_name ?? 'No release found')
@@ -37,6 +38,7 @@ async function resolveUpdater() {
 
   const updateData = {
     name: latestRelease.tag_name,
+    version: latestRelease.tag_name.replace(/^v/i, ''),
     notes: await resolveUpdateLog(latestRelease.tag_name),
     pub_date: latestRelease.published_at || new Date().toISOString(),
     platforms: {

@@ -743,9 +743,12 @@ const ConnectPage = () => {
       <Stack
         spacing={1.5}
         sx={{
-          maxWidth: 900,
+          maxWidth: 860,
           mx: 'auto',
-          py: 1,
+          py: 0.5,
+          height: '100%',
+          boxSizing: 'border-box',
+          justifyContent: 'center',
         }}
       >
         {(trialNeedsClaim || trialOutOfTraffic || startupSyncError) && (
@@ -807,8 +810,8 @@ const ConnectPage = () => {
             border: `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
             background:
               theme.palette.mode === 'dark'
-                ? 'radial-gradient(circle at 88% 2%, rgba(139,92,246,0.20), transparent 32%), radial-gradient(circle at 4% 100%, rgba(34,211,238,0.12), transparent 26%), rgba(14,16,22,0.96)'
-                : 'linear-gradient(135deg,#ffffff,#f6f8ff)',
+                ? 'radial-gradient(circle at 88% 2%, rgba(15,237,210,0.16), transparent 32%), radial-gradient(circle at 4% 100%, rgba(47,128,237,0.14), transparent 28%), rgba(7,16,24,0.97)'
+                : 'linear-gradient(135deg,#ffffff,#f2fbff)',
           }}
         >
           <Stack
@@ -823,17 +826,17 @@ const ConnectPage = () => {
                 variant="overline"
                 sx={{ color: 'primary.light', fontWeight: 900 }}
               >
-                连接
+                XXLink
               </Typography>
               <Typography variant="h5" fontWeight={950}>
-                安静、稳定地连接
+                一键连接
               </Typography>
               <Typography
                 variant="body2"
                 color="text.secondary"
                 sx={{ mt: 0.25 }}
               >
-                保持简单连接，节点细节由 XXLink 自动整理。
+                选择模式，点击圆形按钮即可开始。
               </Typography>
             </Box>
             <ButtonGroup
@@ -870,23 +873,23 @@ const ConnectPage = () => {
             elevation={0}
             sx={{
               p: { xs: 1.75, md: 2.25 },
-              mb: 1.5,
+              mb: 1.25,
               borderRadius: 4,
               border: `1px solid ${alpha(theme.palette.common.white, 0.1)}`,
               background:
                 theme.palette.mode === 'dark'
-                  ? 'linear-gradient(135deg,rgba(24,27,36,0.98),rgba(33,36,48,0.94))'
+                  ? 'linear-gradient(135deg,rgba(13,25,36,0.98),rgba(8,18,27,0.94))'
                   : '#fff',
             }}
           >
-            <Stack direction="column" spacing={1.5} alignItems="center">
+            <Stack direction="column" spacing={1.25} alignItems="center">
               <Button
                 onClick={handleToggle}
                 disabled={busy || isEmpty}
                 sx={{
-                  width: 116,
-                  height: 116,
-                  minWidth: 116,
+                  width: 104,
+                  height: 104,
+                  minWidth: 104,
                   borderRadius: '50%',
                   bgcolor: buttonColor,
                   color: theme.palette.getContrastText(buttonColor),
@@ -918,7 +921,7 @@ const ConnectPage = () => {
                     sx={{ color: 'inherit' }}
                   />
                 ) : (
-                  <PowerSettingsNewRounded sx={{ fontSize: 50 }} />
+                  <PowerSettingsNewRounded sx={{ fontSize: 46 }} />
                 )}
               </Button>
 
@@ -945,8 +948,8 @@ const ConnectPage = () => {
                   {isEmpty
                     ? t('layout.components.connect.empty.subtitle')
                     : connected
-                      ? '连接已建立，套餐剩余流量以服务端为准。'
-                      : '点击按钮后将按当前模式建立连接。'}
+                      ? '已连接'
+                      : '点击开始'}
                 </Typography>
                 {isEmpty ? (
                   <Button
@@ -970,7 +973,7 @@ const ConnectPage = () => {
                 md: 'repeat(3, minmax(0, 1fr))',
               },
               gap: 1.5,
-              mb: 1.5,
+              mb: 1.25,
             }}
           >
             {[
@@ -1060,7 +1063,7 @@ const ConnectPage = () => {
             >
               <Stack direction="row" spacing={1} alignItems="center">
                 <Typography variant="body2" color="text.secondary">
-                  当前节点
+                  节点
                 </Typography>
                 <Typography variant="body1" fontWeight={950} noWrap>
                   {currentNodeDisplay ||
@@ -1088,7 +1091,7 @@ const ConnectPage = () => {
                   onClick={() => navigate('/nodes')}
                   sx={{ borderRadius: 999, fontWeight: 950 }}
                 >
-                  更换 →
+                  切换
                 </Button>
               </Stack>
             </Stack>

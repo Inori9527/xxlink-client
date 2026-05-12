@@ -85,11 +85,14 @@ export const LayoutItem = (props: Props) => {
             const color = mode === 'light' ? '#172033' : '#F4F4F5'
             return {
               '&.Mui-selected': {
-                bgcolor,
-                border: `1px solid ${alpha(primary.main, mode === 'light' ? 0.18 : 0.26)}`,
+                background:
+                  mode === 'light'
+                    ? 'linear-gradient(135deg, rgba(47,128,237,0.13), rgba(15,237,210,0.10))'
+                    : 'linear-gradient(135deg, rgba(47,128,237,0.20), rgba(15,237,210,0.13))',
+                border: `1px solid ${alpha('#0FEDD2', mode === 'light' ? 0.24 : 0.34)}`,
                 boxShadow:
                   mode === 'dark'
-                    ? `inset 0 1px 0 ${alpha('#fff', 0.08)}`
+                    ? `inset 0 1px 0 ${alpha('#fff', 0.08)}, 0 10px 30px ${alpha('#0FEDD2', 0.08)}`
                     : `0 8px 24px ${alpha(primary.main, 0.08)}`,
               },
               '&.Mui-selected:hover': { bgcolor },

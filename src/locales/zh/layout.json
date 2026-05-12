@@ -54,7 +54,7 @@
       "modeTooltip": "浏览器：适合浏览器和常见应用。全局加速：让大多数应用都通过 XXLink 连接，推荐使用。",
       "empty": {
         "title": "暂无可用节点",
-        "subtitle": "请先购买套餐或刷新节点",
+        "subtitle": "暂无节点，请刷新节点或查看套餐",
         "goToPlans": "前往套餐",
         "refresh": "刷新节点",
         "rebuild": "刷新节点",
@@ -63,13 +63,13 @@
         "noSubscription": "您还没有订阅"
       },
       "trial": {
-        "claimPrompt": "请到控制台领取今日公益流量",
+        "claimPrompt": "请领取今日公益流量",
         "emptyTitle": "公益流量待领取",
-        "emptySubtitle": "当前账号暂无可用公益流量，请到控制台领取今日流量后再刷新节点。",
+        "emptySubtitle": "领取后再刷新节点即可使用。",
         "trafficExceeded": "今日公益流量已用完，请等待下次刷新或升级套餐",
         "exceededTitle": "今日公益流量已用完",
         "exceededSubtitle": "请等待下次 24 小时刷新，或升级套餐继续使用。",
-        "openDashboard": "打开控制台"
+        "openDashboard": "打开账户页"
       },
       "session": {
         "duration": "已连接时长",
@@ -88,7 +88,7 @@
     "promoCode": {
       "title": "优惠码",
       "heading": "兑换优惠码",
-      "subtitle": "输入后台发放的优惠码，成功后会自动刷新账号权益和节点。",
+      "subtitle": "输入优惠码，兑换流量或账号权益。",
       "placeholder": "请输入优惠码",
       "redeem": "立即兑换",
       "redeeming": "兑换中...",
@@ -96,8 +96,8 @@
       "retrySync": "重试同步",
       "syncWarning": "优惠码已兑换，但节点同步失败。请重试同步，或到连接页点击刷新节点。",
       "chips": {
-        "autoSync": "兑换成功后自动同步",
-        "trafficCode": "支持流量码，后续可扩展套餐体验码"
+        "autoSync": "兑换后同步",
+        "trafficCode": "支持流量码和体验码"
       },
       "errors": {
         "empty": "请输入优惠码",
@@ -110,9 +110,9 @@
     },
     "announcement": {
       "label": "XXLink 公告",
-      "dismissHint": "关闭后本公告不会再次弹出；下一条新公告发布时会重新提醒。",
+      "dismissHint": "关闭后不再提醒，直到下一条公告。",
       "viewDetails": "查看详情",
-      "dismiss": "不再显示此公告"
+      "dismiss": "知道了"
     }
   }
 }

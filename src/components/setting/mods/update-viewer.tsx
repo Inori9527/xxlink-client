@@ -14,7 +14,13 @@ import { useUpdate } from '@/hooks/use-update'
 import { showNotice } from '@/services/notice-service'
 import { useSetUpdateState, useUpdateState } from '@/services/states'
 
-export function UpdateViewer({ ref }: { ref?: Ref<DialogRef> }) {
+export function UpdateViewer({
+  ref,
+  onDismiss,
+}: {
+  ref?: Ref<DialogRef>
+  onDismiss?: () => void
+}) {
   const { t } = useTranslation()
 
   const [open, setOpen] = useState(false)
@@ -40,7 +46,7 @@ export function UpdateViewer({ ref }: { ref?: Ref<DialogRef> }) {
 
   const markdownContent = useMemo(() => {
     if (!updateInfo?.body) {
-      return 'New Version is available'
+      return '发现新版本。建议更新后再继续使用。'
     }
     return updateInfo?.body
   }, [updateInfo])
@@ -53,7 +59,7 @@ export function UpdateViewer({ ref }: { ref?: Ref<DialogRef> }) {
   }, [updateInfo])
 
   const onUpdate = useLockFn(async () => {
-    if (!updateInfo?.body) return
+    if (!updateInfo) return
     if (breakChangeFlag) {
       showNotice.error('settings.modals.update.messages.breakChangeError')
       return
@@ -116,7 +122,7 @@ export function UpdateViewer({ ref }: { ref?: Ref<DialogRef> }) {
               variant="contained"
               size="small"
               onClick={() => {
-                openUrl('https://xxlink.net/')
+                openUrl('https://xxlink.net/download')
               }}
             >
               {t('settings.modals.update.actions.goToRelease')}
@@ -127,8 +133,14 @@ export function UpdateViewer({ ref }: { ref?: Ref<DialogRef> }) {
       contentSx={{ minWidth: 360, maxWidth: 400, height: '50vh' }}
       okBtn={t('settings.modals.update.actions.update')}
       cancelBtn={t('shared.actions.cancel')}
-      onClose={() => setOpen(false)}
-      onCancel={() => setOpen(false)}
+      onClose={() => {
+        setOpen(false)
+        onDismiss?.()
+      }}
+      onCancel={() => {
+        setOpen(false)
+        onDismiss?.()
+      }}
       onOk={onUpdate}
     >
       <Box sx={{ height: 'calc(100% - 10px)', overflow: 'auto' }}>

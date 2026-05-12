@@ -52,8 +52,7 @@ async function resolveUpdater() {
   )
   const preRelease = releases.find(
     (release) =>
-      release.prerelease &&
-      /(?:alpha|beta|rc|pre)/i.test(release.tag_name),
+      release.prerelease && /(?:alpha|beta|rc|pre)/i.test(release.tag_name),
   )
 
   console.log(`Retrieved ${releases.length} published releases in total`)
@@ -83,6 +82,7 @@ async function processRelease(github, options, release, isAlpha) {
 
   const updateData = {
     name: release.tag_name,
+    version: release.tag_name.replace(/^v/i, ''),
     notes: await resolveUpdateLog(release.tag_name).catch(() =>
       resolveUpdateLogDefault().catch(() => 'No changelog available'),
     ),
@@ -107,110 +107,110 @@ async function processRelease(github, options, release, isAlpha) {
   }
 
   const promises = release.assets.map(async (asset) => {
-      const { name, browser_download_url } = asset
-      const publicAssetUrl = resolvePublicAssetUrl(name, browser_download_url)
+    const { name, browser_download_url } = asset
+    const publicAssetUrl = resolvePublicAssetUrl(name, browser_download_url)
 
-      // Process all the platform URL and signature data
-      // win64 url
-      if (name.endsWith('x64-setup.exe')) {
-        updateData.platforms.win64.url = publicAssetUrl
-        updateData.platforms['windows-x86_64'].url = publicAssetUrl
-      }
-      // win64 signature
-      if (name.endsWith('x64-setup.exe.sig')) {
-        const sig = await getSignature(browser_download_url)
-        updateData.platforms.win64.signature = sig
-        updateData.platforms['windows-x86_64'].signature = sig
-      }
+    // Process all the platform URL and signature data
+    // win64 url
+    if (name.endsWith('x64-setup.exe')) {
+      updateData.platforms.win64.url = publicAssetUrl
+      updateData.platforms['windows-x86_64'].url = publicAssetUrl
+    }
+    // win64 signature
+    if (name.endsWith('x64-setup.exe.sig')) {
+      const sig = await getSignature(browser_download_url)
+      updateData.platforms.win64.signature = sig
+      updateData.platforms['windows-x86_64'].signature = sig
+    }
 
-      // win32 url
-      if (name.endsWith('x86-setup.exe')) {
-        updateData.platforms['windows-x86'].url = publicAssetUrl
-        updateData.platforms['windows-i686'].url = publicAssetUrl
-      }
-      // win32 signature
-      if (name.endsWith('x86-setup.exe.sig')) {
-        const sig = await getSignature(browser_download_url)
-        updateData.platforms['windows-x86'].signature = sig
-        updateData.platforms['windows-i686'].signature = sig
-      }
+    // win32 url
+    if (name.endsWith('x86-setup.exe')) {
+      updateData.platforms['windows-x86'].url = publicAssetUrl
+      updateData.platforms['windows-i686'].url = publicAssetUrl
+    }
+    // win32 signature
+    if (name.endsWith('x86-setup.exe.sig')) {
+      const sig = await getSignature(browser_download_url)
+      updateData.platforms['windows-x86'].signature = sig
+      updateData.platforms['windows-i686'].signature = sig
+    }
 
-      // win arm url
-      if (name.endsWith('arm64-setup.exe')) {
-        updateData.platforms['windows-aarch64'].url = publicAssetUrl
-      }
-      // win arm signature
-      if (name.endsWith('arm64-setup.exe.sig')) {
-        const sig = await getSignature(browser_download_url)
-        updateData.platforms['windows-aarch64'].signature = sig
-      }
+    // win arm url
+    if (name.endsWith('arm64-setup.exe')) {
+      updateData.platforms['windows-aarch64'].url = publicAssetUrl
+    }
+    // win arm signature
+    if (name.endsWith('arm64-setup.exe.sig')) {
+      const sig = await getSignature(browser_download_url)
+      updateData.platforms['windows-aarch64'].signature = sig
+    }
 
-      // darwin url (intel)
-      if (name.endsWith('.app.tar.gz') && !name.includes('aarch')) {
-        updateData.platforms.darwin.url = browser_download_url
-        updateData.platforms['darwin-intel'].url = browser_download_url
-        updateData.platforms['darwin-x86_64'].url = browser_download_url
-      }
-      // darwin signature (intel)
-      if (name.endsWith('.app.tar.gz.sig') && !name.includes('aarch')) {
-        const sig = await getSignature(browser_download_url)
-        updateData.platforms.darwin.signature = sig
-        updateData.platforms['darwin-intel'].signature = sig
-        updateData.platforms['darwin-x86_64'].signature = sig
-      }
+    // darwin url (intel)
+    if (name.endsWith('.app.tar.gz') && !name.includes('aarch')) {
+      updateData.platforms.darwin.url = browser_download_url
+      updateData.platforms['darwin-intel'].url = browser_download_url
+      updateData.platforms['darwin-x86_64'].url = browser_download_url
+    }
+    // darwin signature (intel)
+    if (name.endsWith('.app.tar.gz.sig') && !name.includes('aarch')) {
+      const sig = await getSignature(browser_download_url)
+      updateData.platforms.darwin.signature = sig
+      updateData.platforms['darwin-intel'].signature = sig
+      updateData.platforms['darwin-x86_64'].signature = sig
+    }
 
-      // darwin url (aarch)
-      if (name.endsWith('aarch64.app.tar.gz')) {
-        updateData.platforms['darwin-aarch64'].url = browser_download_url
-      }
-      // darwin signature (aarch)
-      if (name.endsWith('aarch64.app.tar.gz.sig')) {
-        const sig = await getSignature(browser_download_url)
-        updateData.platforms['darwin-aarch64'].signature = sig
-      }
+    // darwin url (aarch)
+    if (name.endsWith('aarch64.app.tar.gz')) {
+      updateData.platforms['darwin-aarch64'].url = browser_download_url
+    }
+    // darwin signature (aarch)
+    if (name.endsWith('aarch64.app.tar.gz.sig')) {
+      const sig = await getSignature(browser_download_url)
+      updateData.platforms['darwin-aarch64'].signature = sig
+    }
 
-      // linux x86_64 url
-      if (name.endsWith('amd64.AppImage') || name.endsWith('x86_64.AppImage')) {
-        updateData.platforms.linux.url = browser_download_url
-        updateData.platforms['linux-x86_64'].url = browser_download_url
-        updateData.platforms['linux-x86'].url = browser_download_url
-        updateData.platforms['linux-i686'].url = browser_download_url
-      }
-      // linux x86_64 signature
-      if (
-        name.endsWith('amd64.AppImage.sig') ||
-        name.endsWith('x86_64.AppImage.sig')
-      ) {
-        const sig = await getSignature(browser_download_url)
-        updateData.platforms.linux.signature = sig
-        updateData.platforms['linux-x86_64'].signature = sig
-        updateData.platforms['linux-x86'].signature = sig
-        updateData.platforms['linux-i686'].signature = sig
-      }
+    // linux x86_64 url
+    if (name.endsWith('amd64.AppImage') || name.endsWith('x86_64.AppImage')) {
+      updateData.platforms.linux.url = browser_download_url
+      updateData.platforms['linux-x86_64'].url = browser_download_url
+      updateData.platforms['linux-x86'].url = browser_download_url
+      updateData.platforms['linux-i686'].url = browser_download_url
+    }
+    // linux x86_64 signature
+    if (
+      name.endsWith('amd64.AppImage.sig') ||
+      name.endsWith('x86_64.AppImage.sig')
+    ) {
+      const sig = await getSignature(browser_download_url)
+      updateData.platforms.linux.signature = sig
+      updateData.platforms['linux-x86_64'].signature = sig
+      updateData.platforms['linux-x86'].signature = sig
+      updateData.platforms['linux-i686'].signature = sig
+    }
 
-      // linux aarch64 url
-      if (name.endsWith('aarch64.AppImage')) {
-        updateData.platforms['linux-aarch64'].url = browser_download_url
-      }
-      // linux aarch64 signature
-      if (name.endsWith('aarch64.AppImage.sig')) {
-        const sig = await getSignature(browser_download_url)
-        updateData.platforms['linux-aarch64'].signature = sig
-      }
+    // linux aarch64 url
+    if (name.endsWith('aarch64.AppImage')) {
+      updateData.platforms['linux-aarch64'].url = browser_download_url
+    }
+    // linux aarch64 signature
+    if (name.endsWith('aarch64.AppImage.sig')) {
+      const sig = await getSignature(browser_download_url)
+      updateData.platforms['linux-aarch64'].signature = sig
+    }
 
-      // linux armv7 url
-      if (name.endsWith('armhf.AppImage') || name.endsWith('armv7.AppImage')) {
-        updateData.platforms['linux-armv7'].url = browser_download_url
-      }
-      // linux armv7 signature
-      if (
-        name.endsWith('armhf.AppImage.sig') ||
-        name.endsWith('armv7.AppImage.sig')
-      ) {
-        const sig = await getSignature(browser_download_url)
-        updateData.platforms['linux-armv7'].signature = sig
-      }
-    })
+    // linux armv7 url
+    if (name.endsWith('armhf.AppImage') || name.endsWith('armv7.AppImage')) {
+      updateData.platforms['linux-armv7'].url = browser_download_url
+    }
+    // linux armv7 signature
+    if (
+      name.endsWith('armhf.AppImage.sig') ||
+      name.endsWith('armv7.AppImage.sig')
+    ) {
+      const sig = await getSignature(browser_download_url)
+      updateData.platforms['linux-armv7'].signature = sig
+    }
+  })
 
   await Promise.allSettled(promises)
   console.log(updateData)
@@ -236,10 +236,7 @@ async function processRelease(github, options, release, isAlpha) {
   })
 
   const releaseTag = isAlpha ? ALPHA_TAG_NAME : UPDATE_TAG_NAME
-  console.log(
-    `Processing ${isAlpha ? 'alpha' : 'stable'} release:`,
-    releaseTag,
-  )
+  console.log(`Processing ${isAlpha ? 'alpha' : 'stable'} release:`, releaseTag)
 
   try {
     let updateRelease
@@ -250,10 +247,14 @@ async function processRelease(github, options, release, isAlpha) {
         tag: releaseTag,
       })
       updateRelease = response.data
-      console.log(`Found existing ${releaseTag} release with ID: ${updateRelease.id}`)
+      console.log(
+        `Found existing ${releaseTag} release with ID: ${updateRelease.id}`,
+      )
     } catch (error) {
       if (error.status === 404) {
-        console.log(`Release with tag ${releaseTag} not found, creating new release...`)
+        console.log(
+          `Release with tag ${releaseTag} not found, creating new release...`,
+        )
         const createResponse = await github.rest.repos.createRelease({
           ...options,
           tag_name: releaseTag,
@@ -264,7 +265,9 @@ async function processRelease(github, options, release, isAlpha) {
           prerelease: isAlpha,
         })
         updateRelease = createResponse.data
-        console.log(`Created new ${releaseTag} release with ID: ${updateRelease.id}`)
+        console.log(
+          `Created new ${releaseTag} release with ID: ${updateRelease.id}`,
+        )
       } else {
         throw error
       }
@@ -324,7 +327,9 @@ async function getSignature(url) {
 }
 
 function resolvePublicAssetUrl(name, fallbackUrl) {
-  if (/^XXLink_.*_(x64|x86|arm64)(?:_fixed_webview2)?-setup\.exe$/i.test(name)) {
+  if (
+    /^XXLink_.*_(x64|x86|arm64)(?:_fixed_webview2)?-setup\.exe$/i.test(name)
+  ) {
     return `${PUBLIC_DOWNLOAD_BASE_URL}/${name}`
   }
 

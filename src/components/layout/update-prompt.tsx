@@ -17,17 +17,27 @@ export const UpdatePrompt = () => {
     if (!updateInfo?.available || !version) return
 
     try {
-      if (localStorage.getItem(SEEN_VERSION_KEY) === version) {
-        return
-      }
-      localStorage.setItem(SEEN_VERSION_KEY, version)
+      if (localStorage.getItem(SEEN_VERSION_KEY) === version) return
     } catch {
       /* ignore */
     }
 
-    showNotice.info(`发现新版本 v${version}，可立即更新`)
+    showNotice.info(`发现新版本 v${version}`)
     viewerRef.current?.open()
   }, [updateInfo?.available, updateInfo?.version])
 
-  return <UpdateViewer ref={viewerRef} />
+  return (
+    <UpdateViewer
+      ref={viewerRef}
+      onDismiss={() => {
+        const version = updateInfo?.version?.trim()
+        if (!version) return
+        try {
+          localStorage.setItem(SEEN_VERSION_KEY, version)
+        } catch {
+          /* ignore */
+        }
+      }}
+    />
+  )
 }
