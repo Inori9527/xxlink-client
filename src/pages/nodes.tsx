@@ -1,19 +1,25 @@
-import { CheckCircleRounded } from '@mui/icons-material'
+import { CheckCircleRounded, SpeedRounded } from '@mui/icons-material'
 import {
   Box,
+  Button,
   Chip,
+  CircularProgress,
   Paper,
   Stack,
   Typography,
   alpha,
   useTheme,
 } from '@mui/material'
-import { useMemo } from 'react'
+import { useLockFn } from 'ahooks'
+import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { BasePage } from '@/components/base'
 import { useProxySelection } from '@/hooks/use-proxy-selection'
 import { useVerge } from '@/hooks/use-verge'
 import { useAppData } from '@/providers/app-data-context'
+import delayManager from '@/services/delay'
+import { showNotice } from '@/services/notice-service'
 import { getProxyDisplayKey, getProxyDisplayName } from '@/utils/proxy-display'
 
 type ProxyEntry = {
@@ -29,9 +35,12 @@ type DisplayNode = ProxyEntry & {
 const HIDDEN_NODES: ReadonlySet<string> = new Set(['direct', 'reject', 'proxy'])
 
 const NodesPage = () => {
+  const { t } = useTranslation()
   const theme = useTheme()
   const { verge } = useVerge()
   const { proxies, refreshProxy } = useAppData()
+  const [delayRefreshTick, setDelayRefreshTick] = useState(0)
+  const [testingDelay, setTestingDelay] = useState(false)
   const connected = Boolean(
     verge?.enable_tun_mode || verge?.enable_system_proxy,
   )
@@ -49,6 +58,8 @@ const NodesPage = () => {
     | undefined
 
   const currentNode = globalGroup?.now || ''
+  const groupName = globalGroup?.name || ''
+  const latencyTimeout = verge?.default_latency_timeout || 10000
 
   const nodes = useMemo<DisplayNode[]>(() => {
     const byKey = new Map<string, DisplayNode>()
@@ -83,13 +94,89 @@ const NodesPage = () => {
 
   const selectedKey = currentNode ? getProxyDisplayKey(currentNode) : ''
 
+  useEffect(() => {
+    if (!groupName) return
+    delayManager.setGroupListener(groupName, () =>
+      setDelayRefreshTick((value) => value + 1),
+    )
+    return () => delayManager.removeGroupListener(groupName)
+  }, [groupName])
+
   const handleSelect = (node: DisplayNode) => {
     if (connected || !globalGroup?.name || node.name === currentNode) return
     changeProxy(globalGroup.name, node.name, currentNode, true)
   }
 
+  const handleTestDelay = useLockFn(async () => {
+    if (!groupName || nodes.length === 0) return
+
+    setTestingDelay(true)
+    try {
+      setDelayRefreshTick((value) => value + 1)
+      await delayManager.checkListDelay(
+        nodes.map((node) => node.name),
+        groupName,
+        latencyTimeout,
+        6,
+      )
+      setDelayRefreshTick((value) => value + 1)
+      await refreshProxy()
+    } catch {
+      showNotice.error(t('layout.components.nodes.delay.failed'))
+    } finally {
+      setTestingDelay(false)
+    }
+  })
+
+  const getNodeDelay = (node: DisplayNode) => {
+    void delayRefreshTick
+    const cachedDelay = groupName
+      ? delayManager.getDelayUpdate(node.name, groupName)?.delay
+      : undefined
+    if (typeof cachedDelay === 'number') return cachedDelay
+
+    const historyDelay = node.history?.[node.history.length - 1]?.delay
+    return typeof historyDelay === 'number' ? historyDelay : -1
+  }
+
+  const getDelayLabel = (delay: number) => {
+    if (delay === -2) return t('layout.components.nodes.delay.testing')
+    if (delay === -1) return t('layout.components.nodes.delay.notTested')
+    if (delay === 0 || (delay >= latencyTimeout && delay <= 1e5)) {
+      return t('layout.components.nodes.delay.timeout')
+    }
+    if (delay > 1e5) return t('layout.components.nodes.delay.failed')
+    return t('layout.components.nodes.delay.ms', { value: delay })
+  }
+
+  const getDelayColor = (delay: number) => {
+    if (delay === -2) return 'primary.main'
+    if (delay < 0) return 'text.secondary'
+    if (delay === 0 || delay >= latencyTimeout) return 'error.main'
+    if (delay >= 400) return 'warning.main'
+    return 'success.main'
+  }
+
   return (
-    <BasePage title="节点">
+    <BasePage
+      title={t('layout.components.nodes.title')}
+      header={
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={
+            testingDelay ? <CircularProgress size={14} /> : <SpeedRounded />
+          }
+          onClick={handleTestDelay}
+          disabled={!groupName || nodes.length === 0 || testingDelay}
+          sx={{ borderRadius: 999, fontWeight: 900 }}
+        >
+          {testingDelay
+            ? t('layout.components.nodes.actions.testing')
+            : t('layout.components.nodes.actions.test')}
+        </Button>
+      }
+    >
       <Stack
         spacing={2}
         sx={{
@@ -121,10 +208,10 @@ const NodesPage = () => {
                 variant="overline"
                 sx={{ color: 'primary.light', fontWeight: 900 }}
               >
-                节点
+                {t('layout.components.nodes.kicker')}
               </Typography>
               <Typography variant="h5" fontWeight={950}>
-                选择一个入口
+                {t('layout.components.nodes.heading')}
               </Typography>
               <Typography
                 variant="body2"
@@ -132,12 +219,14 @@ const NodesPage = () => {
                 sx={{ mt: 0.25 }}
               >
                 {connected
-                  ? '当前已连接，请先断开后再切换节点。'
-                  : '选择一个常用入口。'}
+                  ? t('layout.components.nodes.connectedHint')
+                  : t('layout.components.nodes.readyHint')}
               </Typography>
             </Box>
             <Chip
-              label={`${nodes.length} 个节点`}
+              label={t('layout.components.nodes.count', {
+                count: nodes.length,
+              })}
               color="primary"
               variant="outlined"
               sx={{ borderRadius: 999, fontWeight: 900 }}
@@ -160,6 +249,7 @@ const NodesPage = () => {
             const selected =
               selectedKey !== '' &&
               selectedKey === getProxyDisplayKey(node.name)
+            const delay = getNodeDelay(node)
 
             return (
               <Paper
@@ -214,12 +304,30 @@ const NodesPage = () => {
                   <Typography variant="body1" fontWeight={900} noWrap>
                     {node.displayName}
                   </Typography>
-                  {selected && (
-                    <CheckCircleRounded
-                      color="primary"
-                      sx={{ ml: 'auto', fontSize: 19 }}
+                  <Stack
+                    direction="row"
+                    spacing={0.75}
+                    alignItems="center"
+                    sx={{ ml: 'auto' }}
+                  >
+                    <Chip
+                      size="small"
+                      label={getDelayLabel(delay)}
+                      sx={{
+                        height: 24,
+                        borderRadius: 999,
+                        color: getDelayColor(delay),
+                        bgcolor: alpha(theme.palette.common.white, 0.06),
+                        fontWeight: 900,
+                      }}
                     />
-                  )}
+                    {selected && (
+                      <CheckCircleRounded
+                        color="primary"
+                        sx={{ fontSize: 19 }}
+                      />
+                    )}
+                  </Stack>
                 </Stack>
               </Paper>
             )
@@ -237,10 +345,10 @@ const NodesPage = () => {
             }}
           >
             <Typography variant="h6" fontWeight={900}>
-              暂无可用节点
+              {t('layout.components.nodes.empty.title')}
             </Typography>
             <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-              请在连接页刷新节点，或打开套餐页确认当前权益。
+              {t('layout.components.nodes.empty.subtitle')}
             </Typography>
           </Paper>
         )}

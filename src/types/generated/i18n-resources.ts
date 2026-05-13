@@ -269,6 +269,29 @@ export interface TranslationResources {
             unlock: string
           }
         }
+        nodes: {
+          actions: {
+            test: string
+            testing: string
+          }
+          connectedHint: string
+          count: string
+          delay: {
+            failed: string
+            ms: string
+            notTested: string
+            testing: string
+            timeout: string
+          }
+          empty: {
+            subtitle: string
+            title: string
+          }
+          heading: string
+          kicker: string
+          readyHint: string
+          title: string
+        }
         promoCode: {
           chips: {
             autoSync: string

@@ -85,6 +85,29 @@
         "refreshed": "节点已刷新"
       }
     },
+    "nodes": {
+      "title": "节点",
+      "kicker": "节点",
+      "heading": "选择节点",
+      "readyHint": "选择下次连接使用的节点。",
+      "connectedHint": "已连接，请先断开再切换节点。",
+      "count": "{{count}} 个节点",
+      "actions": {
+        "test": "测速",
+        "testing": "测速中..."
+      },
+      "delay": {
+        "notTested": "-- ms",
+        "testing": "测速中",
+        "timeout": "超时",
+        "failed": "失败",
+        "ms": "{{value}} ms"
+      },
+      "empty": {
+        "title": "暂无可用节点",
+        "subtitle": "请在连接页刷新节点，或确认当前套餐权益。"
+      }
+    },
     "promoCode": {
       "title": "优惠码",
       "heading": "兑换优惠码",

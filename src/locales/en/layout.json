@@ -85,6 +85,29 @@
         "refreshed": "Nodes refreshed"
       }
     },
+    "nodes": {
+      "title": "Nodes",
+      "kicker": "Nodes",
+      "heading": "Choose a node",
+      "readyHint": "Pick a node for your next connection.",
+      "connectedHint": "Disconnect before switching nodes.",
+      "count": "{{count}} nodes",
+      "actions": {
+        "test": "Test latency",
+        "testing": "Testing..."
+      },
+      "delay": {
+        "notTested": "-- ms",
+        "testing": "Testing",
+        "timeout": "Timeout",
+        "failed": "Failed",
+        "ms": "{{value}} ms"
+      },
+      "empty": {
+        "title": "No nodes available",
+        "subtitle": "Refresh nodes on Connect, or check your plan."
+      }
+    },
     "promoCode": {
       "title": "Promo Code",
       "heading": "Redeem promo code",

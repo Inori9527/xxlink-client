@@ -69,7 +69,7 @@ const fs = require('fs')
 const signature = fs.readFileSync(process.env.SIGNATURE, 'utf8').trim()
 const data = {
   version: process.env.VERSION,
-  notes: '修复套餐价格显示，并让套餐周期与后端配置保持一致。',
+  notes: '节点页新增测速按钮，支持查看节点延迟状态。',
   pub_date: new Date().toISOString(),
   platforms: {
     win64: {
