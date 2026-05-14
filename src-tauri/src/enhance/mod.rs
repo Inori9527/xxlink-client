@@ -377,19 +377,19 @@ fn apply_desktop_compatibility_rules(mut config: Mapping) -> Mapping {
     for process in ADOBE_PROCESS_NAMES {
         let rule = format!("PROCESS-NAME,{process},{policy}");
         if !existing.contains(&rule.to_ascii_lowercase()) {
-            compatibility_rules.push(Value::String(rule.into()));
+            compatibility_rules.push(Value::String(rule));
         }
     }
     for domain in ADOBE_DOMAINS {
         let rule = format!("DOMAIN,{domain},{policy}");
         if !existing.contains(&rule.to_ascii_lowercase()) {
-            compatibility_rules.push(Value::String(rule.into()));
+            compatibility_rules.push(Value::String(rule));
         }
     }
     for suffix in ADOBE_DOMAIN_SUFFIXES {
         let rule = format!("DOMAIN-SUFFIX,{suffix},{policy}");
         if !existing.contains(&rule.to_ascii_lowercase()) {
-            compatibility_rules.push(Value::String(rule.into()));
+            compatibility_rules.push(Value::String(rule));
         }
     }
 
