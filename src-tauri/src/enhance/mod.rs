@@ -7,13 +7,33 @@ use self::{
 };
 use crate::utils::dirs;
 use crate::{config::Config, constants};
-use xxlink_logging::{Type, logging};
 use serde_yaml_ng::{Mapping, Value};
 use smartstring::alias::String;
 use std::collections::{HashMap, HashSet};
 use tokio::fs;
+use xxlink_logging::{Type, logging};
 
 type ResultLog = Vec<(String, String)>;
+
+const ADOBE_DOMAIN_SUFFIXES: &[&str] = &["adobe.com", "adobe.io", "adobecc.com", "adobelogin.com"];
+const ADOBE_DOMAINS: &[&str] = &[
+    "firefly.adobe.com",
+    "creativecloud.adobe.com",
+    "cc-api-data.adobe.io",
+    "ims-na1.adobelogin.com",
+    "assets.adobe.com",
+    "lcs-cops.adobe.io",
+    "p13n.adobe.io",
+];
+const ADOBE_PROCESS_NAMES: &[&str] = &[
+    "Photoshop.exe",
+    "Creative Cloud.exe",
+    "CCXProcess.exe",
+    "CoreSync.exe",
+    "Adobe Desktop Service.exe",
+    "AdobeIPCBroker.exe",
+];
+const DESKTOP_COMPAT_POLICY: &str = "XXLink-Desktop";
 
 #[derive(Debug)]
 struct ConfigValues {
@@ -261,6 +281,127 @@ async fn apply_dns_settings(mut config: Mapping, enable_dns_settings: bool) -> M
     config
 }
 
+fn is_builtin_policy(name: &str) -> bool {
+    matches!(name, "DIRECT" | "REJECT" | "REJECT-DROP" | "PASS")
+}
+
+fn collect_leaf_proxy_names(config: &Mapping) -> Vec<std::string::String> {
+    config
+        .get("proxies")
+        .and_then(Value::as_sequence)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| match item {
+                    Value::Mapping(map) => map.get("name").and_then(Value::as_str),
+                    Value::String(name) => Some(name.as_str()),
+                    _ => None,
+                })
+                .filter(|name| !is_builtin_policy(name))
+                .map(ToOwned::to_owned)
+                .collect::<Vec<std::string::String>>()
+        })
+        .unwrap_or_default()
+}
+
+fn collect_provider_names(config: &Mapping) -> Vec<std::string::String> {
+    config
+        .get("proxy-providers")
+        .and_then(Value::as_mapping)
+        .map(|providers| {
+            providers
+                .keys()
+                .filter_map(Value::as_str)
+                .map(ToOwned::to_owned)
+                .collect::<Vec<std::string::String>>()
+        })
+        .unwrap_or_default()
+}
+
+fn ensure_desktop_compatibility_group(config: &mut Mapping) -> Option<String> {
+    let proxy_names = collect_leaf_proxy_names(config);
+    let provider_names = collect_provider_names(config);
+    if proxy_names.is_empty() && provider_names.is_empty() {
+        return None;
+    }
+
+    let mut group = Mapping::new();
+    group.insert("name".into(), DESKTOP_COMPAT_POLICY.into());
+    group.insert("type".into(), "select".into());
+    if !proxy_names.is_empty() {
+        group.insert(
+            "proxies".into(),
+            Value::Sequence(proxy_names.into_iter().map(Value::String).collect()),
+        );
+    }
+    if !provider_names.is_empty() {
+        group.insert(
+            "use".into(),
+            Value::Sequence(provider_names.into_iter().map(Value::String).collect()),
+        );
+    }
+
+    let groups_key = Value::from("proxy-groups");
+    let mut groups = config
+        .remove(&groups_key)
+        .and_then(|value| value.as_sequence().cloned())
+        .unwrap_or_default();
+    groups.retain(|item| {
+        item.get("name")
+            .and_then(Value::as_str)
+            .is_none_or(|name| name != DESKTOP_COMPAT_POLICY)
+    });
+    groups.insert(0, Value::Mapping(group));
+    config.insert(groups_key, Value::Sequence(groups));
+
+    Some(DESKTOP_COMPAT_POLICY.into())
+}
+
+fn apply_desktop_compatibility_rules(mut config: Mapping) -> Mapping {
+    let Some(policy) = ensure_desktop_compatibility_group(&mut config) else {
+        return config;
+    };
+
+    let rules_key = Value::from("rules");
+    let mut rules = config
+        .remove(&rules_key)
+        .and_then(|value| value.as_sequence().cloned())
+        .unwrap_or_default();
+    let existing = rules
+        .iter()
+        .filter_map(Value::as_str)
+        .map(|rule| rule.to_ascii_lowercase())
+        .collect::<HashSet<_>>();
+
+    let mut compatibility_rules = Vec::new();
+    for process in ADOBE_PROCESS_NAMES {
+        let rule = format!("PROCESS-NAME,{process},{policy}");
+        if !existing.contains(&rule.to_ascii_lowercase()) {
+            compatibility_rules.push(Value::String(rule.into()));
+        }
+    }
+    for domain in ADOBE_DOMAINS {
+        let rule = format!("DOMAIN,{domain},{policy}");
+        if !existing.contains(&rule.to_ascii_lowercase()) {
+            compatibility_rules.push(Value::String(rule.into()));
+        }
+    }
+    for suffix in ADOBE_DOMAIN_SUFFIXES {
+        let rule = format!("DOMAIN-SUFFIX,{suffix},{policy}");
+        if !existing.contains(&rule.to_ascii_lowercase()) {
+            compatibility_rules.push(Value::String(rule.into()));
+        }
+    }
+
+    if !compatibility_rules.is_empty() {
+        logging!(info, Type::Core, "apply desktop compatibility routing rules");
+    }
+
+    compatibility_rules.append(&mut rules);
+    config.insert(rules_key, Value::Sequence(compatibility_rules));
+    config
+}
+
 /// Enhance mode
 /// 返回最终订阅、该订阅包含的键、和script执行的结果
 pub async fn enhance() -> (Mapping, HashSet<String>, HashMap<String, ResultLog>) {
@@ -297,11 +438,13 @@ pub async fn enhance() -> (Mapping, HashSet<String>, HashMap<String, ResultLog>)
 
     let mut config = cleanup_proxy_groups(config);
 
-    config = use_tun(config, enable_tun);
     config = use_sort(config);
 
-    // dns settings
+    // User DNS settings are loaded first; TUN then applies final guardrails so
+    // app-level DNS overrides cannot reopen desktop DNS/IPv6 leaks.
     config = apply_dns_settings(config, enable_dns_settings).await;
+    config = use_tun(config, enable_tun);
+    config = apply_desktop_compatibility_rules(config);
 
     let mut exists_keys_set = HashSet::new();
     exists_keys_set.extend(exists_keys);

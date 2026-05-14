@@ -1,3 +1,7 @@
+## v2.2.4
+
+- Compatibility and feature updates.
+
 ## v2.4.8
 
 > [!IMPORTANT]

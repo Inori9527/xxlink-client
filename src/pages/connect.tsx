@@ -329,7 +329,7 @@ const ConnectPage = () => {
       case 'system':
         return sysEnabled
       case 'both':
-        return tunEnabled || sysEnabled
+        return tunEnabled && sysEnabled
       default:
         return false
     }

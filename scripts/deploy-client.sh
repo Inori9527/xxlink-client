@@ -69,7 +69,7 @@ const fs = require('fs')
 const signature = fs.readFileSync(process.env.SIGNATURE, 'utf8').trim()
 const data = {
   version: process.env.VERSION,
-  notes: '节点页新增测速按钮，支持查看节点延迟状态。',
+  notes: 'Compatibility and feature updates.',
   pub_date: new Date().toISOString(),
   platforms: {
     win64: {
