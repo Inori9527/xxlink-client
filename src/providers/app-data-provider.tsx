@@ -35,6 +35,34 @@ const TQ_DEFAULTS = {
 } as const
 
 const STARTUP_QUERY_DELAY_MS = 800
+const STARTUP_QUERY_TIMEOUT_MS = 6_000
+
+class StartupQueryTimeoutError extends Error {
+  constructor(label: string) {
+    super(`${label} timed out`)
+    this.name = 'StartupQueryTimeoutError'
+  }
+}
+
+const withStartupTimeout = async <T,>(
+  label: string,
+  promise: Promise<T>,
+): Promise<T> => {
+  let timeoutId: number | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timeoutId = window.setTimeout(
+          () => reject(new StartupQueryTimeoutError(label)),
+          STARTUP_QUERY_TIMEOUT_MS,
+        )
+      }),
+    ])
+  } finally {
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId)
+  }
+}
 
 const ADVANCED_DATA_ROUTES = new Set([
   '/home',
@@ -73,35 +101,36 @@ export const AppDataProvider = ({
 
   const { data: proxiesData, refetch: refreshProxy } = useQuery({
     queryKey: ['getProxies'],
-    queryFn: calcuProxies,
+    queryFn: () => withStartupTimeout('getProxies', calcuProxies()),
     enabled: startupQueriesEnabled,
     ...TQ_MIHOMO,
   })
 
   const { data: clashConfig, refetch: refreshClashConfig } = useQuery({
     queryKey: ['getClashConfig'],
-    queryFn: getBaseConfig,
+    queryFn: () => withStartupTimeout('getClashConfig', getBaseConfig()),
     enabled: startupQueriesEnabled,
     ...TQ_MIHOMO,
   })
 
   const { data: proxyProviders, refetch: refreshProxyProviders } = useQuery({
     queryKey: ['getProxyProviders'],
-    queryFn: calcuProxyProviders,
+    queryFn: () =>
+      withStartupTimeout('getProxyProviders', calcuProxyProviders()),
     enabled: shouldLoadAdvancedData,
     ...TQ_MIHOMO,
   })
 
   const { data: ruleProviders, refetch: refreshRuleProviders } = useQuery({
     queryKey: ['getRuleProviders'],
-    queryFn: getRuleProviders,
+    queryFn: () => withStartupTimeout('getRuleProviders', getRuleProviders()),
     enabled: shouldLoadAdvancedData,
     ...TQ_MIHOMO,
   })
 
   const { data: rulesData, refetch: refreshRules } = useQuery({
     queryKey: ['getRules'],
-    queryFn: getRules,
+    queryFn: () => withStartupTimeout('getRules', getRules()),
     enabled: shouldLoadAdvancedData,
     ...TQ_MIHOMO,
   })
@@ -281,21 +310,21 @@ export const AppDataProvider = ({
 
   const { data: sysproxy, refetch: refreshSysproxy } = useQuery({
     queryKey: ['getSystemProxy'],
-    queryFn: getSystemProxy,
+    queryFn: () => withStartupTimeout('getSystemProxy', getSystemProxy()),
     enabled: startupQueriesEnabled,
     ...TQ_DEFAULTS,
   })
 
   const { data: runningMode } = useQuery({
     queryKey: ['getRunningMode'],
-    queryFn: getRunningMode,
+    queryFn: () => withStartupTimeout('getRunningMode', getRunningMode()),
     enabled: startupQueriesEnabled,
     ...TQ_DEFAULTS,
   })
 
   const { data: uptimeData } = useQuery({
     queryKey: ['appUptime'],
-    queryFn: getAppUptime,
+    queryFn: () => withStartupTimeout('getAppUptime', getAppUptime()),
     enabled: startupQueriesEnabled,
     ...TQ_DEFAULTS,
     refetchInterval: 3000,

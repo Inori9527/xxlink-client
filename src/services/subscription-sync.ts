@@ -32,13 +32,32 @@ export interface SyncOptions {
    * is stuck (stale cached data, bad profile state, etc.).
    */
   force?: boolean
+  timeoutMs?: number
+}
+
+export class SubscriptionSyncTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`Subscription sync timed out after ${timeoutMs}ms`)
+    this.name = 'SubscriptionSyncTimeoutError'
+  }
 }
 
 export async function syncSubscription(options?: SyncOptions): Promise<void> {
   // Share the in-flight promise so concurrent callers observe the actual
   // outcome instead of a spurious early-return success.
   if (inflight) return inflight
-  inflight = doSync(options?.force ?? false).finally(() => {
+  const timeoutMs = options?.timeoutMs ?? 15_000
+  const work = doSync(options?.force ?? false)
+  work.catch(() => {
+    /* observed by race below */
+  })
+  const timeout = new Promise<never>((_, reject) => {
+    window.setTimeout(
+      () => reject(new SubscriptionSyncTimeoutError(timeoutMs)),
+      timeoutMs,
+    )
+  })
+  inflight = Promise.race([work, timeout]).finally(() => {
     inflight = null
   })
   return inflight

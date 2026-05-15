@@ -69,7 +69,7 @@ const fs = require('fs')
 const signature = fs.readFileSync(process.env.SIGNATURE, 'utf8').trim()
 const data = {
   version: process.env.VERSION,
-  notes: 'Compatibility and feature updates.',
+  notes: 'bug fix',
   pub_date: new Date().toISOString(),
   platforms: {
     win64: {

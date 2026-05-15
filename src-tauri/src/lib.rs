@@ -17,13 +17,13 @@ use crate::{
     utils::{resolve, server},
 };
 use anyhow::Result;
-use xxlink_logging::{Type, logging};
 use once_cell::sync::OnceCell;
 use tauri::{AppHandle, Manager as _};
 #[cfg(target_os = "macos")]
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_deep_link::DeepLinkExt as _;
 use tauri_plugin_mihomo::RejectPolicy;
+use xxlink_logging::{Type, logging};
 
 pub static APP_HANDLE: OnceCell<AppHandle> = OnceCell::new();
 /// Application initialization helper functions
@@ -63,7 +63,7 @@ mod app_init {
                             .max_connections(32)
                             .idle_timeout(std::time::Duration::from_secs(60))
                             .health_check_interval(std::time::Duration::from_secs(60))
-                            .reject_policy(RejectPolicy::Wait)
+                            .reject_policy(RejectPolicy::Timeout(std::time::Duration::from_secs(5)))
                             .build(),
                     )
                     .build(),
@@ -250,10 +250,10 @@ pub fn run() {
         #[cfg(target_os = "macos")]
         use crate::module::lightweight;
         use crate::utils::window_manager::WindowManager;
-        use xxlink_logging::{Type, logging};
         use tauri::AppHandle;
         #[cfg(target_os = "macos")]
         use tauri::Manager as _;
+        use xxlink_logging::{Type, logging};
 
         pub fn handle_ready_resumed(_app_handle: &AppHandle) {
             if handle::Handle::global().is_exiting() {

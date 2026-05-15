@@ -1,11 +1,12 @@
 import { getName, getVersion } from '@tauri-apps/api/app'
-import { fetch } from '@tauri-apps/plugin-http'
 import { asyncRetry } from 'foxts/async-retry'
 import { once } from 'foxts/once'
 
-import { apiRefreshToken } from '@/services/auth'
+import { apiRefreshToken, AuthError } from '@/services/auth'
 import { authStore } from '@/services/auth-store'
 import { BASE_URL } from '@/services/config'
+import { fetchWithTimeout } from '@/services/http'
+import { expireSession } from '@/services/session'
 import { debugLog } from '@/utils/debug'
 
 // ---------------------------------------------------------------------------
@@ -186,7 +187,7 @@ const ANNOUNCEMENT_LATEST_PATH =
 interface BackendResponse<T> {
   success: boolean
   data?: T
-  error?: { message: string; code: string }
+  error?: string | { message?: string; code?: string }
 }
 
 // ---------------------------------------------------------------------------
@@ -195,6 +196,67 @@ interface BackendResponse<T> {
 
 let isRefreshing = false
 let refreshPromise: Promise<void> | null = null
+
+const AUTH_FATAL_CODES = new Set([
+  'ACCOUNT_DISABLED',
+  'ACCOUNT_NOT_FOUND',
+  'AUTH_REQUIRED',
+  'INVALID_REFRESH_TOKEN',
+  'INVALID_TOKEN',
+  'REFRESH_TOKEN_INVALID',
+  'SESSION_EXPIRED',
+  'TOKEN_EXPIRED',
+  'TOKEN_INVALID',
+  'UNAUTHENTICATED',
+  'USER_DELETED',
+  'USER_DISABLED',
+  'USER_NOT_FOUND',
+])
+
+const getBackendError = <T>(json: BackendResponse<T> | null | undefined) => {
+  const error = json?.error
+  if (typeof error === 'string') {
+    return { message: error, code: undefined }
+  }
+  return { message: error?.message, code: error?.code }
+}
+
+const isAuthFatalResponse = (
+  status: number,
+  code?: string,
+  path?: string,
+): boolean => {
+  if (status === 401) return true
+  if (code && AUTH_FATAL_CODES.has(code)) return true
+
+  const identityPath = path?.startsWith('/user/')
+
+  return identityPath === true && (status === 403 || status === 404)
+}
+
+export function isAuthFatalError(error: unknown): boolean {
+  return error instanceof ApiError && isAuthFatalResponse(error.status, error.code)
+}
+
+function getAuthFatalMessage(code?: string): string {
+  if (
+    code === 'USER_NOT_FOUND' ||
+    code === 'USER_DELETED' ||
+    code === 'ACCOUNT_NOT_FOUND'
+  ) {
+    return '账号不存在或已失效，请重新登录'
+  }
+  if (code === 'USER_DISABLED' || code === 'ACCOUNT_DISABLED') {
+    return '账号状态不可用，请联系客服'
+  }
+  return '登录状态已失效，请重新登录'
+}
+
+function handleAuthFatal(status: number, code?: string, message?: string): never {
+  const friendlyMessage = getAuthFatalMessage(code) || message || '登录状态已失效，请重新登录'
+  expireSession({ message: friendlyMessage, code, status })
+  throw new ApiError(friendlyMessage, status, code || 'SESSION_EXPIRED')
+}
 
 async function request<T>(
   path: string,
@@ -212,7 +274,7 @@ async function request<T>(
       headers['Authorization'] = `Bearer ${state.accessToken}`
     }
 
-    return fetch(`${BASE_URL}${path}`, {
+    return fetchWithTimeout(`${BASE_URL}${path}`, {
       method: options.method ?? 'GET',
       headers,
       body:
@@ -239,9 +301,15 @@ async function request<T>(
               )
             }
           })
-          .catch(() => {
-            authStore.clearAuth()
-            window.location.href = '/login'
+          .catch((error) => {
+            if (
+              error instanceof AuthError &&
+              error.status !== undefined &&
+              isAuthFatalResponse(error.status, error.code, '/auth/refresh')
+            ) {
+              handleAuthFatal(error.status, error.code || 'REFRESH_TOKEN_INVALID')
+            }
+            throw error
           })
           .finally(() => {
             isRefreshing = false
@@ -249,12 +317,13 @@ async function request<T>(
           })
       }
       await refreshPromise
+      if (!authStore.getState().accessToken) {
+        handleAuthFatal(401, 'SESSION_EXPIRED')
+      }
       // Retry the original request with the refreshed token
       res = await doRequest()
     } else {
-      authStore.clearAuth()
-      window.location.href = '/login'
-      throw new Error('Unauthenticated')
+      handleAuthFatal(401, 'AUTH_REQUIRED')
     }
   }
 
@@ -265,12 +334,17 @@ async function request<T>(
     throw new Error(`Server returned non-JSON response (${res.status})`)
   }
 
+  const { message, code } = getBackendError(json)
+
   if (!res.ok || !json.success) {
-    throw new ApiError(
-      json.error?.message ?? `Request failed (${res.status})`,
-      res.status,
-      json.error?.code,
-    )
+    if (isAuthFatalResponse(res.status, code, path)) {
+      handleAuthFatal(res.status, code, message)
+    }
+    throw new ApiError(message ?? `Request failed (${res.status})`, res.status, code)
+  }
+
+  if (!('data' in json)) {
+    throw new ApiError('Server response missing data', res.status, 'MALFORMED_RESPONSE')
   }
 
   return json.data as T
@@ -419,12 +493,16 @@ export const getIpInfo = async (): Promise<
       )
 
       try {
-        const response = await fetch(IP_CHECK_URL, {
-          method: 'GET',
-          signal: timeoutController.signal,
-          connectTimeout: IP_CHECK_TIMEOUT,
-          headers: { 'User-Agent': userAgent },
-        })
+        const response = await fetchWithTimeout(
+          IP_CHECK_URL,
+          {
+            method: 'GET',
+            signal: timeoutController.signal,
+            connectTimeout: IP_CHECK_TIMEOUT,
+            headers: { 'User-Agent': userAgent },
+          },
+          IP_CHECK_TIMEOUT,
+        )
 
         if (!response.ok) {
           return bail(new Error(`IP 检测服务出错，状态码: ${response.status}`))

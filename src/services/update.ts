@@ -130,11 +130,30 @@ export const resolveRemoteVersion = (update: Update): string | null => {
 }
 
 const localVersionNormalized = normalizeVersion(appVersion)
+const UPDATE_CHECK_TIMEOUT_MS = 10_000
+
+class UpdateCheckTimeoutError extends Error {
+  constructor() {
+    super('Update check timed out')
+    this.name = 'UpdateCheckTimeoutError'
+  }
+}
 
 export const checkUpdateSafe = async (
   options?: CheckOptions,
 ): Promise<Update | null> => {
-  const result = await check({ ...(options ?? {}), allowDowngrades: false })
+  let timeoutId: number | undefined
+  const result = await Promise.race([
+    check({ ...(options ?? {}), allowDowngrades: false }),
+    new Promise<never>((_, reject) => {
+      timeoutId = window.setTimeout(
+        () => reject(new UpdateCheckTimeoutError()),
+        UPDATE_CHECK_TIMEOUT_MS,
+      )
+    }),
+  ]).finally(() => {
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId)
+  })
   if (!result) return null
 
   const remoteVersion = resolveRemoteVersion(result)

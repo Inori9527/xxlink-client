@@ -6,10 +6,14 @@ use crate::{
     utils::{dirs, help},
 };
 use anyhow::{Result, anyhow};
-use xxlink_logging::{Type, logging};
 use smartstring::alias::String;
 use std::{collections::HashSet, path::PathBuf, time::Instant};
 use tauri_plugin_mihomo::Error as MihomoError;
+use tokio::time::{Duration, timeout};
+use xxlink_logging::{Type, logging};
+
+const CORE_RELOAD_TIMEOUT: Duration = Duration::from_secs(8);
+const CORE_RESTART_TIMEOUT: Duration = Duration::from_secs(12);
 
 impl CoreManager {
     pub async fn use_default_config(&self, error_key: &str, error_msg: &str) -> Result<()> {
@@ -82,30 +86,48 @@ impl CoreManager {
 
     async fn apply_config(&self, path: PathBuf) -> Result<()> {
         let path = dirs::path_to_str(&path)?;
-        match self.reload_config(path).await {
-            Ok(_) => {
+        let reload_result = timeout(CORE_RELOAD_TIMEOUT, self.reload_config(path)).await;
+        match reload_result {
+            Ok(Ok(_)) => {
                 Config::runtime().await.apply();
                 logging!(info, Type::Core, "Configuration applied");
                 Ok(())
             }
-            Err(err) => {
+            Ok(Err(err)) => {
                 logging!(
                     warn,
                     Type::Core,
                     "Failed to apply configuration by mihomo api, restart core to apply it, error msg: {err}"
                 );
-                match self.restart_core().await {
-                    Ok(_) => {
-                        Config::runtime().await.apply();
-                        logging!(info, Type::Core, "Configuration applied after restart");
-                        Ok(())
-                    }
-                    Err(err) => {
-                        logging!(error, Type::Core, "Failed to restart core: {}", err);
-                        Config::runtime().await.discard();
-                        Err(anyhow!("Failed to apply config: {}", err))
-                    }
-                }
+                self.apply_config_by_restart().await
+            }
+            Err(_) => {
+                logging!(
+                    warn,
+                    Type::Core,
+                    "Applying configuration by mihomo api timed out, restart core to apply it"
+                );
+                self.apply_config_by_restart().await
+            }
+        }
+    }
+
+    async fn apply_config_by_restart(&self) -> Result<()> {
+        match timeout(CORE_RESTART_TIMEOUT, self.restart_core()).await {
+            Ok(Ok(_)) => {
+                Config::runtime().await.apply();
+                logging!(info, Type::Core, "Configuration applied after restart");
+                Ok(())
+            }
+            Ok(Err(err)) => {
+                logging!(error, Type::Core, "Failed to restart core: {}", err);
+                Config::runtime().await.discard();
+                Err(anyhow!("Failed to apply config: {}", err))
+            }
+            Err(_) => {
+                logging!(error, Type::Core, "Restarting core timed out");
+                Config::runtime().await.discard();
+                Err(anyhow!("Failed to apply config: core restart timed out"))
             }
         }
     }

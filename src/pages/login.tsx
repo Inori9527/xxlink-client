@@ -15,7 +15,33 @@ import { useNavigate, Link as RouterLink } from 'react-router'
 
 import { apiLogin, AuthError } from '@/services/auth'
 import { useAuth } from '@/services/auth-store'
+import { SESSION_EXPIRED_MESSAGE_KEY } from '@/services/session'
 import { syncSubscription } from '@/services/subscription-sync'
+
+const getLoginErrorMessage = (err: unknown): string => {
+  const code = (err as { code?: string } | null)?.code
+  if (code === 'NETWORK_TIMEOUT') {
+    return '网络连接超时，请稍后重试'
+  }
+
+  if (err instanceof AuthError) {
+    if (err.status === 401 || err.status === 403) {
+      return '邮箱或密码不正确'
+    }
+    if (err.status !== undefined && err.status >= 500) {
+      return '服务暂时不可用，请稍后重试'
+    }
+    if (
+      err.message.includes('non-JSON') ||
+      err.message.includes('missing data')
+    ) {
+      return '服务响应异常，请稍后重试'
+    }
+    return '登录失败，请稍后重试'
+  }
+
+  return '登录失败，请稍后重试'
+}
 
 export default function LoginPage(): ReactNode {
   const navigate = useNavigate()
@@ -24,7 +50,16 @@ export default function LoginPage(): ReactNode {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(() => {
+    try {
+      const message = localStorage.getItem(SESSION_EXPIRED_MESSAGE_KEY)
+      if (!message) return ''
+      localStorage.removeItem(SESSION_EXPIRED_MESSAGE_KEY)
+      return message
+    } catch {
+      return ''
+    }
+  })
   const [loading, setLoading] = useState(false)
 
   // Redirect if already authenticated
@@ -41,14 +76,10 @@ export default function LoginPage(): ReactNode {
     try {
       const result = await apiLogin(email, password)
       setAuth(result.user, result.accessToken, result.refreshToken)
-      syncSubscription({ force: true }).catch(console.error)
+      syncSubscription({ force: true, timeoutMs: 10_000 }).catch(console.error)
       void navigate('/')
     } catch (err) {
-      setError(
-        err instanceof AuthError
-          ? err.message
-          : `登录失败: ${err instanceof Error ? err.message : String(err)}`,
-      )
+      setError(getLoginErrorMessage(err))
     } finally {
       setLoading(false)
     }

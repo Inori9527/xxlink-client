@@ -1,14 +1,13 @@
 /**
- * Auth service — all API calls go through @tauri-apps/plugin-http fetch
- * to avoid WebView cross-origin restrictions.
+ * Auth service. All API calls go through @tauri-apps/plugin-http so the
+ * Tauri WebView is not blocked by browser CORS rules.
  */
-import { fetch } from '@tauri-apps/plugin-http'
-
 import { BASE_URL } from '@/services/config'
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+import {
+  DEFAULT_AUTH_TIMEOUT_MS,
+  DEFAULT_REFRESH_TIMEOUT_MS,
+  fetchWithTimeout,
+} from '@/services/http'
 
 export interface AuthUser {
   id: string
@@ -28,53 +27,56 @@ export interface LoginResult extends AuthTokens {
 export interface ApiResponse<T> {
   success: boolean
   data?: T
-  error?: string
+  error?: string | { message?: string; code?: string }
 }
 
 export class AuthError extends Error {
   constructor(
     message: string,
     public readonly status?: number,
+    public readonly code?: string,
   ) {
     super(message)
     this.name = 'AuthError'
   }
 }
 
-// ---------------------------------------------------------------------------
-// Internal helper
-// ---------------------------------------------------------------------------
+const getEnvelopeError = (error: ApiResponse<unknown>['error']) => {
+  if (typeof error === 'string') {
+    return { message: error, code: undefined }
+  }
+  return { message: error?.message || 'Request failed', code: error?.code }
+}
 
 async function post<T>(path: string, body: unknown): Promise<T> {
-  const url = `${BASE_URL}${path}`
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+  const res = await fetchWithTimeout(
+    `${BASE_URL}${path}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+    path === '/auth/refresh' ? DEFAULT_REFRESH_TIMEOUT_MS : DEFAULT_AUTH_TIMEOUT_MS,
+  )
 
   let json: ApiResponse<T>
   try {
     json = (await res.json()) as ApiResponse<T>
   } catch {
-    throw new AuthError(`服务器返回了非 JSON 响应 (${res.status})`, res.status)
+    throw new AuthError(`Server returned non-JSON response (${res.status})`, res.status)
   }
 
   if (!res.ok || !json.success) {
-    throw new AuthError(json.error ?? '请求失败', res.status)
+    const { message, code } = getEnvelopeError(json.error)
+    throw new AuthError(message, res.status, code)
   }
 
   if (json.data === undefined) {
-    throw new AuthError('响应数据为空', res.status)
+    throw new AuthError('Server response missing data', res.status)
   }
 
   return json.data
 }
-
-// ---------------------------------------------------------------------------
-// Auth API calls
-// ---------------------------------------------------------------------------
 
 export async function apiLogin(
   email: string,

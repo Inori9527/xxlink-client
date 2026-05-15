@@ -7,11 +7,15 @@ use crate::{
     utils::{arch_check, dirs},
 };
 use anyhow::{Result, anyhow};
-use xxlink_logging::Type;
 use compact_str::CompactString;
 use log::Level;
 use scopeguard::defer;
 use tauri_plugin_shell::ShellExt as _;
+use tokio::time::{Duration, sleep, timeout};
+use xxlink_logging::Type;
+
+const SIDECAR_READY_TIMEOUT: Duration = Duration::from_secs(6);
+const SIDECAR_READY_POLL: Duration = Duration::from_millis(250);
 
 impl CoreManager {
     pub async fn get_clash_logs(&self) -> Result<Vec<CompactString>> {
@@ -89,7 +93,6 @@ impl CoreManager {
         logging!(trace, Type::Core, "Sidecar started with PID: {}", pid);
 
         self.set_running_child_sidecar(child);
-        self.set_running_mode(RunningMode::Sidecar);
 
         AsyncHandler::spawn(|| async move {
             while let Some(event) = rx.recv().await {
@@ -117,7 +120,32 @@ impl CoreManager {
             }
         });
 
+        if let Err(err) = self.wait_sidecar_ready().await {
+            logging!(error, Type::Core, "Sidecar readiness check failed: {}", err);
+            self.stop_core_by_sidecar();
+            handle::Handle::notice_message("config_validate::boot_error", err.to_string());
+            return Err(err);
+        }
+
+        self.set_running_mode(RunningMode::Sidecar);
+
         Ok(())
+    }
+
+    async fn wait_sidecar_ready(&self) -> Result<()> {
+        timeout(SIDECAR_READY_TIMEOUT, async {
+            loop {
+                match handle::Handle::mihomo().await.get_version().await {
+                    Ok(_) => return Ok(()),
+                    Err(err) => {
+                        logging!(debug, Type::Core, "Sidecar not ready yet: {}", err);
+                        sleep(SIDECAR_READY_POLL).await;
+                    }
+                }
+            }
+        })
+        .await
+        .map_err(|_| anyhow!("Core startup timed out"))?
     }
 
     pub(super) fn stop_core_by_sidecar(&self) {

@@ -1,7 +1,6 @@
 use crate::{config::Config, singleton, utils::dirs};
 use anyhow::Result;
 use chrono::Utc;
-use xxlink_logging::{Type, logging};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -9,6 +8,11 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 use tauri_plugin_updater::{Update, UpdaterExt as _};
+use tokio::time::{Duration, timeout};
+use xxlink_logging::{Type, logging};
+
+const UPDATE_CHECK_TIMEOUT: Duration = Duration::from_secs(10);
+const UPDATE_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(120);
 
 pub struct SilentUpdater {
     update_ready: AtomicBool,
@@ -418,13 +422,17 @@ impl SilentUpdater {
         logging!(info, Type::System, "Silent updater: checking for updates...");
 
         let updater = app_handle.updater()?;
-        let update = match updater.check().await {
-            Ok(Some(update)) => update,
-            Ok(None) => {
+        let update = match timeout(UPDATE_CHECK_TIMEOUT, updater.check()).await {
+            Err(_) => {
+                logging!(warn, Type::System, "Silent updater: check timed out");
+                return Ok(());
+            }
+            Ok(Ok(Some(update))) => update,
+            Ok(Ok(None)) => {
                 logging!(info, Type::System, "Silent updater: no update available");
                 return Ok(());
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 logging!(warn, Type::System, "Silent updater: check failed: {e}");
                 return Err(e.into());
             }
@@ -449,8 +457,9 @@ impl SilentUpdater {
         }
 
         logging!(info, Type::System, "Silent updater: downloading v{version}...");
-        let bytes = update
-            .download(
+        let bytes = timeout(
+            UPDATE_DOWNLOAD_TIMEOUT,
+            update.download(
                 |chunk_len, content_len| {
                     logging!(
                         debug,
@@ -461,8 +470,10 @@ impl SilentUpdater {
                 || {
                     logging!(info, Type::System, "Silent updater: download complete");
                 },
-            )
-            .await?;
+            ),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("silent updater download timed out"))??;
 
         if let Err(e) = Self::write_cache(&bytes, &version) {
             logging!(warn, Type::System, "Silent updater: failed to write cache: {e}");

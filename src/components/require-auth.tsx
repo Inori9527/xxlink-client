@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 
+import { hideInitialOverlay } from '@/pages/_layout/utils'
 import { useAuth } from '@/services/auth-store'
 
 /**
@@ -17,11 +18,13 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isAuthenticated) {
+      hideInitialOverlay({ assumeMissingAsRemoved: true })
       navigate('/login', { replace: true })
     }
   }, [isAuthenticated, navigate])
 
   if (!isAuthenticated) {
+    hideInitialOverlay({ assumeMissingAsRemoved: true })
     return null
   }
   return <>{children}</>

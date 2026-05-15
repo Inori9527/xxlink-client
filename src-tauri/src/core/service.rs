@@ -5,8 +5,6 @@ use crate::{
 };
 use anyhow::{Context as _, Result, anyhow, bail};
 use backon::{ConstantBuilder, Retryable as _};
-use xxlink_logging::{Type, logging, logging_error};
-use xxlink_service_ipc::CoreConfig;
 use compact_str::CompactString;
 use once_cell::sync::Lazy;
 use std::{
@@ -17,6 +15,11 @@ use std::{
     time::Duration,
 };
 use tokio::sync::Mutex;
+use tokio::time::timeout;
+use xxlink_logging::{Type, logging, logging_error};
+use xxlink_service_ipc::CoreConfig;
+
+const SERVICE_OPERATION_TIMEOUT: Duration = Duration::from_secs(45);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ServiceStatus {
@@ -519,22 +522,22 @@ impl ServiceManager {
             }
             ServiceStatus::NeedsReinstall | ServiceStatus::ReinstallRequired => {
                 logging!(info, Type::Service, "服务需要重装，执行重装流程");
-                reinstall_service()?;
+                run_blocking_service_operation("reinstall", reinstall_service).await?;
                 wait_and_check_service_available(self).await?;
             }
             ServiceStatus::ForceReinstallRequired => {
                 logging!(info, Type::Service, "服务需要强制重装，执行强制重装流程");
-                force_reinstall_service()?;
+                run_blocking_service_operation("force reinstall", force_reinstall_service).await?;
                 wait_and_check_service_available(self).await?;
             }
             ServiceStatus::InstallRequired => {
                 logging!(info, Type::Service, "需要安装服务，执行安装流程");
-                install_service()?;
+                run_blocking_service_operation("install", install_service).await?;
                 wait_and_check_service_available(self).await?;
             }
             ServiceStatus::UninstallRequired => {
                 logging!(info, Type::Service, "服务需要卸载，执行卸载流程");
-                uninstall_service()?;
+                run_blocking_service_operation("uninstall", uninstall_service).await?;
                 self.0 = ServiceStatus::Unavailable("Service Uninstalled".into());
             }
             ServiceStatus::Unavailable(reason) => {
@@ -551,3 +554,11 @@ impl ServiceManager {
 }
 
 pub static SERVICE_MANAGER: Lazy<Mutex<ServiceManager>> = Lazy::new(|| Mutex::new(ServiceManager::default()));
+
+async fn run_blocking_service_operation(label: &'static str, operation: fn() -> Result<()>) -> Result<()> {
+    timeout(SERVICE_OPERATION_TIMEOUT, tokio::task::spawn_blocking(operation))
+        .await
+        .map_err(|_| anyhow!("service {label} timed out"))?
+        .map_err(|err| anyhow!("service {label} task failed: {err}"))??;
+    Ok(())
+}
