@@ -11,6 +11,7 @@ import { RouterProvider } from 'react-router'
 import { MihomoWebSocket } from 'tauri-plugin-mihomo-api'
 
 import { BaseErrorBoundary } from './components/base'
+import { ClientWebLoginPrompt } from './components/layout/client-web-login-prompt'
 import {
   STARTUP_TIMEOUT_NOTICE_KEY,
   StartupTimeoutNotice,
@@ -94,6 +95,7 @@ const initializeApp = (
             <QueryClientProvider client={queryClient}>
               <AuthProvider>
                 <WindowProvider>
+                  <ClientWebLoginPrompt />
                   <StartupTimeoutNotice />
                   <RouterProvider router={router} />
                 </WindowProvider>

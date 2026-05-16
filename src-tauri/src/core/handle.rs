@@ -44,6 +44,14 @@ impl Handle {
         Self::send_event(FrontendEvent::RefreshVerge);
     }
 
+    pub fn client_web_login(attempt_id: String, state: String, challenge: String) {
+        Self::send_event(FrontendEvent::ClientWebLogin {
+            attempt_id,
+            state,
+            challenge,
+        });
+    }
+
     pub fn notify_profile_changed(profile_id: &String) {
         Self::send_event(FrontendEvent::ProfileChanged {
             current_profile_id: profile_id.clone(),

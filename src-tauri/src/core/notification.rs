@@ -1,10 +1,10 @@
-use crate::utils::window_manager::WindowManager;
 use crate::utils::resolve::ui;
-use xxlink_logging::{Type, logging};
+use crate::utils::window_manager::WindowManager;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use serde_json::json;
 use smartstring::alias::String;
+use xxlink_logging::{Type, logging};
 
 use tauri::{Emitter as _, WebviewWindow};
 
@@ -12,11 +12,27 @@ use tauri::{Emitter as _, WebviewWindow};
 pub enum FrontendEvent {
     RefreshClash,
     RefreshVerge,
-    NoticeMessage { status: String, message: String },
-    ProfileChanged { current_profile_id: String },
-    TimerUpdated { profile_index: String },
-    ProfileUpdateStarted { uid: String },
-    ProfileUpdateCompleted { uid: String },
+    ClientWebLogin {
+        attempt_id: String,
+        state: String,
+        challenge: String,
+    },
+    NoticeMessage {
+        status: String,
+        message: String,
+    },
+    ProfileChanged {
+        current_profile_id: String,
+    },
+    TimerUpdated {
+        profile_index: String,
+    },
+    ProfileUpdateStarted {
+        uid: String,
+    },
+    ProfileUpdateCompleted {
+        uid: String,
+    },
 }
 
 #[derive(Debug)]
@@ -39,6 +55,18 @@ impl NotificationSystem {
         match event {
             FrontendEvent::RefreshClash => ("verge://refresh-clash-config", Ok(json!("yes"))),
             FrontendEvent::RefreshVerge => ("verge://refresh-verge-config", Ok(json!("yes"))),
+            FrontendEvent::ClientWebLogin {
+                attempt_id,
+                state,
+                challenge,
+            } => (
+                "xxlink://web-login",
+                Ok(json!({
+                    "attemptId": attempt_id,
+                    "state": state,
+                    "challenge": challenge,
+                })),
+            ),
             FrontendEvent::NoticeMessage { status, message } => {
                 ("verge://notice-message", serde_json::to_value((status, message)))
             }

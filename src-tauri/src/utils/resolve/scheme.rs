@@ -8,11 +8,12 @@ use tauri::Url;
 use crate::{
     config::{Config, PrfItem, profiles},
     core::{CoreManager, handle},
+    utils::window_manager::WindowManager,
 };
 use xxlink_logging::{Type, logging, logging_error};
 
 pub(super) async fn resolve_scheme(param: &str) -> Result<()> {
-    logging!(info, Type::Config, "received deep link: {param}");
+    logging!(info, Type::Config, "received deep link request");
 
     let param_str = if param.starts_with("[") && param.len() > 4 {
         param
@@ -22,16 +23,50 @@ pub(super) async fn resolve_scheme(param: &str) -> Result<()> {
         param
     };
 
-    let link_parsed =
-        Url::parse(param_str).map_err(|e| anyhow::anyhow!("failed to parse deep link: {:?}, param: {:?}", e, param))?;
+    let link_parsed = Url::parse(param_str).map_err(|e| anyhow::anyhow!("failed to parse deep link: {:?}", e))?;
+
+    if let Some((attempt_id, state, challenge)) = extract_client_web_login_request(&link_parsed) {
+        WindowManager::show_main_window().await;
+        handle::Handle::client_web_login(attempt_id.into(), state.into(), challenge.into());
+        return Ok(());
+    }
 
     let Some((url, name)) = extract_subscription_info(&link_parsed) else {
-        logging!(error, Type::Config, "missing url parameter in deep link: {}", param_str);
+        logging!(error, Type::Config, "missing url parameter in deep link request");
         return Ok(());
     };
 
     import_subscription(&url, name.as_ref()).await;
     Ok(())
+}
+
+fn extract_client_web_login_request(
+    link_parsed: &Url,
+) -> Option<(std::string::String, std::string::String, std::string::String)> {
+    if !matches!(link_parsed.scheme(), "xxlink") {
+        return None;
+    }
+
+    let is_web_login = matches!(link_parsed.host_str(), Some("web-login"))
+        || link_parsed.path().trim_start_matches('/') == "web-login";
+    if !is_web_login {
+        return None;
+    }
+
+    let mut attempt_id = None;
+    let mut state = None;
+    let mut challenge = None;
+
+    for (key, value) in link_parsed.query_pairs() {
+        match key.as_ref() {
+            "attemptId" => attempt_id = Some(value.into_owned()),
+            "state" => state = Some(value.into_owned()),
+            "challenge" => challenge = Some(value.into_owned()),
+            _ => {}
+        }
+    }
+
+    Some((attempt_id?, state?, challenge?))
 }
 
 fn extract_subscription_info(link_parsed: &Url) -> Option<(std::string::String, Option<String>)> {

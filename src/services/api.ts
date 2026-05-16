@@ -159,6 +159,19 @@ export interface TrafficReportResult {
   remaining: string | number
 }
 
+export interface ClientWebLoginTicketInput {
+  attemptId: string
+  state: string
+  challenge: string
+  pairingCode: string
+  confirmed: true
+  deviceName: string
+}
+
+export interface ClientWebLoginTicketResult {
+  status: 'APPROVED' | string
+}
+
 export class ApiError extends Error {
   status: number
   code?: string
@@ -179,6 +192,23 @@ export function isTrafficExceededError(error: unknown): boolean {
 const ANNOUNCEMENT_LATEST_PATH =
   (import.meta.env['VITE_ANNOUNCEMENT_LATEST_PATH'] as string | undefined) ??
   '/announcements/latest'
+const OFFICIAL_API_ORIGIN = 'https://api.xxlink.net'
+
+function assertOfficialApiBaseUrl() {
+  try {
+    const url = new URL(BASE_URL)
+    if (
+      url.origin === OFFICIAL_API_ORIGIN &&
+      url.pathname.replace(/\/+$/, '') === '/api/v1'
+    ) {
+      return
+    }
+  } catch {
+    /* handled below */
+  }
+
+  throw new ApiError('网页登录只支持官方服务', 0, 'UNTRUSTED_API_HOST')
+}
 
 // ---------------------------------------------------------------------------
 // Backend API response envelope
@@ -235,7 +265,9 @@ const isAuthFatalResponse = (
 }
 
 export function isAuthFatalError(error: unknown): boolean {
-  return error instanceof ApiError && isAuthFatalResponse(error.status, error.code)
+  return (
+    error instanceof ApiError && isAuthFatalResponse(error.status, error.code)
+  )
 }
 
 function getAuthFatalMessage(code?: string): string {
@@ -252,8 +284,13 @@ function getAuthFatalMessage(code?: string): string {
   return '登录状态已失效，请重新登录'
 }
 
-function handleAuthFatal(status: number, code?: string, message?: string): never {
-  const friendlyMessage = getAuthFatalMessage(code) || message || '登录状态已失效，请重新登录'
+function handleAuthFatal(
+  status: number,
+  code?: string,
+  message?: string,
+): never {
+  const friendlyMessage =
+    getAuthFatalMessage(code) || message || '登录状态已失效，请重新登录'
   expireSession({ message: friendlyMessage, code, status })
   throw new ApiError(friendlyMessage, status, code || 'SESSION_EXPIRED')
 }
@@ -307,7 +344,10 @@ async function request<T>(
               error.status !== undefined &&
               isAuthFatalResponse(error.status, error.code, '/auth/refresh')
             ) {
-              handleAuthFatal(error.status, error.code || 'REFRESH_TOKEN_INVALID')
+              handleAuthFatal(
+                error.status,
+                error.code || 'REFRESH_TOKEN_INVALID',
+              )
             }
             throw error
           })
@@ -340,11 +380,19 @@ async function request<T>(
     if (isAuthFatalResponse(res.status, code, path)) {
       handleAuthFatal(res.status, code, message)
     }
-    throw new ApiError(message ?? `Request failed (${res.status})`, res.status, code)
+    throw new ApiError(
+      message ?? `Request failed (${res.status})`,
+      res.status,
+      code,
+    )
   }
 
   if (!('data' in json)) {
-    throw new ApiError('Server response missing data', res.status, 'MALFORMED_RESPONSE')
+    throw new ApiError(
+      'Server response missing data',
+      res.status,
+      'MALFORMED_RESPONSE',
+    )
   }
 
   return json.data as T
@@ -436,6 +484,19 @@ export const api = {
 
   announcements: {
     latest: () => request<Announcement | null>(ANNOUNCEMENT_LATEST_PATH),
+  },
+
+  clientWebLogin: {
+    approveTicket: (body: ClientWebLoginTicketInput) => {
+      assertOfficialApiBaseUrl()
+      return request<ClientWebLoginTicketResult>(
+        '/auth/client-web-login/tickets',
+        {
+          method: 'POST',
+          body,
+        },
+      )
+    },
   },
 
   apiKeys: {
