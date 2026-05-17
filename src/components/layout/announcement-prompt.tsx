@@ -13,29 +13,18 @@ import {
   alpha,
   useTheme,
 } from '@mui/material'
-import { open } from '@tauri-apps/plugin-shell'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api, type Announcement } from '@/services/api'
-
-const DISMISSED_ANNOUNCEMENT_KEY = 'xxlink:dismissed-announcement-id'
-const ANNOUNCEMENT_HISTORY_KEY = 'xxlink:announcement-history'
-
-const rememberAnnouncement = (announcement: Announcement) => {
-  if (!announcement.id) return
-  try {
-    const raw = localStorage.getItem(ANNOUNCEMENT_HISTORY_KEY)
-    const list = raw ? (JSON.parse(raw) as Announcement[]) : []
-    const next = [
-      announcement,
-      ...list.filter((item) => item?.id !== announcement.id),
-    ].slice(0, 20)
-    localStorage.setItem(ANNOUNCEMENT_HISTORY_KEY, JSON.stringify(next))
-  } catch {
-    /* ignore */
-  }
-}
+import {
+  getDismissedAnnouncementId,
+  migrateLegacyBroadcastHistory,
+  normalizeAnnouncementLevel,
+  openAnnouncementAction,
+  rememberAnnouncementHistory,
+  setDismissedAnnouncementId,
+} from '@/utils/announcements'
 
 export const AnnouncementPrompt = () => {
   const { t } = useTranslation()
@@ -45,18 +34,15 @@ export const AnnouncementPrompt = () => {
 
   useEffect(() => {
     let cancelled = false
+    migrateLegacyBroadcastHistory()
 
     api.announcements
-      .latest()
+      .latestBroadcast()
       .then((latest) => {
         if (cancelled || !latest?.id) return
-        rememberAnnouncement(latest)
-        try {
-          if (localStorage.getItem(DISMISSED_ANNOUNCEMENT_KEY) === latest.id) {
-            return
-          }
-        } catch {
-          /* ignore */
+        rememberAnnouncementHistory('BROADCAST', [latest])
+        if (getDismissedAnnouncementId('BROADCAST') === latest.id) {
+          return
         }
         setAnnouncement(latest)
         setOpenDialog(true)
@@ -72,18 +58,14 @@ export const AnnouncementPrompt = () => {
 
   const handleDismissForever = () => {
     if (announcement?.id) {
-      try {
-        localStorage.setItem(DISMISSED_ANNOUNCEMENT_KEY, announcement.id)
-      } catch {
-        /* ignore */
-      }
+      setDismissedAnnouncementId('BROADCAST', announcement.id)
     }
     setOpenDialog(false)
   }
 
   const handleOpenAction = () => {
     if (!announcement?.actionUrl) return
-    void open(announcement.actionUrl)
+    void openAnnouncementAction(announcement.actionUrl)
   }
 
   if (!announcement) return null
@@ -123,7 +105,7 @@ export const AnnouncementPrompt = () => {
 
       <DialogContent>
         <Alert
-          severity={announcement.level ?? 'info'}
+          severity={normalizeAnnouncementLevel(announcement.level)}
           sx={{ mb: 2, borderRadius: 2 }}
         >
           {announcement.body}

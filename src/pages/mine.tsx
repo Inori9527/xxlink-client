@@ -40,6 +40,7 @@ import { api, type Announcement, type UsageData } from '@/services/api'
 import { apiLogout } from '@/services/auth'
 import { useAuth } from '@/services/auth-store'
 import { showNotice } from '@/services/notice-service'
+import { normalizeAnnouncementLevel } from '@/utils/announcements'
 import parseTraffic from '@/utils/parse-traffic'
 
 const DASHBOARD_URL = 'https://xxlink.net/dashboard'
@@ -197,15 +198,25 @@ const MinePage = () => {
 
   useEffect(() => {
     let cancelled = false
-    Promise.allSettled([api.user.usage(), api.announcements.latest()]).then(
-      ([usageResult, announcementResult]) => {
-        if (cancelled) return
-        if (usageResult.status === 'fulfilled') setUsage(usageResult.value)
-        if (announcementResult.status === 'fulfilled') {
-          setAnnouncement(announcementResult.value)
-        }
-      },
-    )
+
+    api.user
+      .usage()
+      .then((value) => {
+        if (!cancelled) setUsage(value)
+      })
+      .catch(() => {
+        if (!cancelled) setUsage(null)
+      })
+
+    api.announcements
+      .listUpdates(1)
+      .then((items) => {
+        if (!cancelled) setAnnouncement(items[0] ?? null)
+      })
+      .catch(() => {
+        if (!cancelled) setAnnouncement(null)
+      })
+
     return () => {
       cancelled = true
     }
@@ -345,7 +356,7 @@ const MinePage = () => {
 
         {announcement?.id && (
           <Alert
-            severity={announcement.level ?? 'info'}
+            severity={normalizeAnnouncementLevel(announcement.level)}
             action={
               <Button
                 color="inherit"
