@@ -119,11 +119,13 @@ export interface PromoRedeemResult {
   subscriptionCreated?: boolean
 }
 
+export type AnnouncementLevel = 'info' | 'success' | 'warning' | 'error'
+
 export interface Announcement {
   id: string
   title: string
   body: string
-  level?: 'info' | 'success' | 'warning' | 'error'
+  level?: AnnouncementLevel | string | null
   publishedAt?: string | null
   actionLabel?: string | null
   actionUrl?: string | null
@@ -192,6 +194,14 @@ export function isTrafficExceededError(error: unknown): boolean {
 const ANNOUNCEMENT_LATEST_PATH =
   (import.meta.env['VITE_ANNOUNCEMENT_LATEST_PATH'] as string | undefined) ??
   '/announcements/latest'
+const ANNOUNCEMENT_BROADCAST_LATEST_PATH =
+  (import.meta.env['VITE_ANNOUNCEMENT_BROADCAST_LATEST_PATH'] as
+    | string
+    | undefined) ?? '/announcements/latest?channel=CLIENT&type=BROADCAST'
+const ANNOUNCEMENT_UPDATE_LIST_PATH =
+  (import.meta.env['VITE_ANNOUNCEMENT_UPDATE_LIST_PATH'] as
+    | string
+    | undefined) ?? '/announcements?channel=CLIENT&type=UPDATE'
 const OFFICIAL_API_ORIGIN = 'https://api.xxlink.net'
 
 function assertOfficialApiBaseUrl() {
@@ -398,6 +408,42 @@ async function request<T>(
   return json.data as T
 }
 
+async function publicRequest<T>(path: string): Promise<T> {
+  const res = await fetchWithTimeout(`${BASE_URL}${path}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  let json: BackendResponse<T>
+  try {
+    json = (await res.json()) as BackendResponse<T>
+  } catch {
+    throw new Error(`Server returned non-JSON response (${res.status})`)
+  }
+
+  const { message, code } = getBackendError(json)
+
+  if (!res.ok || !json.success) {
+    throw new ApiError(
+      message ?? `Request failed (${res.status})`,
+      res.status,
+      code,
+    )
+  }
+
+  if (!('data' in json)) {
+    throw new ApiError(
+      'Server response missing data',
+      res.status,
+      'MALFORMED_RESPONSE',
+    )
+  }
+
+  return json.data as T
+}
+
 // ---------------------------------------------------------------------------
 // getSubUrl helper
 // ---------------------------------------------------------------------------
@@ -483,7 +529,16 @@ export const api = {
   },
 
   announcements: {
-    latest: () => request<Announcement | null>(ANNOUNCEMENT_LATEST_PATH),
+    latest: () => publicRequest<Announcement | null>(ANNOUNCEMENT_LATEST_PATH),
+    latestBroadcast: () =>
+      publicRequest<Announcement | null>(ANNOUNCEMENT_BROADCAST_LATEST_PATH),
+    listUpdates: (limit = 20) => {
+      const safeLimit = Math.max(1, Math.min(Math.floor(limit), 50))
+      const separator = ANNOUNCEMENT_UPDATE_LIST_PATH.includes('?') ? '&' : '?'
+      return publicRequest<Announcement[]>(
+        `${ANNOUNCEMENT_UPDATE_LIST_PATH}${separator}limit=${safeLimit}`,
+      )
+    },
   },
 
   clientWebLogin: {

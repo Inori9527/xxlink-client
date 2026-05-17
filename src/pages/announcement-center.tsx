@@ -16,39 +16,18 @@ import {
   alpha,
   useTheme,
 } from '@mui/material'
-import { open } from '@tauri-apps/plugin-shell'
 import { useCallback, useEffect, useState } from 'react'
 
 import { BasePage } from '@/components/base'
 import { api, type Announcement } from '@/services/api'
-
-const DISMISSED_ANNOUNCEMENT_KEY = 'xxlink:dismissed-announcement-id'
-const ANNOUNCEMENT_HISTORY_KEY = 'xxlink:announcement-history'
-
-const readAnnouncementHistory = (): Announcement[] => {
-  try {
-    const raw = localStorage.getItem(ANNOUNCEMENT_HISTORY_KEY)
-    if (!raw) return []
-    const list = JSON.parse(raw) as Announcement[]
-    return Array.isArray(list) ? list.filter((item) => item?.id) : []
-  } catch {
-    return []
-  }
-}
-
-const rememberAnnouncement = (announcement: Announcement) => {
-  if (!announcement.id) return readAnnouncementHistory()
-  const next = [
-    announcement,
-    ...readAnnouncementHistory().filter((item) => item.id !== announcement.id),
-  ].slice(0, 20)
-  try {
-    localStorage.setItem(ANNOUNCEMENT_HISTORY_KEY, JSON.stringify(next))
-  } catch {
-    /* ignore */
-  }
-  return next
-}
+import {
+  markAnnouncementRead,
+  normalizeAnnouncementLevel,
+  openAnnouncementAction,
+  readAnnouncementHistory,
+  readAnnouncementIds,
+  rememberAnnouncementHistory,
+} from '@/utils/announcements'
 
 const formatDate = (date?: string | null) => {
   if (!date) return '最新公告'
@@ -61,31 +40,28 @@ const AnnouncementCenterPage = () => {
   const theme = useTheme()
   const [announcement, setAnnouncement] = useState<Announcement | null>(null)
   const [history, setHistory] = useState<Announcement[]>(() =>
-    readAnnouncementHistory(),
+    readAnnouncementHistory('UPDATE'),
   )
-  const [dismissedId, setDismissedId] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem(DISMISSED_ANNOUNCEMENT_KEY)
-    } catch {
-      return null
-    }
-  })
+  const [readIds, setReadIds] = useState<Set<string>>(() =>
+    readAnnouncementIds('UPDATE'),
+  )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const loadLatest = useCallback(async () => {
+  const loadUpdates = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const latest = await api.announcements.latest()
+      const updates = await api.announcements.listUpdates(20)
+      const latest = updates[0] ?? null
       setAnnouncement(latest)
-      if (latest) {
-        setHistory(rememberAnnouncement(latest))
-      } else {
-        setHistory(readAnnouncementHistory())
-      }
+      setHistory(
+        updates.length > 0
+          ? rememberAnnouncementHistory('UPDATE', updates)
+          : readAnnouncementHistory('UPDATE'),
+      )
     } catch (err) {
-      console.error('[AnnouncementCenter] failed to load latest', err)
+      console.error('[AnnouncementCenter] failed to load updates', err)
       setError('公告加载失败，请稍后重试。')
     } finally {
       setLoading(false)
@@ -93,21 +69,21 @@ const AnnouncementCenterPage = () => {
   }, [])
 
   useEffect(() => {
-    void loadLatest()
-  }, [loadLatest])
+    void loadUpdates()
+  }, [loadUpdates])
 
-  const handleDismiss = () => {
+  const markCurrentRead = () => {
     if (!announcement?.id) return
-    try {
-      localStorage.setItem(DISMISSED_ANNOUNCEMENT_KEY, announcement.id)
-    } catch {
-      /* ignore */
-    }
-    setDismissedId(announcement.id)
+    setReadIds(markAnnouncementRead('UPDATE', announcement.id))
   }
 
-  const isDismissed = Boolean(
-    announcement?.id && dismissedId === announcement.id,
+  const selectAnnouncement = (item: Announcement) => {
+    setAnnouncement(item)
+    if (item.id) setReadIds(markAnnouncementRead('UPDATE', item.id))
+  }
+
+  const isCurrentRead = Boolean(
+    announcement?.id && readIds.has(announcement.id),
   )
 
   return (
@@ -120,7 +96,7 @@ const AnnouncementCenterPage = () => {
           startIcon={
             loading ? <CircularProgress size={14} /> : <RefreshRounded />
           }
-          onClick={loadLatest}
+          onClick={loadUpdates}
           disabled={loading}
           sx={{ borderRadius: 999, fontWeight: 900 }}
         >
@@ -170,7 +146,7 @@ const AnnouncementCenterPage = () => {
                 公告中心
               </Typography>
               <Typography color="text.secondary">
-                最新公告会在启动时弹出；关闭后直到下一条公告才会再次提醒。
+                查看版本更新和服务公告。
               </Typography>
             </Box>
           </Stack>
@@ -212,15 +188,15 @@ const AnnouncementCenterPage = () => {
                 <Stack direction="row" spacing={1}>
                   <Chip
                     size="small"
-                    color={announcement.level ?? 'info'}
-                    label={announcement.level ?? 'info'}
+                    color={normalizeAnnouncementLevel(announcement.level)}
+                    label={normalizeAnnouncementLevel(announcement.level)}
                   />
-                  {isDismissed && (
+                  {isCurrentRead && (
                     <Chip
                       size="small"
                       color="success"
                       icon={<CheckRounded />}
-                      label="已关闭提醒"
+                      label="已读"
                     />
                   )}
                 </Stack>
@@ -241,25 +217,27 @@ const AnnouncementCenterPage = () => {
                   <Button
                     variant="contained"
                     startIcon={<OpenInNewRounded />}
-                    onClick={() => void open(announcement.actionUrl!)}
+                    onClick={() =>
+                      void openAnnouncementAction(announcement.actionUrl)
+                    }
                     sx={{ borderRadius: 999, fontWeight: 900 }}
                   >
                     {announcement.actionLabel ?? '打开链接'}
                   </Button>
                 )}
                 <Button
-                  variant={isDismissed ? 'outlined' : 'contained'}
-                  color={isDismissed ? 'success' : 'primary'}
-                  onClick={handleDismiss}
-                  disabled={isDismissed}
+                  variant={isCurrentRead ? 'outlined' : 'contained'}
+                  color={isCurrentRead ? 'success' : 'primary'}
+                  onClick={markCurrentRead}
+                  disabled={isCurrentRead}
                   sx={{ borderRadius: 999, fontWeight: 900 }}
                 >
-                  {isDismissed ? '已关闭此公告提醒' : '不再弹出此公告'}
+                  {isCurrentRead ? '已读' : '标记已读'}
                 </Button>
               </Stack>
             </Stack>
           </Paper>
-        ) : (
+        ) : !error ? (
           <Paper
             elevation={0}
             sx={{
@@ -273,10 +251,10 @@ const AnnouncementCenterPage = () => {
               暂无公告
             </Typography>
             <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-              有新公告时会自动显示在这里。
+              有新公告时会显示在这里。
             </Typography>
           </Paper>
-        )}
+        ) : null}
 
         {history.length > 0 && (
           <Paper
@@ -290,43 +268,57 @@ const AnnouncementCenterPage = () => {
           >
             <Box sx={{ px: 2.5, py: 2 }}>
               <Typography variant="h6" fontWeight={950}>
-                本机公告历史
+                更新公告
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                记录本机已收到的最近公告，便于稍后回看。
+                最近 20 条版本与服务更新。
               </Typography>
             </Box>
-            {history.map((item) => (
-              <Box
-                key={item.id}
-                sx={{
-                  px: 2.5,
-                  py: 1.6,
-                  borderTop: `1px solid ${alpha(theme.palette.divider, 0.55)}`,
-                }}
-              >
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  justifyContent="space-between"
-                  alignItems="center"
+            {history.map((item) => {
+              const isRead = readIds.has(item.id)
+              return (
+                <Box
+                  key={item.id}
+                  sx={{
+                    px: 2.5,
+                    py: 1.6,
+                    cursor: 'pointer',
+                    borderTop: `1px solid ${alpha(theme.palette.divider, 0.55)}`,
+                    '&:hover': {
+                      bgcolor: alpha(theme.palette.primary.main, 0.08),
+                    },
+                  }}
+                  onClick={() => selectAnnouncement(item)}
                 >
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography fontWeight={900} noWrap>
-                      {item.title}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {formatDate(item.publishedAt)}
-                    </Typography>
-                  </Box>
-                  <Chip
-                    size="small"
-                    color={item.level ?? 'info'}
-                    label={item.level ?? 'info'}
-                  />
-                </Stack>
-              </Box>
-            ))}
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    justifyContent="space-between"
+                    alignItems="center"
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography fontWeight={900} noWrap>
+                        {item.title}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {formatDate(item.publishedAt)}
+                      </Typography>
+                    </Box>
+                    <Chip
+                      size="small"
+                      color={
+                        isRead
+                          ? 'default'
+                          : normalizeAnnouncementLevel(item.level)
+                      }
+                      label={
+                        isRead ? '已读' : normalizeAnnouncementLevel(item.level)
+                      }
+                    />
+                  </Stack>
+                </Box>
+              )
+            })}
           </Paper>
         )}
       </Stack>
