@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { closeConnection } from 'tauri-plugin-mihomo-api'
 
 import parseTraffic from '@/utils/parse-traffic'
+import { formatVisibleProxyChain } from '@/utils/proxy-display'
 
 export interface ConnectionDetailRef {
   open: (detail: IConnectionsItem, closed: boolean) => void
@@ -65,7 +66,7 @@ const InnerConnectionDetail = ({ data, closed, onClose }: InnerProps) => {
   const { t } = useTranslation()
   const { metadata, rulePayload } = data
   const theme = useTheme()
-  const chains = [...data.chains].reverse().join(' / ')
+  const chains = formatVisibleProxyChain(data.chains)
   const rule = rulePayload ? `${data.rule}(${rulePayload})` : data.rule
   const host = metadata.host
     ? `${metadata.host}:${metadata.destinationPort}`

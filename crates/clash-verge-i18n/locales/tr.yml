@@ -35,7 +35,7 @@ service:
   adminInstallPrompt: XXLink hizmetini kurmak için yönetici ayrıcalıkları gerekir.
   adminUninstallPrompt: XXLink hizmetini kaldırmak için yönetici ayrıcalıkları gerekir.
 tray:
-  dashboard: Gösterge Paneli
+  dashboard: Open XXLink
   ruleMode: Kural Modu
   globalMode: Küresel Mod
   directMode: Doğrudan Mod
@@ -45,8 +45,6 @@ tray:
   global: Küresel
   profiles: Profiller
   proxies: Vekil'ler
-  systemProxy: Sistem Vekil'i
-  tunMode: TUN Modu
   closeAllConnections: Tüm Bağlantıları Kapat
   lightweightMode: Hafif Mod
   copyEnv: Ortam Değişkenlerini Kopyala
@@ -58,7 +56,7 @@ tray:
   coreLog: Çekirdek Günlüğü
   restartClash: Clash Çekirdeğini Yeniden Başlat
   restartApp: Uygulamayı Yeniden Başlat
-  vergeVersion: Verge Sürümü
+  vergeVersion: XXLink Version
   more: Daha Fazla
   exit: Çıkış
   tooltip:

@@ -35,7 +35,7 @@ service:
   adminInstallPrompt: Menginstal layanan XXLink memerlukan hak administrator.
   adminUninstallPrompt: Menghapus instalasi layanan XXLink memerlukan hak administrator.
 tray:
-  dashboard: Dasbor
+  dashboard: Open XXLink
   ruleMode: Mode Aturan
   globalMode: Mode Global
   directMode: Mode Langsung
@@ -45,8 +45,6 @@ tray:
   global: Global
   profiles: Profil
   proxies: Proksi
-  systemProxy: Proksi Sistem
-  tunMode: Mode TUN
   closeAllConnections: Tutup Semua Koneksi
   lightweightMode: Mode Ringan
   copyEnv: Salin Variabel Lingkungan
@@ -58,7 +56,7 @@ tray:
   coreLog: Log Core
   restartClash: Mulai Ulang Core Clash
   restartApp: Mulai Ulang Aplikasi
-  vergeVersion: Versi Verge
+  vergeVersion: XXLink Version
   more: Lainnya
   exit: Keluar
   tooltip:

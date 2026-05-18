@@ -5,6 +5,10 @@ import { useVerge } from '@/hooks/use-verge'
 import { useAppData } from '@/providers/app-data-context'
 import delayManager from '@/services/delay'
 import { debugLog } from '@/utils/debug'
+import {
+  filterVisibleProxyItems,
+  isHiddenProxyName,
+} from '@/utils/proxy-display'
 
 import { filterSort } from './use-filter-sort'
 import {
@@ -132,8 +136,8 @@ export const useRenderList = (
   useEffect(() => {
     if (!isChainMode || !runtimeConfig) return
 
-    const allProxies: IProxyItem[] = Object.values(
-      (runtimeConfig as any).proxies || {},
+    const allProxies: IProxyItem[] = filterVisibleProxyItems(
+      Object.values((runtimeConfig as any).proxies || {}),
     )
     if (allProxies.length === 0) return
 
@@ -308,8 +312,8 @@ export const useRenderList = (
     // 链式代理模式下的其他模式（如global）仍显示所有节点
     if (isChainMode && runtimeConfig) {
       // 从运行时配置直接获取 proxies 列表 (需要类型断言)
-      const allProxies: IProxyItem[] = Object.values(
-        (runtimeConfig as any).proxies || {},
+      const allProxies: IProxyItem[] = filterVisibleProxyItems(
+        Object.values((runtimeConfig as any).proxies || {}),
       )
 
       // 为每个节点获取延迟信息
@@ -370,8 +374,12 @@ export const useRenderList = (
       useRule && proxiesData.groups.length
         ? proxiesData.groups
         : [proxiesData.global!]
+    const visibleRenderGroups = renderGroups.filter(
+      (group: ProxyGroup | null | undefined) =>
+        group && !isHiddenProxyName(group.name),
+    )
 
-    const retList = renderGroups.flatMap((group: ProxyGroup) => {
+    const retList = visibleRenderGroups.flatMap((group: ProxyGroup) => {
       const headState = headStates[group.name] || DEFAULT_STATE
       const ret: IRenderItem[] = [
         {

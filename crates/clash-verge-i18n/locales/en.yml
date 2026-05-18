@@ -35,7 +35,7 @@ service:
   adminInstallPrompt: Installing the XXLink service requires administrator privileges.
   adminUninstallPrompt: Uninstalling the XXLink service requires administrator privileges.
 tray:
-  dashboard: Dashboard
+  dashboard: Open XXLink
   ruleMode: Rule Mode
   globalMode: Global Mode
   directMode: Direct Mode
@@ -45,8 +45,6 @@ tray:
   global: Global
   profiles: Profiles
   proxies: Proxies
-  systemProxy: System Proxy
-  tunMode: TUN Mode
   closeAllConnections: Close All Connections
   lightweightMode: Lightweight Mode
   copyEnv: Copy Environment Variables
@@ -58,7 +56,7 @@ tray:
   coreLog: Core Log
   restartClash: Restart Clash Core
   restartApp: Restart Application
-  vergeVersion: Verge Version
+  vergeVersion: XXLink Version
   more: More
   exit: Exit
   tooltip:

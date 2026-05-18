@@ -29,6 +29,11 @@ interface Props {
 
 const OS = getSystem()
 
+const normalizeTrayEvent = (value?: string) => {
+  if (value === 'system_proxy' || value === 'tun_mode') return 'main_window'
+  return value ?? 'main_window'
+}
+
 const languageOptions = supportedLanguages.map((code) => {
   const labels: { [key: string]: string } = {
     en: 'English',
@@ -124,7 +129,7 @@ const SettingVergeBasic = ({ onError }: Props) => {
           label={t('settings.components.verge.basic.fields.trayClickEvent')}
         >
           <GuardState
-            value={tray_event ?? 'main_window'}
+            value={normalizeTrayEvent(tray_event)}
             onCatch={onError}
             onFormat={(e: any) => e.target.value}
             onChange={(e) => onChangeData({ tray_event: e })}
@@ -138,12 +143,6 @@ const SettingVergeBasic = ({ onError }: Props) => {
               </MenuItem>
               <MenuItem value="tray_menu">
                 {t('settings.components.verge.basic.trayOptions.showTrayMenu')}
-              </MenuItem>
-              <MenuItem value="system_proxy">
-                {t('settings.sections.system.toggles.systemProxy')}
-              </MenuItem>
-              <MenuItem value="tun_mode">
-                {t('settings.sections.system.toggles.tunMode')}
               </MenuItem>
               <MenuItem value="disable">
                 {t('settings.components.verge.basic.trayOptions.disable')}

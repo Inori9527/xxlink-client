@@ -4,6 +4,12 @@ import { getProxies, getProxyProviders } from 'tauri-plugin-mihomo-api'
 
 import { showNotice } from '@/services/notice-service'
 import { debugLog } from '@/utils/debug'
+import {
+  expandVisibleProxyNames,
+  filterVisibleProxyItems,
+  isHiddenProxyName,
+  resolveVisibleProxyName,
+} from '@/utils/proxy-display'
 
 export async function copyClashEnv() {
   return invoke<void>('copy_clash_env')
@@ -154,13 +160,21 @@ export async function calcuProxies(): Promise<{
 
   const { GLOBAL: global, DIRECT: direct, REJECT: reject } = proxyRecord
 
+  const generateVisibleItems = (items: string[] = []) =>
+    Array.from(
+      new Set(
+        items.flatMap((item) => expandVisibleProxyNames(item, proxyRecord)),
+      ),
+    ).map((item) => generateItem(item))
+
   let groups: IProxyGroupItem[] = Object.values(proxyRecord).reduce<
     IProxyGroupItem[]
   >((acc, each) => {
-    if (each?.name !== 'GLOBAL' && each?.all) {
+    if (each?.name !== 'GLOBAL' && each?.all && !isHiddenProxyName(each.name)) {
       acc.push({
         ...each,
-        all: each.all!.map((item) => generateItem(item)),
+        now: resolveVisibleProxyName(each.now, proxyRecord) || each.now,
+        all: generateVisibleItems(each.all!),
       })
     }
 
@@ -171,10 +185,13 @@ export async function calcuProxies(): Promise<{
     const globalGroups: IProxyGroupItem[] = global.all.reduce<
       IProxyGroupItem[]
     >((acc, name) => {
-      if (proxyRecord[name]?.all) {
+      if (proxyRecord[name]?.all && !isHiddenProxyName(name)) {
         acc.push({
           ...proxyRecord[name],
-          all: proxyRecord[name].all!.map((item) => generateItem(item)),
+          now:
+            resolveVisibleProxyName(proxyRecord[name].now, proxyRecord) ||
+            proxyRecord[name].now,
+          all: generateVisibleItems(proxyRecord[name].all!),
         })
       }
       return acc
@@ -190,13 +207,14 @@ export async function calcuProxies(): Promise<{
 
   const proxies = [direct, reject].concat(
     Object.values(proxyRecord).filter(
-      (p) => !p?.all?.length && p?.name !== 'DIRECT' && p?.name !== 'REJECT',
+      (p) => !p?.all?.length && !isHiddenProxyName(p?.name),
     ),
   )
 
   const _global = {
     ...global,
-    all: global?.all?.map((item) => generateItem(item)) || [],
+    now: resolveVisibleProxyName(global?.now, proxyRecord) || global?.now,
+    all: generateVisibleItems(global?.all || []),
   }
 
   return {
@@ -204,7 +222,7 @@ export async function calcuProxies(): Promise<{
     direct: direct as IProxyItem,
     groups,
     records: proxyRecord as Record<string, IProxyItem>,
-    proxies: (proxies as IProxyItem[]) ?? [],
+    proxies: filterVisibleProxyItems((proxies as IProxyItem[]) ?? []),
   }
 }
 

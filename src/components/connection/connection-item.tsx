@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next'
 import { closeConnection } from 'tauri-plugin-mihomo-api'
 
 import parseTraffic from '@/utils/parse-traffic'
+import { formatVisibleProxyChain } from '@/utils/proxy-display'
 
 const Tag = styled('span')(({ theme }) => ({
   fontSize: '10px',
@@ -36,6 +37,7 @@ export const ConnectionItem = (props: Props) => {
 
   const { id, metadata, chains, start, curUpload, curDownload } = value
   const { t } = useTranslation()
+  const visibleChains = formatVisibleProxyChain(chains)
 
   const onDelete = useLockFn(async () => closeConnection(id))
   const showTraffic = curUpload! >= 100 || curDownload! >= 100
@@ -72,9 +74,7 @@ export const ConnectionItem = (props: Props) => {
 
             {!!metadata.process && <Tag>{metadata.process}</Tag>}
 
-            {chains?.length > 0 && (
-              <Tag>{[...chains].reverse().join(' / ')}</Tag>
-            )}
+            {!!visibleChains && <Tag>{visibleChains}</Tag>}
 
             <Tag>{dayjs(start).fromNow()}</Tag>
 

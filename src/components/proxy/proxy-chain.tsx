@@ -43,6 +43,7 @@ import {
 import { useAppData } from '@/providers/app-data-context'
 import { updateProxyChainConfigInRuntime } from '@/services/cmds'
 import { debugLog } from '@/utils/debug'
+import { isHiddenProxyName } from '@/utils/proxy-display'
 
 interface ProxyChainItem {
   id: string
@@ -82,12 +83,14 @@ const toChainItems = (
   const timestamp = Date.now()
 
   return (
-    parsedConfig?.proxies?.map((proxy, index) => ({
-      id: `${proxy.name}_${timestamp}_${index}`,
-      name: proxy.name,
-      type: proxy.type,
-      delay: undefined,
-    })) || []
+    parsedConfig?.proxies
+      ?.filter((proxy) => !isHiddenProxyName(proxy.name))
+      .map((proxy, index) => ({
+        id: `${proxy.name}_${timestamp}_${index}`,
+        name: proxy.name,
+        type: proxy.type,
+        delay: undefined,
+      })) || []
   )
 }
 

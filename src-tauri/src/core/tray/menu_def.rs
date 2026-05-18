@@ -32,8 +32,6 @@ define_menu! {
     outbound_modes => OUTBOUND_MODES, "tray_outbound_modes", "tray.outboundModes",
     profiles => PROFILES, "tray_profiles", "tray.profiles",
     proxies => PROXIES, "tray_proxies", "tray.proxies",
-    system_proxy => SYSTEM_PROXY, "tray_system_proxy", "tray.systemProxy",
-    tun_mode => TUN_MODE, "tray_tun_mode", "tray.tunMode",
     close_all_connections => CLOSE_ALL_CONNECTIONS, "tray_close_all_connections", "tray.closeAllConnections",
     lightweight_mode => LIGHTWEIGHT_MODE, "tray_lightweight_mode", "tray.lightweightMode",
     copy_env => COPY_ENV, "tray_copy_env", "tray.copyEnv",
@@ -52,8 +50,6 @@ define_menu! {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum TrayAction {
-    SystemProxy,
-    TunMode,
     MainWindow,
     TrayMenu,
     Unknown,
@@ -62,8 +58,7 @@ pub(crate) enum TrayAction {
 impl From<&str> for TrayAction {
     fn from(s: &str) -> Self {
         match s {
-            "system_proxy" => Self::SystemProxy,
-            "tun_mode" => Self::TunMode,
+            "system_proxy" | "tun_mode" => Self::MainWindow,
             "main_window" => Self::MainWindow,
             "tray_menu" => Self::TrayMenu,
             _ => Self::Unknown,

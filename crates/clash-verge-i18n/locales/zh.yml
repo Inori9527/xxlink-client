@@ -35,7 +35,7 @@ service:
   adminInstallPrompt: 安装 XXLink 服务需要管理员权限
   adminUninstallPrompt: 卸载 XXLink 服务需要管理员权限
 tray:
-  dashboard: 仪表板
+  dashboard: Open XXLink
   ruleMode: 规则模式
   globalMode: 全局模式
   directMode: 直连模式
@@ -45,8 +45,6 @@ tray:
   global: 全局
   profiles: 订阅
   proxies: 代理
-  systemProxy: 系统代理
-  tunMode: TUN 模式
   closeAllConnections: 关闭所有连接
   lightweightMode: 轻量模式
   copyEnv: 复制环境变量
@@ -58,7 +56,7 @@ tray:
   coreLog: 内核日志
   restartClash: 重启 Clash 内核
   restartApp: 重启应用
-  vergeVersion: Verge 版本
+  vergeVersion: XXLink Version
   more: 更多
   exit: 退出
   tooltip:

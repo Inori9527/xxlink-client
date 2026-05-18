@@ -22,6 +22,7 @@ import { useAppData } from '@/providers/app-data-context'
 import { updateProxyChainConfigInRuntime } from '@/services/cmds'
 import delayManager from '@/services/delay'
 import { debugLog } from '@/utils/debug'
+import { isHiddenProxyName } from '@/utils/proxy-display'
 
 import { ScrollTopButton } from '../layout/scroll-top-button'
 
@@ -81,9 +82,10 @@ export const ProxyGroups = (props: Props) => {
   const availableGroups = useMemo(() => {
     if (!groups) return []
     // 在链式代理模式下，仅显示支持选择节点的 Selector 代理组
+    const visibleGroups = groups.filter((g: any) => !isHiddenProxyName(g.name))
     return isChainMode
-      ? groups.filter((g: any) => g.type === 'Selector')
-      : groups
+      ? visibleGroups.filter((g: any) => g.type === 'Selector')
+      : visibleGroups
   }, [groups, isChainMode])
 
   const defaultRuleGroup = useMemo(() => {
@@ -306,9 +308,13 @@ export const ProxyGroups = (props: Props) => {
 
     const proxies = renderList
       .filter(
-        (e) => e.group?.name === groupName && (e.type === 2 || e.type === 4),
+        (e) =>
+          e.group?.name === groupName &&
+          !isHiddenProxyName(e.proxy?.name) &&
+          (e.type === 2 || e.type === 4),
       )
       .flatMap((e) => e.proxyCol || e.proxy!)
+      .filter((proxy) => proxy && !isHiddenProxyName(proxy.name))
       .filter(Boolean)
 
     debugLog(`[ProxyGroups] 找到代理数量: ${proxies.length}`)
@@ -386,7 +392,12 @@ export const ProxyGroups = (props: Props) => {
 
   const proxyGroupNames = useMemo(() => {
     const names = renderList
-      .filter((item) => item.type === 0 && item.group?.name)
+      .filter(
+        (item) =>
+          item.type === 0 &&
+          item.group?.name &&
+          !isHiddenProxyName(item.group.name),
+      )
       .map((item) => item.group!.name)
     return Array.from(new Set(names))
   }, [renderList])
@@ -397,7 +408,9 @@ export const ProxyGroups = (props: Props) => {
 
   if (isChainMode) {
     // 获取所有代理组
-    const proxyGroups = proxiesData?.groups || []
+    const proxyGroups = (proxiesData?.groups || []).filter(
+      (group: any) => !isHiddenProxyName(group.name),
+    )
 
     return (
       <>

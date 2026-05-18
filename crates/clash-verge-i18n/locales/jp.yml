@@ -35,7 +35,7 @@ service:
   adminInstallPrompt: XXLink サービスのインストールには管理者権限が必要です。
   adminUninstallPrompt: XXLink サービスのアンインストールには管理者権限が必要です。
 tray:
-  dashboard: ダッシュボード
+  dashboard: Open XXLink
   ruleMode: ルールモード
   globalMode: グローバルモード
   directMode: ダイレクトモード
@@ -45,8 +45,6 @@ tray:
   global: グローバル
   profiles: プロファイル
   proxies: プロキシ
-  systemProxy: システムプロキシ
-  tunMode: TUN モード
   closeAllConnections: すべての接続を閉じる
   lightweightMode: 軽量モード
   copyEnv: 環境変数をコピー
@@ -58,7 +56,7 @@ tray:
   coreLog: コアログ
   restartClash: Clash コアを再起動
   restartApp: アプリケーションを再起動
-  vergeVersion: Verge バージョン
+  vergeVersion: XXLink Version
   more: その他
   exit: 終了
   tooltip:

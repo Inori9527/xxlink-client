@@ -35,7 +35,7 @@ service:
   adminInstallPrompt: Für die Installation des Clash-Verge-Dienstes sind Administratorrechte erforderlich.
   adminUninstallPrompt: Für die Deinstallation des Clash-Verge-Dienstes sind Administratorrechte erforderlich.
 tray:
-  dashboard: Übersicht
+  dashboard: Open XXLink
   ruleMode: Regelmodus
   globalMode: Globaler Modus
   directMode: Direktmodus
@@ -45,8 +45,6 @@ tray:
   global: Global
   profiles: Profile
   proxies: Proxy
-  systemProxy: Systemproxy
-  tunMode: TUN-Modus
   closeAllConnections: Alle Verbindungen schließen
   lightweightMode: Leichtmodus
   copyEnv: Umgebungsvariablen kopieren
@@ -58,7 +56,7 @@ tray:
   coreLog: Core-Log
   restartClash: Clash-Core neu starten
   restartApp: Anwendung neu starten
-  vergeVersion: Verge-Version
+  vergeVersion: XXLink Version
   more: Mehr
   exit: Beenden
   tooltip:

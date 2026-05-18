@@ -35,7 +35,7 @@ service:
   adminInstallPrompt: يتطلب تثبيت خدمة XXLink صلاحيات المسؤول.
   adminUninstallPrompt: يتطلب إلغاء تثبيت خدمة XXLink صلاحيات المسؤول.
 tray:
-  dashboard: لوحة التحكم
+  dashboard: Open XXLink
   ruleMode: وضع القواعد
   globalMode: الوضع العام
   directMode: الوضع المباشر
@@ -45,8 +45,6 @@ tray:
   global: عام
   profiles: الملفات التعريفية
   proxies: وكلاء
-  systemProxy: وكيل النظام
-  tunMode: وضع TUN
   closeAllConnections: إغلاق كل الاتصالات
   lightweightMode: الوضع الخفيف
   copyEnv: نسخ متغيرات البيئة
@@ -58,7 +56,7 @@ tray:
   coreLog: سجل النواة
   restartClash: إعادة تشغيل نواة Clash
   restartApp: إعادة تشغيل التطبيق
-  vergeVersion: إصدار Verge
+  vergeVersion: XXLink Version
   more: المزيد
   exit: خروج
   tooltip:

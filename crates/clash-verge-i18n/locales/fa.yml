@@ -35,7 +35,7 @@ service:
   adminInstallPrompt: نصب سرویس XXLink به دسترسی مدیر نیاز دارد.
   adminUninstallPrompt: حذف سرویس XXLink به دسترسی مدیر نیاز دارد.
 tray:
-  dashboard: داشبورد
+  dashboard: Open XXLink
   ruleMode: حالت قوانین
   globalMode: حالت سراسری
   directMode: حالت مستقیم
@@ -45,8 +45,6 @@ tray:
   global: سراسری
   profiles: پروفایل‌ها
   proxies: پروکسی‌ها
-  systemProxy: پروکسی سیستم
-  tunMode: حالت TUN
   closeAllConnections: بستن همه اتصال‌ها
   lightweightMode: حالت سبک
   copyEnv: کپی متغیرهای محیطی
@@ -58,7 +56,7 @@ tray:
   coreLog: گزارش هسته
   restartClash: راه‌اندازی مجدد هسته Clash
   restartApp: راه‌اندازی مجدد برنامه
-  vergeVersion: نسخه Verge
+  vergeVersion: XXLink Version
   more: بیشتر
   exit: خروج
   tooltip:

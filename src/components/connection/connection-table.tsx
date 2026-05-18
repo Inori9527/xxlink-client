@@ -26,6 +26,7 @@ import {
 import { useTranslation } from 'react-i18next'
 
 import parseTraffic from '@/utils/parse-traffic'
+import { formatVisibleProxyChain } from '@/utils/proxy-display'
 import { truncateStr } from '@/utils/truncate-str'
 
 import { ConnectionColumnManager } from './connection-column-manager'
@@ -75,7 +76,7 @@ const getConnectionCellValue = (field: ColumnField, each: IConnectionsItem) => {
     case 'ulSpeed':
       return each.curUpload
     case 'chains':
-      return [...each.chains].reverse().join(' / ')
+      return formatVisibleProxyChain(each.chains)
     case 'rule':
       return rulePayload ? `${each.rule}(${rulePayload})` : each.rule
     case 'process':

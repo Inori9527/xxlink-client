@@ -1,5 +1,4 @@
 use crate::config::{IProfilePreview, IVerge};
-use crate::core::service;
 use crate::core::tray::menu_def::TrayAction;
 use crate::module::lightweight;
 use crate::process::AsyncHandler;
@@ -12,14 +11,13 @@ use crate::{
 use clash_verge_limiter::{Limiter, SystemClock, SystemLimiter};
 use clash_verge_logging::logging_error;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
-use tauri_plugin_clash_verge_sysinfo::is_current_app_handle_admin;
 use tauri_plugin_mihomo::models::Proxies;
 use tokio::fs;
 
 use super::handle;
 use anyhow::Result;
 use smartstring::alias::String;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use tauri::{
     AppHandle, Wry,
@@ -33,6 +31,36 @@ use menu_def::{MenuIds, MenuTexts};
 type ProxyMenuItem = (Option<Submenu<Wry>>, Vec<Box<dyn IsMenuItem<Wry>>>);
 
 const TRAY_CLICK_DEBOUNCE_MS: u64 = 300;
+
+fn is_hidden_proxy_name(name: &str) -> bool {
+    matches!(
+        name.trim().to_ascii_lowercase().as_str(),
+        "direct" | "reject" | "xxlink-desktop"
+    )
+}
+
+fn expand_visible_proxy_names(name: &str, proxy_nodes_data: &Proxies, seen: &mut HashSet<String>) -> Vec<String> {
+    let normalized = name.trim();
+    if normalized.is_empty() || !seen.insert(normalized.to_string().into()) {
+        return Vec::new();
+    }
+
+    if is_hidden_proxy_name(normalized) {
+        return proxy_nodes_data
+            .proxies
+            .get(normalized)
+            .and_then(|proxy| proxy.all.as_ref())
+            .map(|children| {
+                children
+                    .iter()
+                    .flat_map(|child| expand_visible_proxy_names(child, proxy_nodes_data, seen))
+                    .collect()
+            })
+            .unwrap_or_default();
+    }
+
+    vec![normalized.to_string().into()]
+}
 
 #[derive(Clone)]
 struct TrayState {}
@@ -184,11 +212,6 @@ impl Tray {
             return Ok(());
         };
 
-        let verge = Config::verge().await.latest_arc();
-        let system_proxy = verge.enable_system_proxy.as_ref().unwrap_or(&false);
-        let tun_mode = verge.enable_tun_mode.as_ref().unwrap_or(&false);
-        let tun_mode_available =
-            is_current_app_handle_admin(app_handle) || service::is_service_available().await.is_ok();
         let mode = {
             Config::clash()
                 .await
@@ -207,16 +230,7 @@ impl Tray {
         logging_error!(
             Type::Tray,
             tray.set_menu(Some(
-                create_tray_menu(
-                    app_handle,
-                    Some(mode.as_str()),
-                    *system_proxy,
-                    *tun_mode,
-                    tun_mode_available,
-                    profiles_preview,
-                    is_lightweight_mode,
-                )
-                .await?,
+                create_tray_menu(app_handle, Some(mode.as_str()), profiles_preview, is_lightweight_mode,).await?,
             ))
         );
 
@@ -444,7 +458,8 @@ fn create_subcreate_proxy_menu_item(
                 let should_show = match proxy_mode {
                     "global" => group_name == "GLOBAL",
                     _ => group_name != "GLOBAL",
-                } && !group_data.hidden.unwrap_or_default();
+                } && !group_data.hidden.unwrap_or_default()
+                    && !is_hidden_proxy_name(group_name);
 
                 if !should_show {
                     continue;
@@ -455,18 +470,29 @@ fn create_subcreate_proxy_menu_item(
                 };
 
                 let now_proxy = group_data.now.as_deref().unwrap_or_default();
+                let selected_names: HashSet<String> =
+                    expand_visible_proxy_names(now_proxy, &proxy_nodes_data, &mut HashSet::new())
+                        .into_iter()
+                        .collect();
+                let visible_proxy_names: Vec<String> = {
+                    let mut seen = HashSet::new();
+                    all_proxies
+                        .iter()
+                        .flat_map(|proxy_str| expand_visible_proxy_names(proxy_str, &proxy_nodes_data, &mut seen))
+                        .collect()
+                };
 
                 // Create proxy items
-                let group_items: Vec<CheckMenuItem<Wry>> = all_proxies
+                let group_items: Vec<CheckMenuItem<Wry>> = visible_proxy_names
                     .iter()
                     .filter_map(|proxy_str| {
-                        let is_selected = *proxy_str == now_proxy;
+                        let is_selected = selected_names.contains(proxy_str);
                         let item_id = format!("proxy_{}_{}", group_name, proxy_str);
 
                         // Get delay for display
                         let delay_text = proxy_nodes_data
                             .proxies
-                            .get(proxy_str)
+                            .get(proxy_str.as_str())
                             .and_then(|h| h.history.last())
                             .map(|h| match h.delay {
                                 0 => "-ms".into(),
@@ -563,9 +589,6 @@ fn create_proxy_menu_item(
 async fn create_tray_menu(
     app_handle: &AppHandle,
     mode: Option<&str>,
-    system_proxy_enabled: bool,
-    tun_mode_enabled: bool,
-    tun_mode_available: bool,
     profiles_preview: Vec<IProfilePreview<'_>>,
     is_lightweight_mode: bool,
 ) -> Result<tauri::menu::Menu<Wry>> {
@@ -709,24 +732,6 @@ async fn create_tray_menu(
         _ => (None, Vec::new()),
     };
 
-    let system_proxy = &CheckMenuItem::with_id(
-        app_handle,
-        MenuIds::SYSTEM_PROXY,
-        &texts.system_proxy,
-        true,
-        system_proxy_enabled,
-        hotkeys.get("toggle_system_proxy").map(|s| s.as_str()),
-    )?;
-
-    let tun_mode = &CheckMenuItem::with_id(
-        app_handle,
-        MenuIds::TUN_MODE,
-        &texts.tun_mode,
-        tun_mode_available,
-        tun_mode_enabled,
-        hotkeys.get("toggle_tun_mode").map(|s| s.as_str()),
-    )?;
-
     let close_all_connections = &MenuItem::with_id(
         app_handle,
         MenuIds::CLOSE_ALL_CONNECTIONS,
@@ -778,7 +783,7 @@ async fn create_tray_menu(
         app_handle,
         MenuIds::VERGE_VERSION,
         format!("{} {version}", &texts.verge_version),
-        true,
+        false,
         None::<&str>,
     )?;
 
@@ -833,9 +838,6 @@ async fn create_tray_menu(
 
     menu_items.extend_from_slice(&[
         separator,
-        system_proxy as &dyn IsMenuItem<Wry>,
-        tun_mode as &dyn IsMenuItem<Wry>,
-        separator,
         lightweight_mode as &dyn IsMenuItem<Wry>,
         open_dir as &dyn IsMenuItem<Wry>,
         more as &dyn IsMenuItem<Wry>,
@@ -873,12 +875,6 @@ fn on_tray_icon_event(_tray_icon: &TrayIcon, tray_event: TrayIconEvent) {
             let verge_tray_action = TrayAction::from(verge_tray_event.as_str());
             logging!(debug, Type::Tray, "tray event: {verge_tray_action:?}");
             match verge_tray_action {
-                TrayAction::SystemProxy => {
-                    let _ = feat::toggle_system_proxy().await;
-                }
-                TrayAction::TunMode => {
-                    let _ = feat::toggle_tun_mode(None).await;
-                }
                 TrayAction::MainWindow => {
                     if !lightweight::exit_lightweight_mode().await {
                         WindowManager::show_main_window().await;
@@ -915,12 +911,6 @@ fn on_menu_event(_: &AppHandle, event: MenuEvent) {
                 if !lightweight::exit_lightweight_mode().await {
                     WindowManager::show_main_window().await;
                 };
-            }
-            MenuIds::SYSTEM_PROXY => {
-                feat::toggle_system_proxy().await;
-            }
-            MenuIds::TUN_MODE => {
-                feat::toggle_tun_mode(None).await;
             }
             MenuIds::CLOSE_ALL_CONNECTIONS => {
                 if let Err(err) = handle::Handle::mihomo().await.close_all_connections().await {
