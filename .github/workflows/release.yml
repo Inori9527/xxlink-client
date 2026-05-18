@@ -8,14 +8,14 @@ on:
 permissions: write-all
 
 env:
-  CARGO_INCREMENTAL: 0
   CARGO_BUILD_JOBS: 1
-  RUST_BACKTRACE: short
+  CARGO_INCREMENTAL: 0
   HUSKY: 0
+  RUST_BACKTRACE: short
 
 concurrency:
-  group: '${{ github.workflow }} - ${{ github.head_ref || github.ref }}'
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: '${{ github.workflow }} - ${{ github.ref }}'
+  cancel-in-progress: false
 
 jobs:
   check_tag_version:
@@ -27,32 +27,34 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Ensure tag comes from main
+      - name: Check tag is on main
         run: |
-          TAG_REF="${GITHUB_REF##*/}"
-          TAG_COMMIT=$(git rev-list -n 1 "$TAG_REF")
-          MAIN_COMMITS=$(git rev-list origin/main)
-
-          if ! echo "$MAIN_COMMITS" | grep -q "$TAG_COMMIT"; then
-            echo "Tag $TAG_REF is not from main."
+          git fetch origin main:refs/remotes/origin/main --depth=1
+          TAG_COMMIT="$(git rev-list -n 1 "$GITHUB_REF_NAME")"
+          MAIN_COMMIT="$(git rev-parse origin/main)"
+          if [ "$TAG_COMMIT" != "$MAIN_COMMIT" ]; then
+            echo "Tag $GITHUB_REF_NAME must point to the current origin/main HEAD."
             exit 1
           fi
 
-      - name: Ensure tag matches package version
+      - name: Check tag matches package version
         run: |
-          TAG_REF="${GITHUB_REF_NAME:-${GITHUB_REF##*/}}"
-          PKG_VERSION=$(jq -r .version package.json)
-          EXPECTED_TAG="v$PKG_VERSION"
+          if ! echo "$GITHUB_REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Stable release workflow only accepts vX.Y.Z tags."
+            exit 1
+          fi
 
-          if [[ "$TAG_REF" != "$EXPECTED_TAG" ]]; then
-            echo "Version mismatch: tag=$TAG_REF package=$EXPECTED_TAG"
+          PKG_VERSION="$(jq -r .version package.json)"
+          EXPECTED_TAG="v$PKG_VERSION"
+          if [ "$GITHUB_REF_NAME" != "$EXPECTED_TAG" ]; then
+            echo "Version mismatch: tag=$GITHUB_REF_NAME package=$EXPECTED_TAG"
             exit 1
           fi
 
   release:
-    name: Build Windows x64
-    needs: [check_tag_version]
+    name: Build Windows x64 installer
     runs-on: windows-latest
+    needs: [check_tag_version]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -66,7 +68,6 @@ jobs:
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
-          save-if: ${{ github.ref == 'refs/heads/dev' }}
           prefix-key: 'v1-rust'
           key: 'rust-shared-stable-windows-latest-x86_64-pc-windows-msvc'
           workspaces: |
@@ -86,7 +87,7 @@ jobs:
 
       - name: Install dependencies and sidecars
         run: |
-          pnpm install --frozen-lockfile
+          pnpm i
           pnpm run prebuild x86_64-pc-windows-msvc
 
       - name: Tauri build
@@ -100,53 +101,16 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'XXLink ${{ github.ref_name }}'
           releaseBody: 'bug fix'
-          releaseDraft: true
-          prerelease: ${{ contains(github.ref_name, '-rc') }}
+          releaseDraft: false
+          prerelease: false
           tauriScript: pnpm
           args: --target x86_64-pc-windows-msvc
           includeUpdaterJson: true
 
-  update_tag:
-    name: Publish release notes
-    needs: [release]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Set release metadata
-        run: |
-          TAG_REF="${GITHUB_REF##*/}"
-          VERSION="${TAG_REF#v}"
-          echo "TAG_NAME=$TAG_REF" >> "$GITHUB_ENV"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "BUILDTIME=$(TZ=Asia/Shanghai date)" >> "$GITHUB_ENV"
-          echo "DOWNLOAD_URL=https://github.com/${{ github.repository }}/releases/download/$TAG_REF" >> "$GITHUB_ENV"
-
-      - name: Generate release notes
-        run: |
-          cat > release.txt << EOF
-          bug fix
-
-          ## Download
-
-          - [Windows x64](${{ env.DOWNLOAD_URL }}/XXLink_${{ env.VERSION }}_x64-setup.exe)
-
-          Created at ${{ env.BUILDTIME }}.
-          EOF
-
-      - name: Publish release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.TAG_NAME }}
-          name: 'XXLink ${{ env.TAG_NAME }}'
-          body_path: release.txt
-          draft: false
-          prerelease: ${{ contains(github.ref_name, '-rc') }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-
   release_update:
-    if: ${{ !contains(github.ref_name, '-rc') }}
     name: Publish updater manifest
-    needs: [update_tag]
     runs-on: ubuntu-latest
+    needs: [release]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -162,9 +126,10 @@ jobs:
           run_install: false
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm i
 
-      - name: Publish updater file
+      - name: Release updater file
         run: pnpm updater
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
