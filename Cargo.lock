@@ -10197,7 +10197,7 @@ checksum = "0637d3a5566a82fa5214bae89087bc8c9fb94cd8e8a3c07feb691bb8d9c632db"
 
 [[package]]
 name = "xxlink-client"
-version = "2.4.8"
+version = "2.4.0"
 dependencies = [
  "aes-gcm",
  "anyhow",

@@ -51,12 +51,23 @@ async function resolveUpdater() {
   const stableTagRegex = /^v\d+\.\d+\.\d+$/ // Matches vX.Y.Z format
   // const preReleaseRegex = /^v\d+\.\d+\.\d+-(alpha|beta|rc|pre)/i; // Matches vX.Y.Z-alpha/beta/rc format
   const preReleaseRegex = /^(alpha|beta|rc|pre)$/i // Matches exact alpha/beta/rc/pre tags
+  const currentTagName = (
+    process.env.GITHUB_REF_NAME ||
+    process.env.RELEASE_TAG_NAME ||
+    process.env.GITHUB_REF?.replace(/^refs\/tags\//, '') ||
+    ''
+  ).trim()
+  const currentStableTag = stableTagRegex.test(currentTagName)
+    ? tags.find((t) => t.name === currentTagName) || { name: currentTagName }
+    : null
 
   // Get the latest stable tag and pre-release tag
-  const stableTag = tags.find((t) => stableTagRegex.test(t.name))
+  const stableTag =
+    currentStableTag || tags.find((t) => stableTagRegex.test(t.name))
   const preReleaseTag = tags.find((t) => preReleaseRegex.test(t.name))
 
   console.log('All tags:', tags.map((t) => t.name).join(', '))
+  console.log('Current tag:', currentTagName || 'None found')
   console.log('Stable tag:', stableTag ? stableTag.name : 'None found')
   console.log(
     'Pre-release tag:',
@@ -70,7 +81,7 @@ async function resolveUpdater() {
   }
 
   // Process pre-release if found
-  if (preReleaseTag) {
+  if (!currentStableTag && preReleaseTag) {
     await processRelease(github, options, preReleaseTag, true)
   }
 }
@@ -193,6 +204,11 @@ async function processRelease(github, options, tag, isAlpha) {
     // maybe should test the signature as well
     // delete the null field
     Object.entries(updateData.platforms).forEach(([key, value]) => {
+      if (!['win64', 'windows-x86_64'].includes(key)) {
+        delete updateData.platforms[key]
+        return
+      }
+
       if (!value.url) {
         console.log(`[Error]: failed to parse release for "${key}"`)
         delete updateData.platforms[key]
