@@ -20,10 +20,15 @@ import { useVerge } from '@/hooks/use-verge'
 import { useAppData } from '@/providers/app-data-context'
 import delayManager from '@/services/delay'
 import { showNotice } from '@/services/notice-service'
-import { getProxyDisplayKey, getProxyDisplayName } from '@/utils/proxy-display'
+import {
+  getProxyDisplayKey,
+  getProxyDisplayName,
+  isHiddenProxyEntry,
+} from '@/utils/proxy-display'
 
 type ProxyEntry = {
   name: string
+  type?: string
   history?: { time: string; delay: number }[]
 }
 
@@ -31,8 +36,6 @@ type DisplayNode = ProxyEntry & {
   displayName: string
   key: string
 }
-
-const HIDDEN_NODES: ReadonlySet<string> = new Set(['direct', 'reject', 'proxy'])
 
 const NodesPage = () => {
   const { t } = useTranslation()
@@ -56,6 +59,9 @@ const NodesPage = () => {
         all?: Array<ProxyEntry | string>
       }
     | undefined
+  const proxyRecords = proxies?.records as
+    | Record<string, ProxyEntry>
+    | undefined
 
   const currentNode = globalGroup?.now || ''
   const groupName = globalGroup?.name || ''
@@ -70,7 +76,8 @@ const NodesPage = () => {
           ? ({ name: item } as ProxyEntry)
           : (item as ProxyEntry)
 
-      if (!entry.name || HIDDEN_NODES.has(entry.name.toLowerCase())) continue
+      if (isHiddenProxyEntry(entry.name, proxyRecords?.[entry.name] ?? entry))
+        continue
 
       const displayName = getProxyDisplayName(entry.name)
       const key = getProxyDisplayKey(entry.name)
@@ -90,7 +97,7 @@ const NodesPage = () => {
       if (bAuto && !aAuto) return 1
       return a.displayName.localeCompare(b.displayName)
     })
-  }, [currentNode, globalGroup?.all])
+  }, [currentNode, globalGroup?.all, proxyRecords])
 
   const selectedKey = currentNode ? getProxyDisplayKey(currentNode) : ''
 

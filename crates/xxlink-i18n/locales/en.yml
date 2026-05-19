@@ -35,12 +35,10 @@ service:
   adminInstallPrompt: Installing the XXLink service requires administrator privileges.
   adminUninstallPrompt: Uninstalling the XXLink service requires administrator privileges.
 tray:
-  dashboard: Dashboard
-  systemProxy: System Proxy
-  tunMode: TUN Mode
+  dashboard: Open XXLink
   closeAllConnections: Close All Connections
   restartApp: Restart Application
-  vergeVersion: Verge Version
+  vergeVersion: XXLink Version
   exit: Exit
   tooltip:
     systemProxy: System Proxy

@@ -5,6 +5,7 @@ import { useVerge } from '@/hooks/use-verge'
 import { useAppData } from '@/providers/app-data-context'
 import delayManager from '@/services/delay'
 import { debugLog } from '@/utils/debug'
+import { isHiddenProxyEntry, isHiddenProxyName } from '@/utils/proxy-display'
 
 import { filterSort } from './use-filter-sort'
 import {
@@ -132,9 +133,9 @@ export const useRenderList = (
   useEffect(() => {
     if (!isChainMode || !runtimeConfig) return
 
-    const allProxies: IProxyItem[] = Object.values(
-      (runtimeConfig as any).proxies || {},
-    )
+    const allProxies = (
+      Object.values((runtimeConfig as any).proxies || {}) as IProxyItem[]
+    ).filter((proxy) => !isHiddenProxyEntry(proxy.name, proxy))
     if (allProxies.length === 0) return
 
     // 设置组监听器，当有延迟更新时自动刷新
@@ -176,9 +177,9 @@ export const useRenderList = (
     // 链式代理模式下，显示代理组和其节点
     if (isChainMode && runtimeConfig && mode === 'rule') {
       // 使用正常的规则模式代理组
-      const allGroups = proxiesData.groups.length
-        ? proxiesData.groups
-        : [proxiesData.global!]
+      const allGroups = (
+        proxiesData.groups.length ? proxiesData.groups : [proxiesData.global!]
+      ).filter((group: ProxyGroup) => !isHiddenProxyName(group?.name))
 
       // 如果选择了特定代理组，只显示该组的节点
       if (selectedGroup) {
@@ -250,9 +251,9 @@ export const useRenderList = (
       }
 
       // 如果没有组，显示所有节点
-      const allProxies: IProxyItem[] = allGroups.flatMap(
-        (group: any) => group.all,
-      )
+      const allProxies: IProxyItem[] = allGroups
+        .flatMap((group: any) => group.all)
+        .filter((proxy: IProxyItem) => !isHiddenProxyEntry(proxy.name, proxy))
 
       // 为每个节点获取延迟信息
       const proxiesWithDelay = allProxies.map((proxy) => {
@@ -308,9 +309,9 @@ export const useRenderList = (
     // 链式代理模式下的其他模式（如global）仍显示所有节点
     if (isChainMode && runtimeConfig) {
       // 从运行时配置直接获取 proxies 列表 (需要类型断言)
-      const allProxies: IProxyItem[] = Object.values(
-        (runtimeConfig as any).proxies || {},
-      )
+      const allProxies = (
+        Object.values((runtimeConfig as any).proxies || {}) as IProxyItem[]
+      ).filter((proxy) => !isHiddenProxyEntry(proxy.name, proxy))
 
       // 为每个节点获取延迟信息
       const proxiesWithDelay = allProxies.map((proxy) => {
@@ -366,18 +367,37 @@ export const useRenderList = (
 
     // 正常模式的渲染逻辑
     const useRule = mode === 'rule' || mode === 'script'
-    const renderGroups =
+    const renderGroups = (
       useRule && proxiesData.groups.length
         ? proxiesData.groups
         : [proxiesData.global!]
+    ).filter((group: ProxyGroup) => !isHiddenProxyName(group?.name))
 
     const retList = renderGroups.flatMap((group: ProxyGroup) => {
+      const visibleAll = filterSort(
+        group.all,
+        group.name,
+        '',
+        0,
+        latencyTimeout,
+      )
+      const visibleNow = isHiddenProxyEntry(
+        group.now,
+        proxiesData.records?.[group.now],
+      )
+        ? ''
+        : group.now
+      const renderGroup = {
+        ...group,
+        now: visibleNow,
+        all: visibleAll,
+      }
       const headState = headStates[group.name] || DEFAULT_STATE
       const ret: IRenderItem[] = [
         {
           type: 0,
           key: group.name,
-          group,
+          group: renderGroup,
           headState,
           icon: group.icon,
           testUrl: group.testUrl,
@@ -401,7 +421,7 @@ export const useRenderList = (
         ret.push({
           type: 1,
           key: `head-${group.name}`,
-          group,
+          group: renderGroup,
           headState,
         })
 
@@ -409,7 +429,7 @@ export const useRenderList = (
           ret.push({
             type: 3,
             key: `empty-${group.name}`,
-            group,
+            group: renderGroup,
             headState,
           })
         } else if (col > 1) {
@@ -417,7 +437,7 @@ export const useRenderList = (
             groupProxies(proxies, col).map((proxyCol, colIndex) => ({
               type: 4,
               key: `col-${group.name}-${proxyCol[0].name}-${colIndex}`,
-              group,
+              group: renderGroup,
               headState,
               col,
               proxyCol,
@@ -429,7 +449,7 @@ export const useRenderList = (
             proxies.map((proxy) => ({
               type: 2,
               key: `${group.name}-${proxy!.name}`,
-              group,
+              group: renderGroup,
               proxy,
               headState,
               provider: proxy.provider,

@@ -2,7 +2,10 @@ import { useEffect, useMemo, useReducer, useRef } from 'react'
 
 import { useVerge } from '@/hooks/use-verge'
 import delayManager from '@/services/delay'
-import { dedupeProxiesByDisplayName } from '@/utils/proxy-display'
+import {
+  dedupeProxiesByDisplayName,
+  isHiddenProxyEntry,
+} from '@/utils/proxy-display'
 import { compileStringMatcher } from '@/utils/search-matcher'
 
 // default | delay | alphabet
@@ -127,7 +130,10 @@ function filterProxies(
   searchState?: ProxySearchState,
 ) {
   const query = filterText.trim()
-  if (!query) return dedupeProxiesByDisplayName(proxies)
+  const visibleProxies = proxies.filter(
+    (proxy) => !isHiddenProxyEntry(proxy.name, proxy),
+  )
+  if (!query) return dedupeProxiesByDisplayName(visibleProxies)
 
   const res1 = regex1.exec(query)
   if (res1) {
@@ -137,7 +143,7 @@ function filterProxies(
       symbol2 === 'error' ? 1e5 : symbol2 === 'timeout' ? 3000 : +symbol2
 
     return dedupeProxiesByDisplayName(
-      proxies.filter((p) => {
+      visibleProxies.filter((p) => {
         const delay = delayManager.getDelayFix(p, groupName)
 
         if (delay < 0) return false
@@ -156,7 +162,7 @@ function filterProxies(
   if (res2) {
     const type = res2[1].toLowerCase()
     return dedupeProxiesByDisplayName(
-      proxies.filter((p) => p.type.toLowerCase().includes(type)),
+      visibleProxies.filter((p) => p.type.toLowerCase().includes(type)),
     )
   }
 
@@ -173,7 +179,7 @@ function filterProxies(
 
   if (!compiled.isValid) return []
   return dedupeProxiesByDisplayName(
-    proxies.filter((p) => compiled.matcher(p.name)),
+    visibleProxies.filter((p) => compiled.matcher(p.name)),
   )
 }
 

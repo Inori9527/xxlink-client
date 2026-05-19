@@ -35,12 +35,10 @@ service:
   adminInstallPrompt: 安装 XXLink 服务需要管理员权限
   adminUninstallPrompt: 卸载 XXLink 服务需要管理员权限
 tray:
-  dashboard: 仪表板
-  systemProxy: 系统代理
-  tunMode: TUN 模式
+  dashboard: 打开 XXLink
   closeAllConnections: 关闭所有连接
   restartApp: 重启应用
-  vergeVersion: Verge 版本
+  vergeVersion: XXLink 版本
   exit: 退出
   tooltip:
     systemProxy: 系统代理

@@ -52,7 +52,11 @@ import {
 import { showNotice } from '@/services/notice-service'
 import { syncSubscription } from '@/services/subscription-sync'
 import parseTraffic from '@/utils/parse-traffic'
-import { getProxyDisplayName, getProxyDisplayKey } from '@/utils/proxy-display'
+import {
+  getProxyDisplayName,
+  getProxyDisplayKey,
+  isHiddenProxyEntry,
+} from '@/utils/proxy-display'
 
 const STARTUP_SYNC_ERROR_KEY = 'xxlink:last-sync-error'
 const STARTUP_SYNC_ERROR_TTL_MS = 5 * 60 * 1000
@@ -62,11 +66,6 @@ type ConnectMode = 'system' | 'both'
 
 const MODE_STORAGE_KEY = 'xxlink:connect-mode'
 const DEFAULT_MODE: ConnectMode = 'both'
-
-// Names to exclude from the node dropdown (case-insensitive).
-// "proxy" is the raw manual-selection group the upstream ships; end users
-// should just use "auto" (url-test) which picks the best node automatically.
-const HIDDEN_NODES: ReadonlySet<string> = new Set(['direct', 'reject', 'proxy'])
 
 const loadMode = (): ConnectMode => {
   try {
@@ -90,6 +89,7 @@ const pulse = keyframes`
 
 type ProxyEntry = {
   name: string
+  type?: string
   now?: string
   all?: Array<ProxyEntry | string> | string[]
   history?: { time: string; delay: number }[]
@@ -117,6 +117,15 @@ const resolveLeafProxyName = (
   const next = records[name]?.now
   if (!next || next === name) return name
   return resolveLeafProxyName(records, next, depth + 1)
+}
+
+const resolveVisibleProxyName = (
+  records: Record<string, ProxyEntry> | undefined,
+  name: string,
+): string => {
+  const leaf = resolveLeafProxyName(records, name)
+  if (!isHiddenProxyEntry(leaf, records?.[leaf])) return leaf
+  return ''
 }
 
 const formatDuration = (durationMs: number): string => {
@@ -431,8 +440,7 @@ const ConnectPage = () => {
       if (
         !entry ||
         typeof entry.name !== 'string' ||
-        entry.name.length === 0 ||
-        HIDDEN_NODES.has(entry.name.toLowerCase())
+        isHiddenProxyEntry(entry.name, proxyRecords?.[entry.name] ?? entry)
       ) {
         continue
       }
@@ -448,7 +456,7 @@ const ConnectPage = () => {
     }
 
     return Array.from(byKey.values())
-  }, [currentNode, globalGroup?.all])
+  }, [currentNode, globalGroup?.all, proxyRecords])
 
   const nodeOptions = useMemo(
     () => nodeEntries.map((entry) => entry.displayName),
@@ -457,16 +465,30 @@ const ConnectPage = () => {
 
   const currentNodeDisplay = useMemo(() => {
     const match = nodeEntries.find((entry) => entry.name === currentNode)
-    return (
-      match?.displayName ??
-      (currentNode ? getProxyDisplayName(currentNode) : '')
-    )
-  }, [currentNode, nodeEntries])
+    if (match?.displayName) return match.displayName
+
+    const visibleLeaf = resolveVisibleProxyName(proxyRecords, currentNode)
+    return visibleLeaf ? getProxyDisplayName(visibleLeaf) : ''
+  }, [currentNode, nodeEntries, proxyRecords])
 
   const currentNodeId = useMemo(() => {
     if (!currentRuntimeNode && !currentNode && !currentNodeDisplay) return null
-    const currentKey = currentNode ? getProxyDisplayKey(currentNode) : ''
-    const runtimeKey = currentRuntimeNode
+    const visibleCurrentName = isHiddenProxyEntry(
+      currentNode,
+      proxyRecords?.[currentNode],
+    )
+      ? ''
+      : currentNode
+    const visibleRuntimeName = isHiddenProxyEntry(
+      currentRuntimeNode,
+      proxyRecords?.[currentRuntimeNode],
+    )
+      ? ''
+      : currentRuntimeNode
+    const currentKey = visibleCurrentName
+      ? getProxyDisplayKey(visibleCurrentName)
+      : ''
+    const runtimeKey = visibleRuntimeName
       ? getProxyDisplayKey(currentRuntimeNode)
       : ''
     const displayKey = currentNodeDisplay
@@ -476,8 +498,8 @@ const ConnectPage = () => {
       const nodeDisplay = getProxyDisplayName(node.name)
       const nodeKey = getProxyDisplayKey(node.name)
       return (
-        node.name === currentRuntimeNode ||
-        node.name === currentNode ||
+        node.name === visibleRuntimeName ||
+        node.name === visibleCurrentName ||
         nodeDisplay === currentNodeDisplay ||
         (runtimeKey && nodeKey === runtimeKey) ||
         (currentKey && nodeKey === currentKey) ||
@@ -485,7 +507,13 @@ const ConnectPage = () => {
       )
     })
     return match?.id ?? null
-  }, [accountNodes, currentNode, currentNodeDisplay, currentRuntimeNode])
+  }, [
+    accountNodes,
+    currentNode,
+    currentNodeDisplay,
+    currentRuntimeNode,
+    proxyRecords,
+  ])
 
   const latencyMap = useMemo(() => {
     const map = new Map<string, number>()

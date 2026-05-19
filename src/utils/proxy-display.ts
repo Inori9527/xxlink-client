@@ -9,6 +9,33 @@ const BRACKETED_SPEED_RE = new RegExp(
 )
 const PORT_SUFFIX_RE = /\s*[:：]\d{2,5}\b/g
 
+const ALWAYS_HIDDEN_PROXY_NAMES = new Set(['xxlink-desktop'])
+const INTERNAL_PROXY_NAMES = new Set(['direct', 'reject', 'proxy'])
+const INTERNAL_PROXY_TYPES = new Set(['direct', 'reject', 'selector'])
+
+type ProxyLike = {
+  type?: string
+}
+
+export function isHiddenProxyName(name?: string | null): boolean {
+  if (typeof name !== 'string') return true
+  const normalized = name.trim().toLocaleLowerCase()
+  return !normalized || ALWAYS_HIDDEN_PROXY_NAMES.has(normalized)
+}
+
+export function isHiddenProxyEntry(
+  name?: string | null,
+  proxy?: ProxyLike | null,
+): boolean {
+  if (isHiddenProxyName(name)) return true
+
+  const normalized = name!.trim().toLocaleLowerCase()
+  if (!INTERNAL_PROXY_NAMES.has(normalized)) return false
+
+  const type = proxy?.type?.trim().toLocaleLowerCase()
+  return !type || INTERNAL_PROXY_TYPES.has(type)
+}
+
 export function getProxyDisplayName(name: string): string {
   return name
     .replace(BRACKETED_SPEED_RE, ' ')
@@ -36,4 +63,8 @@ export function dedupeProxiesByDisplayName<T extends { name: string }>(
   }
 
   return result
+}
+
+export function filterVisibleProxyNames(names: string[]): string[] {
+  return names.filter((name) => !isHiddenProxyEntry(name))
 }

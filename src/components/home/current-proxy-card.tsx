@@ -40,6 +40,7 @@ import { useVerge } from '@/hooks/use-verge'
 import { useAppData } from '@/providers/app-data-context'
 import delayManager from '@/services/delay'
 import { debugLog } from '@/utils/debug'
+import { isHiddenProxyEntry, isHiddenProxyName } from '@/utils/proxy-display'
 
 // 本地存储的键名
 const STORAGE_KEY_GROUP = 'clash-verge-selected-proxy-group'
@@ -303,13 +304,25 @@ export const CurrentProxyCard = () => {
         '节点选择',
         '自动选择',
       ]
+      const visibleGroups = proxies.groups.filter(
+        (group: { name: string; all?: Array<string | { name?: string }> }) =>
+          !isHiddenProxyName(group.name) &&
+          (group.all || []).some((item) => {
+            const name = typeof item === 'string' ? item : item?.name
+            const record =
+              typeof item === 'string'
+                ? proxies.records?.[name || '']
+                : proxies.records?.[name || ''] || item
+            return !isHiddenProxyEntry(name, record)
+          }),
+      )
       const primaryGroup =
-        proxies.groups.find((group: { name: string }) =>
+        visibleGroups.find((group: { name: string }) =>
           primaryKeywords.some((keyword) =>
             group.name.toLowerCase().includes(keyword.toLowerCase()),
           ),
         ) ||
-        proxies.groups.filter((g: { name: string }) => g.name !== 'GLOBAL')[0]
+        visibleGroups.filter((g: { name: string }) => g.name !== 'GLOBAL')[0]
 
       return primaryGroup?.name || ''
     }
@@ -353,6 +366,7 @@ export const CurrentProxyCard = () => {
 
     setState((prev) => {
       const groupsMap = new Map<string, ProxyGroupOption>()
+      const recordsMap = { ...(proxies.records || {}) }
 
       const registerGroup = (group: any, fallbackName?: string) => {
         if (!group && !fallbackName) return
@@ -362,7 +376,7 @@ export const CurrentProxyCard = () => {
             ? group.name
             : fallbackName
         const name = normalizePolicyName(rawName)
-        if (!name || groupsMap.has(name)) return
+        if (!name || isHiddenProxyName(name) || groupsMap.has(name)) return
 
         const rawAll = (
           Array.isArray(group?.all)
@@ -370,19 +384,35 @@ export const CurrentProxyCard = () => {
             : []
         ) as Array<string | { name?: string }>
         const allNames = rawAll
-          .map((item) =>
-            typeof item === 'string'
-              ? normalizePolicyName(item)
-              : normalizePolicyName(item?.name),
+          .map((item) => {
+            const value =
+              typeof item === 'string'
+                ? normalizePolicyName(item)
+                : normalizePolicyName(item?.name)
+            if (value && typeof item !== 'string' && !recordsMap[value]) {
+              recordsMap[value] = item
+            }
+            return {
+              name: value,
+              record: recordsMap[value],
+            }
+          })
+          .filter(
+            (item): item is { name: string; record: any } =>
+              item.name.length > 0 &&
+              !isHiddenProxyEntry(item.name, item.record),
           )
-          .filter((value): value is string => value.length > 0)
+          .map((item) => item.name)
 
         const uniqueAll = Array.from(new Set(allNames))
         if (uniqueAll.length === 0) return
 
+        const now = normalizePolicyName(group?.now)
+        const visibleNow = isHiddenProxyEntry(now, recordsMap[now]) ? '' : now
+
         groupsMap.set(name, {
           name,
-          now: normalizePolicyName(group?.now),
+          now: visibleNow,
           all: uniqueAll,
           type: group?.type,
         })
@@ -411,11 +441,23 @@ export const CurrentProxyCard = () => {
       if (isDirectMode) {
         newGroup = 'DIRECT'
         newProxy = 'DIRECT'
-        newDisplayProxy = proxies.records?.DIRECT || { name: 'DIRECT' }
+        newDisplayProxy = recordsMap.DIRECT || { name: 'DIRECT' }
       } else if (isGlobalMode && proxies.global) {
         newGroup = 'GLOBAL'
-        newProxy = proxies.global.now || ''
-        newDisplayProxy = proxies.records?.[newProxy] || null
+        const globalNow = normalizePolicyName(proxies.global.now)
+        const globalAll = (
+          Array.isArray(proxies.global.all) ? proxies.global.all : []
+        )
+          .map((item: string | { name?: string }) =>
+            typeof item === 'string'
+              ? normalizePolicyName(item)
+              : normalizePolicyName(item?.name),
+          )
+          .filter((name: string) => !isHiddenProxyEntry(name, recordsMap[name]))
+        newProxy = !isHiddenProxyEntry(globalNow, recordsMap[globalNow])
+          ? globalNow
+          : globalAll[0] || ''
+        newDisplayProxy = recordsMap[newProxy] || null
       } else {
         const currentGroup = filteredGroups.find(
           (g: { name: string }) => g.name === prev.selection.group,
@@ -426,7 +468,7 @@ export const CurrentProxyCard = () => {
           if (firstGroup) {
             newGroup = firstGroup.name
             newProxy = firstGroup.now || firstGroup.all[0] || ''
-            newDisplayProxy = proxies.records?.[newProxy] || null
+            newDisplayProxy = recordsMap[newProxy] || null
 
             if (!isGlobalMode && !isDirectMode) {
               writeProfileScopedItem(STORAGE_KEY_GROUP, newGroup)
@@ -437,14 +479,14 @@ export const CurrentProxyCard = () => {
           }
         } else if (currentGroup) {
           newProxy = currentGroup.now || currentGroup.all[0] || ''
-          newDisplayProxy = proxies.records?.[newProxy] || null
+          newDisplayProxy = recordsMap[newProxy] || null
         }
       }
 
       return {
         proxyData: {
           groups: filteredGroups,
-          records: proxies.records || {},
+          records: recordsMap,
         },
         selection: {
           group: newGroup,
@@ -491,13 +533,23 @@ export const CurrentProxyCard = () => {
           (g: { name: string }) => g.name === newGroup,
         )
         if (group) {
+          const nextProxy =
+            group.now &&
+            !isHiddenProxyEntry(group.now, prev.proxyData.records[group.now])
+              ? group.now
+              : group.all.find(
+                  (name) =>
+                    !isHiddenProxyEntry(name, prev.proxyData.records[name]),
+                ) || ''
           return {
             ...prev,
             selection: {
               group: newGroup,
-              proxy: group.now,
+              proxy: nextProxy,
             },
-            displayProxy: prev.proxyData.records[group.now] || null,
+            displayProxy: nextProxy
+              ? prev.proxyData.records[nextProxy] || null
+              : null,
           }
         }
         return {
@@ -702,7 +754,7 @@ export const CurrentProxyCard = () => {
       const allProxies = proxies.global.all
         .filter((p: any) => {
           const name = typeof p === 'string' ? p : p.name
-          return name !== 'DIRECT' && name !== 'REJECT'
+          return !isHiddenProxyEntry(name, state.proxyData.records[name])
         })
         .map((p: any) => (typeof p === 'string' ? p : p.name))
 
@@ -718,14 +770,18 @@ export const CurrentProxyCard = () => {
       // 规则模式
       const group = state.proxyData.groups.find((g) => g.name === groupName)
       if (group) {
-        group.all.forEach((name: string) => {
-          const proxy = state.proxyData.records[name]
-          if (proxy?.provider) {
-            providers.add(proxy.provider)
-          } else {
-            proxyNames.push(name)
-          }
-        })
+        group.all
+          .filter(
+            (name) => !isHiddenProxyEntry(name, state.proxyData.records[name]),
+          )
+          .forEach((name: string) => {
+            const proxy = state.proxyData.records[name]
+            if (proxy?.provider) {
+              providers.add(proxy.provider)
+            } else {
+              proxyNames.push(name)
+            }
+          })
       }
     }
 
@@ -827,7 +883,7 @@ export const CurrentProxyCard = () => {
       const options = proxies.global.all
         .filter((p: any) => {
           const name = typeof p === 'string' ? p : p.name
-          return name !== 'DIRECT' && name !== 'REJECT'
+          return !isHiddenProxyEntry(name, state.proxyData.records[name])
         })
         .map((p: any) => ({
           name: typeof p === 'string' ? p : p.name,
@@ -842,7 +898,11 @@ export const CurrentProxyCard = () => {
       : null
 
     if (group) {
-      const options = group.all.map((name) => ({ name }))
+      const options = group.all
+        .filter(
+          (name) => !isHiddenProxyEntry(name, state.proxyData.records[name]),
+        )
+        .map((name) => ({ name }))
       return sortWithLatency(options)
     }
 

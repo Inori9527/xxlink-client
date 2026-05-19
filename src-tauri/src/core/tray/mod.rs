@@ -1,22 +1,20 @@
 use crate::config::IVerge;
-use crate::core::service;
 use crate::core::tray::menu_def::TrayAction;
 use crate::module::lightweight;
 use crate::process::AsyncHandler;
 use crate::singleton;
 use crate::utils::window_manager::WindowManager;
 use crate::{Type, config::Config, feat, logging};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use xxlink_limiter::{Limiter, SystemClock, SystemLimiter};
 use xxlink_logging::logging_error;
-use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
-use tauri_plugin_xxlink_sysinfo::is_current_app_handle_admin;
 
 use super::handle;
 use anyhow::Result;
 use std::time::Duration;
 use tauri::{
     AppHandle, Wry,
-    menu::{CheckMenuItem, IsMenuItem, MenuEvent, MenuItem, PredefinedMenuItem},
+    menu::{IsMenuItem, MenuEvent, MenuItem, PredefinedMenuItem},
 };
 mod menu_def;
 use menu_def::{MenuIds, MenuTexts};
@@ -137,21 +135,7 @@ impl Tray {
             return Ok(());
         };
 
-        let verge = Config::verge().await.latest_arc();
-        let system_proxy = verge.enable_system_proxy.as_ref().unwrap_or(&false);
-        let tun_mode = verge.enable_tun_mode.as_ref().unwrap_or(&false);
-        let tun_mode_available =
-            is_current_app_handle_admin(app_handle) || service::is_service_available().await.is_ok();
-
-        logging_error!(
-            Type::Tray,
-            tray.set_menu(Some(create_tray_menu(
-                app_handle,
-                *system_proxy,
-                *tun_mode,
-                tun_mode_available
-            )?,))
-        );
+        logging_error!(Type::Tray, tray.set_menu(Some(create_tray_menu(app_handle)?,)));
 
         logging!(debug, Type::Tray, "托盘菜单更新成功");
         Ok(())
@@ -314,40 +298,19 @@ impl Tray {
 #[allow(dead_code)]
 const fn _legacy_tray_keepalive() {
     let _ = crate::feat::restart_clash_core;
+    let _ = crate::feat::toggle_system_proxy;
+    let _ = crate::feat::toggle_tun_mode;
     let _ = crate::feat::toggle_proxy_profile;
     let _ = crate::feat::switch_proxy_node;
     let _ = crate::module::lightweight::is_in_lightweight_mode;
     let _ = crate::cmd::patch_profiles_config_by_profile_index;
 }
 
-fn create_tray_menu(
-    app_handle: &AppHandle,
-    system_proxy_enabled: bool,
-    tun_mode_enabled: bool,
-    tun_mode_available: bool,
-) -> Result<tauri::menu::Menu<Wry>> {
+fn create_tray_menu(app_handle: &AppHandle) -> Result<tauri::menu::Menu<Wry>> {
     let version = env!("CARGO_PKG_VERSION");
     let texts = MenuTexts::new();
 
     let open_window = &MenuItem::with_id(app_handle, MenuIds::DASHBOARD, &texts.dashboard, true, None::<&str>)?;
-
-    let system_proxy = &CheckMenuItem::with_id(
-        app_handle,
-        MenuIds::SYSTEM_PROXY,
-        &texts.system_proxy,
-        true,
-        system_proxy_enabled,
-        None::<&str>,
-    )?;
-
-    let tun_mode = &CheckMenuItem::with_id(
-        app_handle,
-        MenuIds::TUN_MODE,
-        &texts.tun_mode,
-        tun_mode_available,
-        tun_mode_enabled,
-        None::<&str>,
-    )?;
 
     let close_all_connections = &MenuItem::with_id(
         app_handle,
@@ -379,8 +342,6 @@ fn create_tray_menu(
     let menu_items: Vec<&dyn IsMenuItem<Wry>> = vec![
         open_window,
         separator,
-        system_proxy as &dyn IsMenuItem<Wry>,
-        tun_mode as &dyn IsMenuItem<Wry>,
         close_all_connections as &dyn IsMenuItem<Wry>,
         separator,
         restart_app,
@@ -419,12 +380,6 @@ fn on_tray_icon_event(_tray_icon: &TrayIcon, tray_event: TrayIconEvent) {
             let verge_tray_action = TrayAction::from(verge_tray_event.as_str());
             logging!(debug, Type::Tray, "tray event: {verge_tray_action:?}");
             match verge_tray_action {
-                TrayAction::SystemProxy => {
-                    let _ = feat::toggle_system_proxy().await;
-                }
-                TrayAction::TunMode => {
-                    let _ = feat::toggle_tun_mode(None).await;
-                }
                 TrayAction::MainWindow => {
                     if !lightweight::exit_lightweight_mode().await {
                         WindowManager::show_main_window().await;
@@ -452,12 +407,6 @@ fn on_menu_event(_: &AppHandle, event: MenuEvent) {
                 if !lightweight::exit_lightweight_mode().await {
                     WindowManager::show_main_window().await;
                 };
-            }
-            MenuIds::SYSTEM_PROXY => {
-                feat::toggle_system_proxy().await;
-            }
-            MenuIds::TUN_MODE => {
-                feat::toggle_tun_mode(None).await;
             }
             MenuIds::CLOSE_ALL_CONNECTIONS => {
                 if let Err(err) = handle::Handle::mihomo().await.close_all_connections().await {
