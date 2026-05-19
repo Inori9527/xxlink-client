@@ -32,7 +32,12 @@ type DisplayNode = ProxyEntry & {
   key: string
 }
 
-const HIDDEN_NODES: ReadonlySet<string> = new Set(['direct', 'reject', 'proxy'])
+const HIDDEN_NODES: ReadonlySet<string> = new Set([
+  'direct',
+  'reject',
+  'proxy',
+  'xxlink-desktop',
+])
 
 const NodesPage = () => {
   const { t } = useTranslation()

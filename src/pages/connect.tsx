@@ -66,7 +66,12 @@ const DEFAULT_MODE: ConnectMode = 'both'
 // Names to exclude from the node dropdown (case-insensitive).
 // "proxy" is the raw manual-selection group the upstream ships; end users
 // should just use "auto" (url-test) which picks the best node automatically.
-const HIDDEN_NODES: ReadonlySet<string> = new Set(['direct', 'reject', 'proxy'])
+const HIDDEN_NODES: ReadonlySet<string> = new Set([
+  'direct',
+  'reject',
+  'proxy',
+  'xxlink-desktop',
+])
 
 const loadMode = (): ConnectMode => {
   try {
