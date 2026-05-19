@@ -120,16 +120,17 @@ impl Tray {
     }
 
     /// 更新托盘菜单
+    #[allow(clippy::unused_async)]
     pub async fn update_menu(&self) -> Result<()> {
         if handle::Handle::global().is_exiting() {
             logging!(debug, Type::Tray, "应用正在退出，跳过托盘菜单更新");
             return Ok(());
         }
         let app_handle = handle::Handle::app_handle();
-        self.update_menu_internal(app_handle).await
+        self.update_menu_internal(app_handle)
     }
 
-    async fn update_menu_internal(&self, app_handle: &AppHandle) -> Result<()> {
+    fn update_menu_internal(&self, app_handle: &AppHandle) -> Result<()> {
         let Some(tray) = app_handle.tray_by_id("main") else {
             logging!(warn, Type::Tray, "Failed to update tray menu: tray not found");
             return Ok(());
