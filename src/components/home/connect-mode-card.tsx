@@ -1,4 +1,8 @@
-import { ComputerRounded, LanguageRounded } from '@mui/icons-material'
+import {
+  AltRouteRounded,
+  ComputerRounded,
+  LanguageRounded,
+} from '@mui/icons-material'
 import { Box, Paper, Stack, Typography } from '@mui/material'
 import { useLockFn } from 'ahooks'
 import { useMemo } from 'react'
@@ -32,6 +36,11 @@ const MODE_META: Record<
     activeDescription: 'home.components.proxyTun.status.tunModeEnabled',
     inactiveDescription: 'home.components.proxyTun.status.tunModeDisabled',
   },
+  smart: {
+    label: 'layout.components.connect.mode.smart',
+    activeDescription: 'home.components.proxyTun.status.tunModeEnabled',
+    inactiveDescription: 'home.components.proxyTun.status.tunModeDisabled',
+  },
 }
 
 export const ConnectModeCard = () => {
@@ -58,6 +67,10 @@ export const ConnectModeCard = () => {
       return t('home.components.proxyTun.status.tunModeServiceRequired')
     }
 
+    if (mode === 'smart') {
+      return t('layout.components.connect.modeTooltip')
+    }
+
     return t(
       tunEnabled
         ? MODE_META.both.activeDescription
@@ -69,6 +82,7 @@ export const ConnectModeCard = () => {
     () => ({
       system: <ComputerRounded fontSize="small" />,
       both: <LanguageRounded fontSize="small" />,
+      smart: <AltRouteRounded fontSize="small" />,
     }),
     [],
   )
@@ -79,16 +93,32 @@ export const ConnectModeCard = () => {
     const previousMode = mode
     setMode(nextMode)
 
-    if (!hasActiveProxy) return
+    if (!hasActiveProxy) {
+      try {
+        await patchVerge({ connect_mode: nextMode })
+      } catch (error) {
+        setMode(previousMode)
+        console.error('[Home] failed to save connect mode', error)
+        showNotice.error(
+          'layout.components.connect.feedback.toggleFailed',
+          error,
+        )
+      }
+      return
+    }
 
     try {
-      if (nextMode === 'both') {
-        await patchClash({ mode: 'global' })
-      }
+      await patchClash({ mode: nextMode === 'smart' ? 'rule' : 'global' })
 
       await patchVerge(getConnectModePayload(nextMode, true))
     } catch (error) {
       setMode(previousMode)
+      try {
+        await patchClash({ mode: previousMode === 'smart' ? 'rule' : 'global' })
+        await patchVerge(getConnectModePayload(previousMode, true))
+      } catch (rollbackError) {
+        console.error('[Home] failed to roll back connect mode', rollbackError)
+      }
       console.error('[Home] failed to change connect mode', error)
       showNotice.error('layout.components.connect.feedback.toggleFailed', error)
     }

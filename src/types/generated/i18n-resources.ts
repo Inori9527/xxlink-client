@@ -191,6 +191,7 @@ export interface TranslationResources {
             connect: string
             connecting: string
             disconnect: string
+            switchNode: string
           }
           empty: {
             goToPlans: string
@@ -211,18 +212,24 @@ export interface TranslationResources {
           labels: {
             both: string
             connected: string
+            connectedHint: string
             disconnected: string
             disconnectFirst: string
             download: string
+            heroSubtitle: string
+            heroTitle: string
             mode: string
+            node: string
             noNode: string
             selectNode: string
+            startHint: string
             system: string
             tun: string
             upload: string
           }
           mode: {
             both: string
+            smart: string
             system: string
           }
           modeTooltip: string

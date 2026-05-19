@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
-export type ConnectMode = 'system' | 'both'
+export type ConnectMode = 'system' | 'both' | 'smart'
 
 export const CONNECT_MODE_STORAGE_KEY = 'xxlink:connect-mode'
 const CONNECT_MODE_EVENT = 'xxlink:connect-mode-changed'
@@ -9,7 +9,7 @@ const DEFAULT_CONNECT_MODE: ConnectMode = 'both'
 const normalizeConnectMode = (
   value: string | null | undefined,
 ): ConnectMode => {
-  if (value === 'system' || value === 'both') {
+  if (value === 'system' || value === 'both' || value === 'smart') {
     return value
   }
 
@@ -53,12 +53,14 @@ export const getConnectModePayload = (
     return {
       enable_tun_mode: false,
       enable_system_proxy: enabled,
+      connect_mode: mode,
     }
   }
 
   return {
     enable_tun_mode: enabled,
     enable_system_proxy: enabled,
+    connect_mode: mode,
   }
 }
 

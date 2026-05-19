@@ -1,6 +1,7 @@
 import {
   AccessTimeRounded,
   DataUsageRounded,
+  KeyboardArrowDownRounded,
   PowerSettingsNewRounded,
   RefreshRounded,
 } from '@mui/icons-material'
@@ -13,6 +14,9 @@ import {
   CircularProgress,
   IconButton,
   LinearProgress,
+  ListItemText,
+  Menu,
+  MenuItem,
   Paper,
   Stack,
   Tooltip,
@@ -24,6 +28,7 @@ import {
 import { open } from '@tauri-apps/plugin-shell'
 import { useLockFn } from 'ahooks'
 import {
+  type MouseEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -36,6 +41,12 @@ import { useNavigate } from 'react-router'
 
 import { BasePage } from '@/components/base'
 import { useClash } from '@/hooks/use-clash'
+import {
+  getConnectModePayload,
+  loadConnectMode,
+  persistConnectMode,
+  type ConnectMode,
+} from '@/hooks/use-connect-mode'
 import { useProxySelection } from '@/hooks/use-proxy-selection'
 import { useTrafficData } from '@/hooks/use-traffic-data'
 import { useVerge } from '@/hooks/use-verge'
@@ -61,25 +72,6 @@ import {
 const STARTUP_SYNC_ERROR_KEY = 'xxlink:last-sync-error'
 const STARTUP_SYNC_ERROR_TTL_MS = 5 * 60 * 1000
 const DASHBOARD_URL = 'https://xxlink.net/dashboard'
-
-type ConnectMode = 'system' | 'both'
-
-const MODE_STORAGE_KEY = 'xxlink:connect-mode'
-const DEFAULT_MODE: ConnectMode = 'both'
-
-const loadMode = (): ConnectMode => {
-  try {
-    const saved = localStorage.getItem(MODE_STORAGE_KEY)
-    if (saved === 'system' || saved === 'both') {
-      return saved
-    }
-    // Legacy 'tun' mode was removed — coerce to recommended default.
-    if (saved === 'tun') return 'both'
-  } catch {
-    /* ignore */
-  }
-  return DEFAULT_MODE
-}
 
 const pulse = keyframes`
   0% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.6); }
@@ -224,9 +216,10 @@ const ConnectPage = () => {
   const { changeProxy } = useProxySelection({
     onSuccess: () => refreshProxy(),
     onError: (error) => console.error('[Connect] proxy change failed', error),
+    forceConnectionCleanup: true,
   })
 
-  const [mode, setMode] = useState<ConnectMode>(() => loadMode())
+  const [mode, setMode] = useState<ConnectMode>(() => loadConnectMode())
   const [busy, setBusy] = useState(false)
   const [errorFlash, setErrorFlash] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -235,6 +228,8 @@ const ConnectPage = () => {
     useState<PublicBenefitStatus | null>(null)
   const [periodUsage, setPeriodUsage] = useState<PeriodUsageState | null>(null)
   const [accountNodes, setAccountNodes] = useState<Node[]>([])
+  const [nodeMenuAnchor, setNodeMenuAnchor] = useState<HTMLElement | null>(null)
+  const [modeChanging, setModeChanging] = useState(false)
   const [durationNow, setDurationNow] = useState(() => Date.now())
   const [connectionSession, updateConnectionSession] = useReducer(
     connectionSessionReducer,
@@ -338,6 +333,7 @@ const ConnectPage = () => {
       case 'system':
         return sysEnabled
       case 'both':
+      case 'smart':
         return tunEnabled && sysEnabled
       default:
         return false
@@ -542,20 +538,107 @@ const ConnectPage = () => {
     }
   }, [connected, globalGroup?.name, nodeEntries, currentNode, changeProxy])
 
-  const handleModeChange = useCallback((next: ConnectMode) => {
-    setMode(next)
-    try {
-      localStorage.setItem(MODE_STORAGE_KEY, next)
-    } catch {
-      /* ignore */
-    }
-  }, [])
-
   const triggerErrorFlash = useCallback(() => {
     setErrorFlash(true)
     if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
     errorTimerRef.current = setTimeout(() => setErrorFlash(false), 2000)
   }, [])
+
+  const handleModeChange = useCallback(
+    (next: ConnectMode) => {
+      if (next === mode || modeChanging) return
+
+      const previousMode = mode
+      setMode(next)
+      persistConnectMode(next)
+
+      const payload = connected
+        ? getConnectModePayload(next, true)
+        : ({ connect_mode: next } as Partial<IVergeConfig>)
+      const rollbackPayload = connected
+        ? getConnectModePayload(previousMode, true)
+        : ({ connect_mode: previousMode } as Partial<IVergeConfig>)
+
+      void (async () => {
+        try {
+          setModeChanging(true)
+          if (connected) {
+            await patchClash({ mode: next === 'smart' ? 'rule' : 'global' })
+          }
+          await patchVerge(payload)
+          await refreshProxy()
+        } catch (error) {
+          setMode(previousMode)
+          persistConnectMode(previousMode)
+
+          try {
+            if (connected) {
+              await patchClash({
+                mode: previousMode === 'smart' ? 'rule' : 'global',
+              })
+            }
+            await patchVerge(rollbackPayload)
+            await refreshProxy()
+          } catch (rollbackError) {
+            console.error('[Connect] mode rollback failed', rollbackError)
+          }
+
+          console.error('[Connect] mode change failed', error)
+          showNotice.error(
+            'layout.components.connect.feedback.toggleFailed',
+            error,
+          )
+          triggerErrorFlash()
+        } finally {
+          setModeChanging(false)
+        }
+      })()
+    },
+    [
+      connected,
+      mode,
+      modeChanging,
+      patchClash,
+      patchVerge,
+      refreshProxy,
+      triggerErrorFlash,
+    ],
+  )
+
+  const handleNodeMenuOpen = useCallback(
+    (event: MouseEvent<HTMLElement>) => {
+      if (busy || modeChanging) return
+      setNodeMenuAnchor(event.currentTarget)
+    },
+    [busy, modeChanging],
+  )
+
+  const handleNodeMenuClose = useCallback(() => {
+    setNodeMenuAnchor(null)
+  }, [])
+
+  const handleNodeSelect = useCallback(
+    (entry: DisplayProxyEntry) => {
+      handleNodeMenuClose()
+      if (busy || modeChanging) return
+      if (!globalGroup?.name || entry.name === currentNode) return
+      changeProxy(
+        globalGroup.name,
+        entry.name,
+        currentRuntimeNode || currentNode,
+        true,
+      )
+    },
+    [
+      changeProxy,
+      currentNode,
+      currentRuntimeNode,
+      busy,
+      globalGroup?.name,
+      handleNodeMenuClose,
+      modeChanging,
+    ],
+  )
 
   const handleToggle = useLockFn(async () => {
     if (busy) return
@@ -567,19 +650,15 @@ const ConnectPage = () => {
         payload.enable_tun_mode = false
         payload.enable_system_proxy = next
       } else {
-        // both (recommended)
+        // Full VPN and Smart Split both need TUN so desktop apps are covered.
         payload.enable_tun_mode = next
         payload.enable_system_proxy = next
       }
-      // When connecting, force Clash routing mode to `global` so the node
-      // selected in the GLOBAL group actually carries traffic. Without this,
-      // a `rule`-mode subscription would ignore our selection and route
-      // through whatever the rules dictate (often a different country).
       if (next) {
         await refreshAccountState()
-        await patchClash({ mode: 'global' })
+        await patchClash({ mode: mode === 'smart' ? 'rule' : 'global' })
       }
-      await patchVerge(payload)
+      await patchVerge({ ...payload, connect_mode: mode })
       await refreshAccountState()
     } catch (error) {
       console.error('[Connect] toggle failed', error)
@@ -857,14 +936,14 @@ const ConnectPage = () => {
                 XXLink
               </Typography>
               <Typography variant="h5" fontWeight={950}>
-                一键连接
+                {t('layout.components.connect.labels.heroTitle')}
               </Typography>
               <Typography
                 variant="body2"
                 color="text.secondary"
                 sx={{ mt: 0.25 }}
               >
-                选择模式，点击圆形按钮即可开始。
+                {t('layout.components.connect.labels.heroSubtitle')}
               </Typography>
             </Box>
             <ButtonGroup
@@ -885,14 +964,23 @@ const ConnectPage = () => {
               <Button
                 variant={mode === 'system' ? 'contained' : 'text'}
                 onClick={() => handleModeChange('system')}
+                disabled={modeChanging}
               >
                 {t('layout.components.connect.mode.system')}
               </Button>
               <Button
                 variant={mode === 'both' ? 'contained' : 'text'}
                 onClick={() => handleModeChange('both')}
+                disabled={modeChanging}
               >
                 {t('layout.components.connect.mode.both')}
+              </Button>
+              <Button
+                variant={mode === 'smart' ? 'contained' : 'text'}
+                onClick={() => handleModeChange('smart')}
+                disabled={modeChanging}
+              >
+                {t('layout.components.connect.mode.smart')}
               </Button>
             </ButtonGroup>
           </Stack>
@@ -913,7 +1001,7 @@ const ConnectPage = () => {
             <Stack direction="column" spacing={1.25} alignItems="center">
               <Button
                 onClick={handleToggle}
-                disabled={busy || isEmpty}
+                disabled={busy || modeChanging || isEmpty}
                 sx={{
                   width: 104,
                   height: 104,
@@ -976,8 +1064,8 @@ const ConnectPage = () => {
                   {isEmpty
                     ? t('layout.components.connect.empty.subtitle')
                     : connected
-                      ? '已连接'
-                      : '点击开始'}
+                      ? t('layout.components.connect.labels.connectedHint')
+                      : t('layout.components.connect.labels.startHint')}
                 </Typography>
                 {isEmpty ? (
                   <Button
@@ -1091,7 +1179,7 @@ const ConnectPage = () => {
             >
               <Stack direction="row" spacing={1} alignItems="center">
                 <Typography variant="body2" color="text.secondary">
-                  节点
+                  {t('layout.components.connect.labels.node')}
                 </Typography>
                 <Typography variant="body1" fontWeight={950} noWrap>
                   {currentNodeDisplay ||
@@ -1115,14 +1203,54 @@ const ConnectPage = () => {
                 </Typography>
                 <Button
                   size="small"
-                  variant="text"
-                  onClick={() => navigate('/nodes')}
+                  variant="outlined"
+                  endIcon={<KeyboardArrowDownRounded />}
+                  onClick={handleNodeMenuOpen}
+                  disabled={busy || modeChanging || isEmpty}
                   sx={{ borderRadius: 999, fontWeight: 950 }}
                 >
-                  切换
+                  {t('layout.components.connect.actions.switchNode')}
                 </Button>
               </Stack>
             </Stack>
+            <Menu
+              anchorEl={nodeMenuAnchor}
+              open={Boolean(nodeMenuAnchor)}
+              onClose={handleNodeMenuClose}
+              slotProps={{
+                paper: {
+                  sx: {
+                    mt: 1,
+                    minWidth: 280,
+                    maxHeight: 360,
+                    borderRadius: 3,
+                  },
+                },
+              }}
+            >
+              {nodeEntries.map((entry) => {
+                const selected = entry.name === currentNode
+                const delay = latencyMap.get(entry.displayName)
+                return (
+                  <MenuItem
+                    key={`${entry.name}:${entry.displayName}`}
+                    selected={selected}
+                    disabled={selected}
+                    onClick={() => handleNodeSelect(entry)}
+                  >
+                    <ListItemText
+                      primary={entry.displayName}
+                      secondary={
+                        delay !== undefined
+                          ? `${delay} ms`
+                          : t('layout.components.nodes.delay.notTested')
+                      }
+                      primaryTypographyProps={{ fontWeight: 900, noWrap: true }}
+                    />
+                  </MenuItem>
+                )
+              })}
+            </Menu>
           </Paper>
         </Paper>
       </Stack>

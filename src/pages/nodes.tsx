@@ -29,6 +29,7 @@ import {
 type ProxyEntry = {
   name: string
   type?: string
+  now?: string
   history?: { time: string; delay: number }[]
 }
 
@@ -50,6 +51,7 @@ const NodesPage = () => {
   const { changeProxy } = useProxySelection({
     onSuccess: () => refreshProxy(),
     onError: (error) => console.error('[Nodes] proxy change failed', error),
+    forceConnectionCleanup: true,
   })
 
   const globalGroup = proxies?.global as
@@ -66,6 +68,15 @@ const NodesPage = () => {
   const currentNode = globalGroup?.now || ''
   const groupName = globalGroup?.name || ''
   const latencyTimeout = verge?.default_latency_timeout || 10000
+  const currentRuntimeNode = useMemo(() => {
+    let next = currentNode
+    for (let depth = 0; depth < 8; depth += 1) {
+      const current = next ? proxyRecords?.[next]?.now : undefined
+      if (!current || current === next) break
+      next = current
+    }
+    return next
+  }, [currentNode, proxyRecords])
 
   const nodes = useMemo<DisplayNode[]>(() => {
     const byKey = new Map<string, DisplayNode>()
@@ -110,8 +121,13 @@ const NodesPage = () => {
   }, [groupName])
 
   const handleSelect = (node: DisplayNode) => {
-    if (connected || !globalGroup?.name || node.name === currentNode) return
-    changeProxy(globalGroup.name, node.name, currentNode, true)
+    if (!globalGroup?.name || node.name === currentNode) return
+    changeProxy(
+      globalGroup.name,
+      node.name,
+      currentRuntimeNode || currentNode,
+      true,
+    )
   }
 
   const handleTestDelay = useLockFn(async () => {
@@ -264,7 +280,7 @@ const NodesPage = () => {
                 component="button"
                 type="button"
                 elevation={0}
-                disabled={connected || selected}
+                disabled={selected}
                 onClick={() => handleSelect(node)}
                 sx={{
                   width: '100%',
@@ -278,19 +294,17 @@ const NodesPage = () => {
                       : alpha(theme.palette.common.white, 0.08)
                   }`,
                   color: 'text.primary',
-                  cursor: connected || selected ? 'default' : 'pointer',
+                  cursor: selected ? 'default' : 'pointer',
                   bgcolor: selected
                     ? alpha(theme.palette.primary.main, 0.16)
                     : theme.palette.mode === 'dark'
                       ? 'rgba(24,27,36,0.92)'
                       : '#FFFFFF',
                   transition: 'border-color .18s ease, transform .18s ease',
-                  '&:hover': connected
-                    ? {}
-                    : {
-                        borderColor: alpha(theme.palette.primary.main, 0.45),
-                        transform: selected ? 'none' : 'translateY(-1px)',
-                      },
+                  '&:hover': {
+                    borderColor: alpha(theme.palette.primary.main, 0.45),
+                    transform: selected ? 'none' : 'translateY(-1px)',
+                  },
                   '&:disabled': {
                     opacity: selected ? 1 : 0.58,
                   },

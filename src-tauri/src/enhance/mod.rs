@@ -34,6 +34,9 @@ const ADOBE_PROCESS_NAMES: &[&str] = &[
     "AdobeIPCBroker.exe",
 ];
 const DESKTOP_COMPAT_POLICY: &str = "XXLink-Desktop";
+const GLOBAL_POLICY: &str = "GLOBAL";
+const SMART_SPLIT_DIRECT_RULES: &[&str] = &["GEOSITE,cn,DIRECT", "GEOIP,CN,DIRECT,no-resolve"];
+const SMART_SPLIT_FALLBACK_RULE: &str = "MATCH,GLOBAL";
 
 #[derive(Debug)]
 struct ConfigValues {
@@ -42,6 +45,7 @@ struct ConfigValues {
     socks_enabled: bool,
     http_enabled: bool,
     enable_dns_settings: bool,
+    connect_mode: Option<String>,
     #[cfg(not(target_os = "windows"))]
     redir_enabled: bool,
     #[cfg(target_os = "linux")]
@@ -61,6 +65,7 @@ async fn get_config_values() -> ConfigValues {
     let socks_enabled = verge_arc.verge_socks_enabled.unwrap_or(false);
     let http_enabled = verge_arc.verge_http_enabled.unwrap_or(false);
     let enable_dns_settings = verge_arc.enable_dns_settings.unwrap_or(false);
+    let connect_mode = verge_arc.connect_mode.clone();
 
     #[cfg(not(target_os = "windows"))]
     let redir_enabled = verge_arc.verge_redir_enabled.unwrap_or(false);
@@ -77,6 +82,7 @@ async fn get_config_values() -> ConfigValues {
         socks_enabled,
         http_enabled,
         enable_dns_settings,
+        connect_mode,
         #[cfg(not(target_os = "windows"))]
         redir_enabled,
         #[cfg(target_os = "linux")]
@@ -402,6 +408,112 @@ fn apply_desktop_compatibility_rules(mut config: Mapping) -> Mapping {
     config
 }
 
+fn ensure_global_proxy_group(config: &mut Mapping) -> bool {
+    let groups_key = Value::from("proxy-groups");
+    let mut groups = config
+        .remove(&groups_key)
+        .and_then(|value| value.as_sequence().cloned())
+        .unwrap_or_default();
+
+    if groups
+        .iter()
+        .any(|item| item.get("name").and_then(Value::as_str) == Some(GLOBAL_POLICY))
+    {
+        config.insert(groups_key, Value::Sequence(groups));
+        return true;
+    }
+
+    let proxy_names = collect_leaf_proxy_names(config);
+    let provider_names = collect_provider_names(config);
+    if proxy_names.is_empty() && provider_names.is_empty() {
+        config.insert(groups_key, Value::Sequence(groups));
+        return false;
+    }
+
+    let mut group = Mapping::new();
+    group.insert("name".into(), GLOBAL_POLICY.into());
+    group.insert("type".into(), "select".into());
+    if !proxy_names.is_empty() {
+        group.insert(
+            "proxies".into(),
+            Value::Sequence(proxy_names.into_iter().map(Value::String).collect()),
+        );
+    }
+    if !provider_names.is_empty() {
+        group.insert(
+            "use".into(),
+            Value::Sequence(provider_names.into_iter().map(Value::String).collect()),
+        );
+    }
+
+    groups.insert(0, Value::Mapping(group));
+    config.insert(groups_key, Value::Sequence(groups));
+    true
+}
+
+fn rule_kind(rule: &str) -> std::string::String {
+    rule.split(',').next().unwrap_or_default().trim().to_ascii_uppercase()
+}
+
+fn is_terminal_rule(rule: &str) -> bool {
+    matches!(rule_kind(rule).as_str(), "MATCH" | "FINAL")
+}
+
+fn should_apply_smart_split(connect_mode: Option<&str>) -> bool {
+    connect_mode.is_some_and(|mode| mode.eq_ignore_ascii_case("smart"))
+}
+
+fn apply_smart_split_rules(mut config: Mapping, connect_mode: Option<&str>) -> Mapping {
+    if !should_apply_smart_split(connect_mode) {
+        return config;
+    }
+    if !ensure_global_proxy_group(&mut config) {
+        return config;
+    }
+
+    config.insert("mode".into(), "rule".into());
+
+    let rules_key = Value::from("rules");
+    let rules = config
+        .remove(&rules_key)
+        .and_then(|value| value.as_sequence().cloned())
+        .unwrap_or_default();
+
+    let smart_rule_set = SMART_SPLIT_DIRECT_RULES
+        .iter()
+        .chain(std::iter::once(&SMART_SPLIT_FALLBACK_RULE))
+        .map(|rule| rule.to_ascii_lowercase())
+        .collect::<HashSet<_>>();
+    let mut seen = HashSet::new();
+    let mut next_rules = Vec::new();
+
+    for rule in SMART_SPLIT_DIRECT_RULES {
+        seen.insert(rule.to_ascii_lowercase());
+        next_rules.push(Value::String((*rule).into()));
+    }
+
+    for rule in rules {
+        let Some(rule_str) = rule.as_str() else {
+            next_rules.push(rule);
+            continue;
+        };
+        let normalized = rule_str.trim().to_ascii_lowercase();
+        if normalized.is_empty()
+            || smart_rule_set.contains(&normalized)
+            || is_terminal_rule(rule_str)
+            || !seen.insert(normalized)
+        {
+            continue;
+        }
+        next_rules.push(rule);
+    }
+
+    next_rules.push(Value::String(SMART_SPLIT_FALLBACK_RULE.into()));
+    logging!(info, Type::Core, "apply smart split routing rules");
+    config.insert(rules_key, Value::Sequence(next_rules));
+    config
+}
+
 /// Enhance mode
 /// 返回最终订阅、该订阅包含的键、和script执行的结果
 pub async fn enhance() -> (Mapping, HashSet<String>, HashMap<String, ResultLog>) {
@@ -413,6 +525,7 @@ pub async fn enhance() -> (Mapping, HashSet<String>, HashMap<String, ResultLog>)
         socks_enabled,
         http_enabled,
         enable_dns_settings,
+        connect_mode,
         #[cfg(not(target_os = "windows"))]
         redir_enabled,
         #[cfg(target_os = "linux")]
@@ -444,6 +557,7 @@ pub async fn enhance() -> (Mapping, HashSet<String>, HashMap<String, ResultLog>)
     // app-level DNS overrides cannot reopen desktop DNS/IPv6 leaks.
     config = apply_dns_settings(config, enable_dns_settings).await;
     config = use_tun(config, enable_tun);
+    config = apply_smart_split_rules(config, connect_mode.as_deref());
     config = apply_desktop_compatibility_rules(config);
 
     let mut exists_keys_set = HashSet::new();
@@ -455,7 +569,7 @@ pub async fn enhance() -> (Mapping, HashSet<String>, HashMap<String, ResultLog>)
 #[allow(clippy::expect_used)]
 #[cfg(test)]
 mod tests {
-    use super::cleanup_proxy_groups;
+    use super::{apply_smart_split_rules, cleanup_proxy_groups};
 
     #[test]
     fn remove_missing_proxies_from_groups() {
@@ -610,5 +724,54 @@ proxy-groups:
             .expect("proxies should be a sequence");
         assert_eq!(proxies.len(), 1);
         assert_eq!(proxies[0].as_str(), Some("DIRECT"));
+    }
+
+    #[test]
+    fn smart_split_prepends_cn_direct_and_replaces_terminal_rule() {
+        let config_str = r"
+mode: rule
+proxies:
+  - name: node-a
+    type: ss
+rules:
+  - DOMAIN,example.com,SomePolicy
+  - MATCH,DIRECT
+";
+
+        let config: serde_yaml_ng::Mapping = serde_yaml_ng::from_str(config_str).expect("Failed to parse test yaml");
+        let config = apply_smart_split_rules(config, Some("smart"));
+        let rules = config
+            .get("rules")
+            .and_then(|v| v.as_sequence())
+            .expect("rules should be a sequence");
+
+        let rules = rules
+            .iter()
+            .filter_map(serde_yaml_ng::Value::as_str)
+            .collect::<Vec<_>>();
+        assert_eq!(rules[0], "GEOSITE,cn,DIRECT");
+        assert_eq!(rules[1], "GEOIP,CN,DIRECT,no-resolve");
+        assert!(rules.contains(&"DOMAIN,example.com,SomePolicy"));
+        assert_eq!(rules.last(), Some(&"MATCH,GLOBAL"));
+        assert!(!rules.contains(&"MATCH,DIRECT"));
+    }
+
+    #[test]
+    fn smart_split_does_not_change_when_client_mode_is_not_smart() {
+        let config_str = r"
+mode: rule
+rules:
+  - MATCH,DIRECT
+";
+
+        let config: serde_yaml_ng::Mapping = serde_yaml_ng::from_str(config_str).expect("Failed to parse test yaml");
+        let config = apply_smart_split_rules(config, Some("both"));
+        let rules = config
+            .get("rules")
+            .and_then(|v| v.as_sequence())
+            .expect("rules should be a sequence");
+
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules[0].as_str(), Some("MATCH,DIRECT"));
     }
 }

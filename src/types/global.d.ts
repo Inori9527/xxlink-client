@@ -906,6 +906,7 @@ interface IVergeConfig {
   tray_proxy_groups_display_mode?: 'default' | 'inline' | 'disable'
   tray_inline_outbound_modes?: boolean
   enable_tun_mode?: boolean
+  connect_mode?: 'system' | 'both' | 'smart' | string
   enable_auto_light_weight_mode?: boolean
   auto_light_weight_minutes?: number
   enable_auto_launch?: boolean

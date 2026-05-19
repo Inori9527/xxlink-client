@@ -4,10 +4,10 @@ use crate::{
     utils::{dirs, help},
 };
 use anyhow::Result;
-use xxlink_logging::{Type, logging};
 use log::LevelFilter;
 use serde::{Deserialize, Serialize};
 use smartstring::alias::String;
+use xxlink_logging::{Type, logging};
 
 /// ### `verge.yaml` schema
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
@@ -64,6 +64,9 @@ pub struct IVerge {
 
     /// clash tun mode
     pub enable_tun_mode: Option<bool>,
+
+    /// client connection mode: system, both, smart
+    pub connect_mode: Option<String>,
 
     /// can the app auto startup
     pub enable_auto_launch: Option<bool>,
@@ -306,6 +309,7 @@ impl IVerge {
             enable_hover_jump_navigator: Some(true),
             hover_jump_navigator_delay: Some(280),
             enable_system_proxy: Some(false),
+            connect_mode: Some("both".into()),
             proxy_auto_config: Some(false),
             pac_file_content: Some(DEFAULT_PAC.into()),
             proxy_host: Some("127.0.0.1".into()),
@@ -379,6 +383,7 @@ impl IVerge {
         patch!(collapse_navbar);
 
         patch!(enable_tun_mode);
+        patch!(connect_mode);
         patch!(enable_auto_launch);
         patch!(enable_silent_start);
         patch!(enable_hover_jump_navigator);

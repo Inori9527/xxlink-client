@@ -31,6 +31,7 @@ interface ProxySelectionOptions {
   onSuccess?: () => void
   onError?: (error: any) => void
   enableConnectionCleanup?: boolean
+  forceConnectionCleanup?: boolean
 }
 
 interface ProxyChangeRequest {
@@ -47,15 +48,25 @@ export const useProxySelection = (options: ProxySelectionOptions = {}) => {
   const pendingRequestRef = useRef<ProxyChangeRequest | null>(null)
   const isProcessingRef = useRef(false)
 
-  const { onSuccess, onError, enableConnectionCleanup = true } = options
+  const {
+    onSuccess,
+    onError,
+    enableConnectionCleanup = true,
+    forceConnectionCleanup = false,
+  } = options
 
   // 缓存
   const config = useMemo(
     () => ({
       autoCloseConnection: verge?.auto_close_connection ?? false,
       enableConnectionCleanup,
+      forceConnectionCleanup,
     }),
-    [verge?.auto_close_connection, enableConnectionCleanup],
+    [
+      verge?.auto_close_connection,
+      enableConnectionCleanup,
+      forceConnectionCleanup,
+    ],
   )
 
   // 切换节点
@@ -101,7 +112,7 @@ export const useProxySelection = (options: ProxySelectionOptions = {}) => {
 
         if (
           config.enableConnectionCleanup &&
-          config.autoCloseConnection &&
+          (config.forceConnectionCleanup || config.autoCloseConnection) &&
           previousProxy
         ) {
           setTimeout(() => cleanupConnections(previousProxy), 0)

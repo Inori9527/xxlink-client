@@ -32,26 +32,33 @@
         "disconnect": "Disconnect",
         "connecting": "Connecting...",
         "clickToConnect": "Click to connect",
-        "clickToDisconnect": "Click to disconnect"
+        "clickToDisconnect": "Click to disconnect",
+        "switchNode": "Switch"
       },
       "labels": {
+        "heroTitle": "One-click connect",
+        "heroSubtitle": "Choose a mode, then press the round button to start.",
         "selectNode": "Select Node",
         "noNode": "No node available",
         "disconnectFirst": "Connected — disconnect first to switch nodes",
         "mode": "Mode",
+        "node": "Node",
         "system": "System Proxy",
         "tun": "TUN",
         "both": "Both",
         "upload": "Upload",
         "download": "Download",
         "connected": "Connected",
-        "disconnected": "Disconnected"
+        "disconnected": "Disconnected",
+        "connectedHint": "Connected",
+        "startHint": "Click to start"
       },
       "mode": {
         "system": "Browser",
-        "both": "Full VPN"
+        "both": "Full VPN",
+        "smart": "Smart Split"
       },
-      "modeTooltip": "Browser: proxy only browser and apps honoring the system proxy. Full VPN: route all system traffic through an encrypted tunnel (recommended).",
+      "modeTooltip": "Browser: only apps honoring system proxy. Full VPN: route all traffic. Smart Split: direct traffic in mainland China, route overseas traffic through XXLink.",
       "empty": {
         "title": "No nodes available",
         "subtitle": "Please purchase a plan or refresh nodes",
@@ -90,7 +97,7 @@
       "kicker": "Nodes",
       "heading": "Choose a node",
       "readyHint": "Pick a node for your next connection.",
-      "connectedHint": "Disconnect before switching nodes.",
+      "connectedHint": "You can switch while connected. Existing sessions may reconnect on the new node.",
       "count": "{{count}} nodes",
       "actions": {
         "test": "Test latency",
