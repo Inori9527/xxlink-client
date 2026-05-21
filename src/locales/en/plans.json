@@ -7,7 +7,7 @@
     },
     "sections": {
       "available": "Available plans",
-      "availableHint": "Choose in XXLink, then complete checkout in your browser.",
+      "availableHint": "Open the dashboard to choose a plan and finish checkout.",
       "promo": "Promo code"
     },
     "current": {
@@ -64,7 +64,7 @@
       "copied": "Subscription URL copied to clipboard",
       "errors": {
         "loadFailed": "Failed to load. Please try again later.",
-        "purchaseFailed": "Failed to create order. Please try again later.",
+        "purchaseFailed": "Unable to open the dashboard. Please try again later.",
         "untrustedCheckout": "Checkout link failed the security check.",
         "sessionExpired": "Session expired. Please log in again.",
         "networkError": "Network error. Please try again later.",

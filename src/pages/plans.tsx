@@ -42,12 +42,6 @@ import {
 import { showNotice } from '@/services/notice-service'
 
 const DASHBOARD_RECHARGE_URL = 'https://xxlink.net/dashboard/recharge'
-const TRUSTED_URL_HOSTS = new Set([
-  'xxlink.net',
-  'www.xxlink.net',
-  'api.xxlink.net',
-])
-const TRUSTED_URL_SUFFIXES = ['.stripe.com', '.paypal.com']
 type BillingPeriod = 'month' | 'quarter' | 'year'
 
 const BILLING_PERIODS: Array<{ value: BillingPeriod; labelKey: string }> = [
@@ -152,17 +146,6 @@ function formatCooldownHours(
   if (hours <= 0) return labels.available
   if (hours < 24) return labels.hours(Math.ceil(hours))
   return labels.days(Math.ceil(hours / 24))
-}
-
-function isTrustedUrl(rawUrl: string): boolean {
-  try {
-    const url = new URL(rawUrl)
-    if (url.protocol !== 'https:') return false
-    if (TRUSTED_URL_HOSTS.has(url.hostname)) return true
-    return TRUSTED_URL_SUFFIXES.some((suffix) => url.hostname.endsWith(suffix))
-  } catch {
-    return false
-  }
 }
 
 const PlansPage = () => {
@@ -300,17 +283,9 @@ const PlansPage = () => {
     setCheckoutPlanId(plan.id)
     setError(null)
     try {
-      const { sessionUrl } = await api.payment.createCheckout(plan.id)
-      if (!sessionUrl || !isTrustedUrl(sessionUrl)) {
-        throw new Error(t('plans.page.feedback.errors.untrustedCheckout'))
-      }
-      await open(sessionUrl)
-    } catch (checkoutError) {
-      const message =
-        checkoutError instanceof Error
-          ? checkoutError.message
-          : t('plans.page.feedback.errors.purchaseFailed')
-      setError(message)
+      await open(DASHBOARD_RECHARGE_URL)
+    } catch {
+      setError(t('plans.page.feedback.errors.purchaseFailed'))
     } finally {
       setCheckoutPlanId(null)
     }

@@ -7,7 +7,7 @@
     },
     "sections": {
       "available": "选择套餐",
-      "availableHint": "在客户端选择，浏览器完成支付。",
+      "availableHint": "打开账户页选择套餐并完成支付。",
       "promo": "优惠码"
     },
     "current": {
@@ -64,7 +64,7 @@
       "copied": "订阅链接已复制到剪贴板",
       "errors": {
         "loadFailed": "套餐加载失败，请稍后重试。",
-        "purchaseFailed": "创建订单失败，请稍后重试。",
+        "purchaseFailed": "无法打开账户页，请稍后重试。",
         "untrustedCheckout": "支付链接未通过安全校验。",
         "sessionExpired": "登录已过期，请重新登录",
         "networkError": "网络错误，请稍后重试",

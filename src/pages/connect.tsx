@@ -914,7 +914,6 @@ const ConnectPage = () => {
             p: { xs: 1.5, md: 2.25 },
             borderRadius: 5,
             overflow: 'visible',
-            border: `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
             background:
               theme.palette.mode === 'dark'
                 ? 'radial-gradient(circle at 88% 2%, rgba(15,237,210,0.16), transparent 32%), radial-gradient(circle at 4% 100%, rgba(47,128,237,0.14), transparent 28%), rgba(7,16,24,0.97)'
@@ -991,7 +990,6 @@ const ConnectPage = () => {
               p: { xs: 1.75, md: 2.25 },
               mb: 1.25,
               borderRadius: 4,
-              border: `1px solid ${alpha(theme.palette.common.white, 0.1)}`,
               background:
                 theme.palette.mode === 'dark'
                   ? 'linear-gradient(135deg,rgba(13,25,36,0.98),rgba(8,18,27,0.94))'
@@ -1118,7 +1116,6 @@ const ConnectPage = () => {
                 sx={{
                   p: 2,
                   borderRadius: 3,
-                  border: `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
                   bgcolor:
                     theme.palette.mode === 'dark'
                       ? 'rgba(24,27,36,0.96)'
@@ -1166,7 +1163,6 @@ const ConnectPage = () => {
               px: 2,
               py: 1.4,
               borderRadius: 3,
-              border: `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
               bgcolor:
                 theme.palette.mode === 'dark' ? 'rgba(24,27,36,0.96)' : '#fff',
             }}
