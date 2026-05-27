@@ -1,4 +1,4 @@
-//! Clash Verge Service - Cross-platform IPC service daemon
+//! XXLink Service - Cross-platform IPC service daemon
 //!
 //! This service can run as a standalone process or as a Windows service.
 //! It listens for shutdown signals (Ctrl+C, SIGTERM, or service stop) to gracefully terminate.
@@ -132,7 +132,7 @@ fn init_logger() {
 
 async fn run_standalone() -> Result<(), KodeBridgeError> {
     let pid = std::process::id();
-    info!("Clash Verge Service - Standalone Mode");
+    info!("XXLink Service - Standalone Mode");
     info!("Current process PID: {}", pid);
 
     let _pid_lock = acquire_pid_lock(pid);
