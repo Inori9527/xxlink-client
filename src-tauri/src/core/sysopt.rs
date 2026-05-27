@@ -3,7 +3,8 @@ use crate::{
     singleton,
 };
 use anyhow::Result;
-use xxlink_logging::{Type, logging};
+#[cfg(target_os = "windows")]
+use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use scopeguard::defer;
 use smartstring::alias::String;
@@ -16,17 +17,142 @@ use std::{
 };
 use sysproxy::{Autoproxy, GuardMonitor, GuardType, Sysproxy};
 use tokio::sync::Mutex as TokioMutex;
+use xxlink_logging::{Type, logging};
+
+#[cfg(target_os = "windows")]
+#[derive(Debug, Clone)]
+struct WindowsProxySnapshot {
+    proxy_enable: Option<u32>,
+    proxy_server: Option<std::string::String>,
+    proxy_override: Option<std::string::String>,
+    auto_config_url: Option<std::string::String>,
+}
+
+#[cfg(target_os = "windows")]
+static WINDOWS_PROXY_SNAPSHOT: Lazy<RwLock<Option<WindowsProxySnapshot>>> = Lazy::new(|| RwLock::new(None));
+
+#[cfg(target_os = "windows")]
+fn win_registry_open_internet_settings() -> Result<winreg::RegKey> {
+    use winreg::RegKey;
+    use winreg::enums::HKEY_CURRENT_USER;
+
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let (key, _) = hkcu.create_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings")?;
+    Ok(key)
+}
+
+#[cfg(target_os = "windows")]
+fn win_registry_read_proxy_snapshot() -> Result<WindowsProxySnapshot> {
+    let key = win_registry_open_internet_settings()?;
+
+    Ok(WindowsProxySnapshot {
+        proxy_enable: key.get_value("ProxyEnable").ok(),
+        proxy_server: key.get_value("ProxyServer").ok(),
+        proxy_override: key.get_value("ProxyOverride").ok(),
+        auto_config_url: key.get_value("AutoConfigURL").ok(),
+    })
+}
+
+#[cfg(target_os = "windows")]
+fn win_registry_delete_value_if_missing(
+    key: &winreg::RegKey,
+    name: &str,
+    value: &Option<std::string::String>,
+) -> Result<()> {
+    if value.is_none() {
+        match key.delete_value(name) {
+            Ok(_) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(err) => return Err(err.into()),
+        }
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn win_registry_restore_proxy_snapshot(snapshot: WindowsProxySnapshot) -> Result<()> {
+    let key = win_registry_open_internet_settings()?;
+
+    if let Some(value) = snapshot.proxy_enable {
+        key.set_value("ProxyEnable", &value)?;
+    } else {
+        match key.delete_value("ProxyEnable") {
+            Ok(_) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(err) => return Err(err.into()),
+        }
+    }
+
+    if let Some(value) = &snapshot.proxy_server {
+        key.set_value("ProxyServer", value)?;
+    }
+    win_registry_delete_value_if_missing(&key, "ProxyServer", &snapshot.proxy_server)?;
+
+    if let Some(value) = &snapshot.proxy_override {
+        key.set_value("ProxyOverride", value)?;
+    }
+    win_registry_delete_value_if_missing(&key, "ProxyOverride", &snapshot.proxy_override)?;
+
+    if let Some(value) = &snapshot.auto_config_url {
+        key.set_value("AutoConfigURL", value)?;
+    }
+    win_registry_delete_value_if_missing(&key, "AutoConfigURL", &snapshot.auto_config_url)?;
+
+    win_registry_refresh();
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn win_registry_remember_proxy_snapshot() {
+    if WINDOWS_PROXY_SNAPSHOT.read().is_some() {
+        return;
+    }
+
+    match win_registry_read_proxy_snapshot() {
+        Ok(snapshot) => {
+            *WINDOWS_PROXY_SNAPSHOT.write() = Some(snapshot);
+            logging!(info, Type::Core, "Saved previous Windows proxy settings");
+        }
+        Err(err) => {
+            logging!(
+                warn,
+                Type::Core,
+                "Failed to save previous Windows proxy settings: {:?}",
+                err
+            );
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn win_registry_try_restore_proxy_snapshot() -> Result<bool> {
+    let snapshot = WINDOWS_PROXY_SNAPSHOT.write().take();
+    if let Some(snapshot) = snapshot {
+        win_registry_restore_proxy_snapshot(snapshot)?;
+        logging!(info, Type::Core, "Restored previous Windows proxy settings");
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn win_registry_refresh() {
+    unsafe {
+        use windows::Win32::Networking::WinInet::{
+            INTERNET_OPTION_PROXY_SETTINGS_CHANGED, INTERNET_OPTION_REFRESH, InternetSetOptionW,
+        };
+        let _ = InternetSetOptionW(None, INTERNET_OPTION_PROXY_SETTINGS_CHANGED, None, 0);
+        let _ = InternetSetOptionW(None, INTERNET_OPTION_REFRESH, None, 0);
+    }
+}
 
 /// Directly write proxy state to the Windows registry for reliability.
 /// The sysproxy crate uses InternetSetOptionW which sometimes doesn't
 /// persist to the registry on certain Windows versions.
 #[cfg(target_os = "windows")]
 fn win_registry_set_proxy(enable: bool, server: &str, bypass: &str) -> Result<()> {
-    use winreg::RegKey;
-    use winreg::enums::HKEY_CURRENT_USER;
-
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let (key, _) = hkcu.create_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings")?;
+    let key = win_registry_open_internet_settings()?;
 
     key.set_value("ProxyEnable", &(if enable { 1u32 } else { 0u32 }))?;
 
@@ -35,14 +161,7 @@ fn win_registry_set_proxy(enable: bool, server: &str, bypass: &str) -> Result<()
         key.set_value("ProxyOverride", &bypass)?;
     }
 
-    // Signal WinInet to pick up changes
-    unsafe {
-        use windows::Win32::Networking::WinInet::{
-            INTERNET_OPTION_PROXY_SETTINGS_CHANGED, INTERNET_OPTION_REFRESH, InternetSetOptionW,
-        };
-        let _ = InternetSetOptionW(None, INTERNET_OPTION_PROXY_SETTINGS_CHANGED, None, 0);
-        let _ = InternetSetOptionW(None, INTERNET_OPTION_REFRESH, None, 0);
-    }
+    win_registry_refresh();
 
     Ok(())
 }
@@ -203,6 +322,9 @@ impl Sysopt {
 
         tokio::task::spawn_blocking(move || -> Result<()> {
             if sys.enable && !auto.enable {
+                #[cfg(target_os = "windows")]
+                win_registry_remember_proxy_snapshot();
+
                 // System proxy mode: set via sysproxy + registry for reliability
                 if let Err(e) = sys.set_system_proxy() {
                     logging!(error, Type::Core, "Failed to set system proxy: {:?}", e);
@@ -217,6 +339,9 @@ impl Sysopt {
                 }
                 logging!(info, Type::Core, "System proxy set successfully");
             } else if auto.enable {
+                #[cfg(target_os = "windows")]
+                win_registry_remember_proxy_snapshot();
+
                 // PAC mode: only set auto proxy
                 if let Err(e) = auto.set_auto_proxy() {
                     logging!(error, Type::Core, "Failed to set auto proxy: {:?}", e);
@@ -224,6 +349,14 @@ impl Sysopt {
                 }
                 logging!(info, Type::Core, "Auto proxy (PAC) set successfully");
             } else {
+                #[cfg(target_os = "windows")]
+                {
+                    if win_registry_try_restore_proxy_snapshot()? {
+                        logging!(info, Type::Core, "All proxies restored");
+                        return Ok(());
+                    }
+                }
+
                 // Both disabled: clear via sysproxy + registry
                 if let Err(e) = sys.set_system_proxy() {
                     logging!(error, Type::Core, "Failed to clear system proxy: {:?}", e);
@@ -269,6 +402,18 @@ impl Sysopt {
         };
 
         tokio::task::spawn_blocking(move || -> Result<()> {
+            #[cfg(target_os = "windows")]
+            {
+                if win_registry_try_restore_proxy_snapshot()? {
+                    logging!(
+                        info,
+                        Type::Core,
+                        "System proxy reset restored previous Windows settings"
+                    );
+                    return Ok(());
+                }
+            }
+
             sys.set_system_proxy()?;
             #[cfg(target_os = "windows")]
             {
