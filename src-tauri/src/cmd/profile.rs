@@ -14,12 +14,12 @@ use crate::{
     process::AsyncHandler,
     utils::{dirs, help},
 };
-use xxlink_draft::SharedDraft;
-use xxlink_logging::{Type, logging};
 use scopeguard::defer;
 use smartstring::alias::String;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+use xxlink_draft::SharedDraft;
+use xxlink_logging::{Type, logging};
 
 static CURRENT_SWITCHING_PROFILE: AtomicBool = AtomicBool::new(false);
 
@@ -72,8 +72,9 @@ pub async fn import_profile(url: std::string::String, option: Option<PrfOption>)
             it
         }
         Err(e) => {
-            logging!(error, Type::Cmd, "[导入订阅] 下载失败: {}", e);
-            return Err(format!("导入订阅失败: {}", e).into());
+            let rendered = help::mask_err(&e.to_string());
+            logging!(error, Type::Cmd, "[导入订阅] 下载失败: {}", rendered);
+            return Err(format!("导入订阅失败: {}", rendered).into());
         }
     };
 
@@ -130,8 +131,9 @@ pub async fn update_profile(index: String, option: Option<PrfOption>) -> CmdResu
     match feat::update_profile(&index, option.as_ref(), true, true, true).await {
         Ok(_) => Ok(()),
         Err(e) => {
-            logging!(error, Type::Cmd, "{}", e);
-            Err(e.to_string().into())
+            let rendered = help::mask_err(&e.to_string());
+            logging!(error, Type::Cmd, "{}", rendered);
+            Err(rendered.into())
         }
     }
 }
@@ -293,6 +295,7 @@ async fn handle_success(current_value: Option<&String>) -> CmdResult<bool> {
 }
 
 async fn handle_validation_failure(error_msg: String, current_profile: Option<&String>) -> CmdResult<bool> {
+    let error_msg = help::mask_err(&error_msg);
     // If the failure was flagged as an architecture mismatch, surface the
     // dedicated notice so the UI can tell the user to reinstall.
     if let Some(tail) = error_msg.strip_prefix(crate::core::validate::ARCH_MISMATCH_PREFIX) {
@@ -315,9 +318,9 @@ async fn handle_validation_failure(error_msg: String, current_profile: Option<&S
 }
 
 async fn handle_update_error<E: std::fmt::Display>(e: E) -> CmdResult<bool> {
-    logging!(warn, Type::Cmd, "更新过程发生错误: {}", e,);
+    let rendered = help::mask_err(&e.to_string());
+    logging!(warn, Type::Cmd, "更新过程发生错误: {}", rendered);
     Config::profiles().await.discard();
-    let rendered = e.to_string();
     // Windows OS error 216 == ERROR_EXE_MACHINE_TYPE_MISMATCH: the sidecar
     // binary is the wrong architecture for this machine. Report it as such
     // instead of a generic boot error, so the UI can guide the user to

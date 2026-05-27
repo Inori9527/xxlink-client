@@ -217,10 +217,35 @@ fn main() -> anyhow::Result<()> {
     let manager_access = ServiceManagerAccess::CONNECT | ServiceManagerAccess::CREATE_SERVICE;
     let service_manager = ServiceManager::local_computer(None::<&str>, manager_access)?;
 
-    let service_access = ServiceAccess::QUERY_STATUS | ServiceAccess::START;
+    let service_binary_path = env::current_exe()
+        .unwrap()
+        .with_file_name("xxlink-service.exe");
+
+    if !service_binary_path.exists() {
+        eprintln!("xxlink-service.exe not found");
+        std::process::exit(2);
+    }
+
+    let service_info = ServiceInfo {
+        name: OsString::from("xxlink_service"),
+        display_name: OsString::from("XXLink Service"),
+        service_type: ServiceType::OWN_PROCESS,
+        start_type: ServiceStartType::AutoStart,
+        error_control: ServiceErrorControl::Normal,
+        executable_path: service_binary_path,
+        launch_arguments: vec![],
+        dependencies: vec![],
+        account_name: None, // run as System
+        account_password: None,
+    };
+
+    let service_access = ServiceAccess::QUERY_STATUS | ServiceAccess::START | ServiceAccess::CHANGE_CONFIG;
     if let Ok(service) = service_manager.open_service("xxlink_service", service_access)
         && let Ok(status) = service.query_status()
     {
+        service.change_config(&service_info)?;
+        service.set_description("XXLink Service helps to launch the mihomo core")?;
+
         match status.current_state {
             ServiceState::StopPending
             | ServiceState::Stopped
@@ -234,32 +259,10 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let service_binary_path = env::current_exe()
-        .unwrap()
-        .with_file_name("xxlink-service.exe");
-
-    if !service_binary_path.exists() {
-        eprintln!("xxlink-service.exe not found");
-        std::process::exit(2);
-    }
-
-    let service_info = ServiceInfo {
-        name: OsString::from("xxlink_service"),
-        display_name: OsString::from("Clash Verge Service"),
-        service_type: ServiceType::OWN_PROCESS,
-        start_type: ServiceStartType::AutoStart,
-        error_control: ServiceErrorControl::Normal,
-        executable_path: service_binary_path,
-        launch_arguments: vec![],
-        dependencies: vec![],
-        account_name: None, // run as System
-        account_password: None,
-    };
-
     let start_access = ServiceAccess::CHANGE_CONFIG | ServiceAccess::START;
     let service = service_manager.create_service(&service_info, start_access)?;
 
-    service.set_description("Clash Verge Service helps to launch clash core")?;
+    service.set_description("XXLink Service helps to launch the mihomo core")?;
     service.start(&Vec::<&OsStr>::new())?;
 
     Ok(())

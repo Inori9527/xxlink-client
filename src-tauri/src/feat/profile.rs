@@ -5,9 +5,9 @@ use crate::{
     utils::help::{mask_err, mask_url},
 };
 use anyhow::{Result, bail};
-use xxlink_logging::{Type, logging, logging_error};
 use smartstring::alias::String;
 use tauri::Emitter as _;
+use xxlink_logging::{Type, logging, logging_error};
 
 /// Toggle proxy profile
 pub async fn toggle_proxy_profile(profile_index: String) {
@@ -181,7 +181,10 @@ async fn perform_profile_update(
     }
 
     if is_mannual_trigger {
-        handle::Handle::notice_message("update_failed_even_with_clash", format!("{profile_name} - {last_err}"));
+        handle::Handle::notice_message(
+            "update_failed_even_with_clash",
+            format!("{profile_name} - {}", mask_err(&last_err.to_string())),
+        );
     }
     Ok(is_current)
 }
@@ -211,9 +214,10 @@ pub async fn update_profile(
                 handle::Handle::refresh_clash();
             }
             Err(err) => {
-                logging!(error, Type::Config, "[订阅更新] 更新失败: {}", err);
-                handle::Handle::notice_message("update_failed", format!("{err}"));
-                logging!(error, Type::Config, "{err}");
+                let rendered = mask_err(&err.to_string());
+                logging!(error, Type::Config, "[订阅更新] 更新失败: {}", rendered);
+                handle::Handle::notice_message("update_failed", rendered.clone());
+                logging!(error, Type::Config, "{rendered}");
             }
         }
     }

@@ -9,6 +9,7 @@ TARGET=""
 RES_DIR="./temp"
 META_URL_PREFIX="https://github.com/MetaCubeX/mihomo/releases/download"
 META_ALPHA_URL_PREFIX="https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha"
+PINNED_MIHOMO_VERSION="v1.19.25"
 
 get_platform_arch() {
   case "$PLATFORM" in
@@ -84,6 +85,15 @@ extract_archive() {
 
 get_latest_version() {
   local url="$1"
+  local is_alpha="$2"
+  if [[ -n "${XXLINK_MIHOMO_VERSION:-}" ]]; then
+    echo "$XXLINK_MIHOMO_VERSION"
+    return
+  fi
+  if [[ "$is_alpha" != "alpha" ]]; then
+    echo "$PINNED_MIHOMO_VERSION"
+    return
+  fi
   curl -sL "$url" | tr -d ' \n'
 }
 
@@ -114,7 +124,7 @@ fetch_mihomo() {
     ver_url="https://github.com/MetaCubeX/mihomo/releases/latest/download/version.txt"
   fi
 
-  version="$(get_latest_version "$ver_url")"
+  version="$(get_latest_version "$ver_url" "$is_alpha")"
   [[ -z "$version" ]] && { echo "[ERROR] Cannot fetch version!"; exit 1; }
 
   local archive_file="$RES_DIR/${bin_name}-${version}.${url_ext}"

@@ -187,8 +187,9 @@ async function updateHashCache(targetPath) {
 // =======================
 // Meta maps (stable)
 // =======================
-const META_VERSION_URL =
-  'https://github.com/MetaCubeX/mihomo/releases/latest/download/version.txt'
+// Release builds are intentionally pinned. Update this only after validating
+// the bundled core with scripts/validate-core-version.mjs.
+const PINNED_MIHOMO_VERSION = 'v1.19.25'
 const META_URL_PREFIX = `https://github.com/MetaCubeX/mihomo/releases/download`
 let META_VERSION
 
@@ -209,36 +210,11 @@ const META_MAP = {
 // =======================
 // Fetch latest versions
 // =======================
-async function getLatestReleaseVersion() {
-  if (!FORCE) {
-    const cached = await getCachedVersion('META_VERSION')
-    if (cached) {
-      META_VERSION = cached
-      return
-    }
-  }
-  const options = {}
-  const httpProxy =
-    process.env.HTTP_PROXY ||
-    process.env.http_proxy ||
-    process.env.HTTPS_PROXY ||
-    process.env.https_proxy
-  if (httpProxy) options.agent = new HttpsProxyAgent(httpProxy)
-
-  try {
-    const response = await fetch(META_VERSION_URL, {
-      ...options,
-      method: 'GET',
-    })
-    if (!response.ok)
-      throw new Error(`Failed to fetch ${META_VERSION_URL}: ${response.status}`)
-    META_VERSION = (await response.text()).trim()
-    log_info(`Latest release version: ${META_VERSION}`)
-    await setCachedVersion('META_VERSION', META_VERSION)
-  } catch (err) {
-    log_error('Error fetching latest release version:', err.message)
-    process.exit(1)
-  }
+async function getPinnedReleaseVersion() {
+  META_VERSION =
+    process.env.XXLINK_MIHOMO_VERSION?.trim() || PINNED_MIHOMO_VERSION
+  log_info(`Using pinned mihomo release version: ${META_VERSION}`)
+  await setCachedVersion('META_VERSION', META_VERSION)
 }
 
 // =======================
@@ -683,7 +659,7 @@ const tasks = [
   {
     name: 'xxlink-mihomo',
     func: () =>
-      getLatestReleaseVersion().then(() => resolveSidecar(clashMeta())),
+      getPinnedReleaseVersion().then(() => resolveSidecar(clashMeta())),
     retry: 5,
   },
   { name: 'plugin', func: resolvePlugin, retry: 5, winOnly: true },
