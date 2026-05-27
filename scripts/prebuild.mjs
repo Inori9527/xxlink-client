@@ -128,6 +128,38 @@ async function setCachedVersion(key, version) {
   await saveVersionCache(cache)
 }
 
+const SERVICE_EXPECTED_BRANDING = 'XXLink Service'
+const SERVICE_LEGACY_BRANDING = 'Clash Verge Service'
+
+function binaryIncludesText(buffer, text) {
+  return (
+    buffer.includes(Buffer.from(text, 'utf8')) ||
+    buffer.includes(Buffer.from(text, 'utf16le'))
+  )
+}
+
+function verifyServiceHelperBranding(filePath, file) {
+  if (platform !== 'win32') return
+
+  const buffer = fs.readFileSync(filePath)
+  if (binaryIncludesText(buffer, SERVICE_LEGACY_BRANDING)) {
+    throw new Error(
+      `${file}: stale service helper branding found: ${SERVICE_LEGACY_BRANDING}`,
+    )
+  }
+
+  if (
+    path.basename(file).startsWith('xxlink-service-install') &&
+    !binaryIncludesText(buffer, SERVICE_EXPECTED_BRANDING)
+  ) {
+    throw new Error(
+      `${file}: expected service helper branding not found: ${SERVICE_EXPECTED_BRANDING}`,
+    )
+  }
+
+  log_success(`${file} branding validated`)
+}
+
 // =======================
 // Hash Cache & File Hash
 // =======================
@@ -538,61 +570,42 @@ const resolveServicePermission = async () => {
 // =======================
 // Other resource resolvers (service, mmdb, geosite, geoip, enableLoopback)
 // =======================
-const SERVICE_VERSION = 'v2.3.0'
-const SERVICE_REPO = 'clash-verge-service-ipc'
-const SERVICE_HOST =
-  platform === 'win32'
-    ? SIDECAR_HOST.replace(/-pc-windows-gnu$/, '-pc-windows-msvc')
-    : SIDECAR_HOST
-const SERVICE_ARCHIVE_EXT = platform === 'win32' ? 'zip' : 'tar.gz'
-const SERVICE_ARCHIVE = `${SERVICE_REPO}-${SERVICE_VERSION}-${SERVICE_HOST}.${SERVICE_ARCHIVE_EXT}`
-const SERVICE_URL = `https://github.com/clash-verge-rev/${SERVICE_REPO}/releases/download/${SERVICE_VERSION}/${SERVICE_ARCHIVE}`
+let serviceBuildReady = false
+
+function serviceTargetDir() {
+  return path.join(cwd, 'target', SIDECAR_HOST, 'release')
+}
+
+async function ensureLocalServiceBinaries() {
+  if (serviceBuildReady) return
+
+  const command =
+    `cargo build -p xxlink_service_ipc --features standalone --bins ` +
+    `--release --target ${SIDECAR_HOST}`
+  log_info(`Building XXLink service helpers from local source: ${command}`)
+  execSync(command, { stdio: 'inherit' })
+  serviceBuildReady = true
+}
 
 async function resolveServiceResource(file, sourceFile) {
+  await ensureLocalServiceBinaries()
+
   const targetPath = path.join(SERVICE_DIR, file)
-  const existingSize = fs.existsSync(targetPath)
-    ? fs.statSync(targetPath).size
-    : 0
-  if (!FORCE && existingSize > 1024) {
-    log_success(`"${file}" already exists, skipping download`)
-    return
+  const sourcePath = path.join(serviceTargetDir(), sourceFile)
+
+  if (!fs.existsSync(sourcePath)) {
+    throw new Error(`${sourceFile} not found after local service helper build`)
   }
 
-  const tempDir = path.join(TEMP_DIR, SERVICE_REPO)
-  const tempArchive = path.join(tempDir, SERVICE_ARCHIVE)
-  await fsp.mkdir(tempDir, { recursive: true })
+  await resolveResource({
+    file,
+    localPath: sourcePath,
+    dir: SERVICE_DIR,
+  })
 
-  try {
-    if (!fs.existsSync(tempArchive) || FORCE) {
-      await downloadFile(SERVICE_URL, tempArchive)
-    }
-
-    if (SERVICE_ARCHIVE.endsWith('.zip')) {
-      const zip = new AdmZip(tempArchive)
-      zip
-        .getEntries()
-        .forEach((entry) =>
-          log_debug(`"${SERVICE_REPO}" entry: ${entry.entryName}`),
-        )
-      zip.extractAllTo(tempDir, true)
-    } else {
-      await extract({ cwd: tempDir, file: tempArchive })
-    }
-
-    const sourcePath = path.join(tempDir, sourceFile)
-    if (!fs.existsSync(sourcePath)) {
-      throw new Error(`${sourceFile} not found in ${SERVICE_ARCHIVE}`)
-    }
-
-    await fsp.mkdir(SERVICE_DIR, { recursive: true })
-    await fsp.copyFile(sourcePath, targetPath)
-    if (platform !== 'win32') execSync(`chmod 755 ${targetPath}`)
-    if (platform === 'win32') verifyPEMachine(targetPath, arch, file)
-    await updateHashCache(targetPath)
-    log_success(`${file} finished`)
-  } finally {
-    await fsp.rm(tempDir, { recursive: true, force: true })
-  }
+  if (platform !== 'win32') execSync(`chmod 755 ${targetPath}`)
+  if (platform === 'win32') verifyPEMachine(targetPath, arch, file)
+  verifyServiceHelperBranding(targetPath, file)
 }
 
 const resolveService = () => {
@@ -600,7 +613,7 @@ const resolveService = () => {
   const suffix = platform === 'linux' ? '-' + SIDECAR_HOST : ''
   return resolveServiceResource(
     'xxlink-service' + suffix + ext,
-    'clash-verge-service' + ext,
+    'xxlink-service' + ext,
   )
 }
 const resolveInstall = () => {
@@ -608,7 +621,7 @@ const resolveInstall = () => {
   const suffix = platform === 'linux' ? '-' + SIDECAR_HOST : ''
   return resolveServiceResource(
     'xxlink-service-install' + suffix + ext,
-    'clash-verge-service-install' + ext,
+    'xxlink-service-install' + ext,
   )
 }
 const resolveUninstall = () => {
@@ -616,7 +629,7 @@ const resolveUninstall = () => {
   const suffix = platform === 'linux' ? '-' + SIDECAR_HOST : ''
   return resolveServiceResource(
     'xxlink-service-uninstall' + suffix + ext,
-    'clash-verge-service-uninstall' + ext,
+    'xxlink-service-uninstall' + ext,
   )
 }
 
