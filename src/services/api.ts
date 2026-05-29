@@ -161,6 +161,13 @@ export interface TrafficReportResult {
   remaining: string | number
 }
 
+export interface SubscriptionCheckoutResult {
+  status: 'PENDING' | 'COMPLETED'
+  approvalUrl: string | null
+  paymentId?: string
+  orderId?: string | null
+}
+
 export class ApiError extends Error {
   status: number
   code?: string
@@ -467,9 +474,19 @@ export const api = {
 
   payment: {
     createCheckout: (planId: string, promoCode?: string) =>
-      request<{ sessionUrl: string; sessionId: string }>('/payment/checkout', {
+      request<{
+        sessionUrl: string | null
+        sessionId: string | null
+        paymentId?: string
+        free?: boolean
+      }>('/payment/create-checkout-session', {
         method: 'POST',
         body: { planId, ...(promoCode ? { promoCode } : {}) },
+      }),
+    createSubscriptionCheckout: (planId: string) =>
+      request<SubscriptionCheckoutResult>('/payment/subscription/checkout', {
+        method: 'POST',
+        body: { planId, externalMethod: 'PAYPAL' },
       }),
   },
 

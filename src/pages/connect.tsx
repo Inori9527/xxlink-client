@@ -775,12 +775,25 @@ const ConnectPage = () => {
     }
   }, [connected, currentNodeId, disconnectForTrafficExceeded])
 
+  const brandAccent =
+    theme.palette.mode === 'dark'
+      ? theme.palette.common.white
+      : theme.palette.common.black
+  const subtlePanelBg =
+    theme.palette.mode === 'dark'
+      ? alpha(theme.palette.common.white, 0.045)
+      : alpha(theme.palette.common.black, 0.025)
+  const subtlePanelHover =
+    theme.palette.mode === 'dark'
+      ? alpha(theme.palette.common.white, 0.08)
+      : alpha(theme.palette.common.black, 0.05)
+
   // Button colors
   const getButtonColor = () => {
     if (errorFlash) return theme.palette.error.main
     if (busy) return theme.palette.warning.main
     if (connected) return theme.palette.success.main
-    return theme.palette.primary.main
+    return brandAccent
   }
 
   const buttonColor = getButtonColor()
@@ -828,10 +841,10 @@ const ConnectPage = () => {
             width: 34,
             height: 34,
             border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
-            bgcolor: alpha(theme.palette.primary.main, 0.08),
-            color: 'primary.main',
+            bgcolor: subtlePanelBg,
+            color: 'text.primary',
             '&:hover': {
-              bgcolor: alpha(theme.palette.primary.main, 0.16),
+              bgcolor: subtlePanelHover,
             },
           }}
         >
@@ -916,8 +929,9 @@ const ConnectPage = () => {
             overflow: 'visible',
             background:
               theme.palette.mode === 'dark'
-                ? 'radial-gradient(circle at 88% 2%, rgba(15,237,210,0.16), transparent 32%), radial-gradient(circle at 4% 100%, rgba(47,128,237,0.14), transparent 28%), rgba(7,16,24,0.97)'
-                : 'linear-gradient(135deg,#ffffff,#f2fbff)',
+                ? 'linear-gradient(135deg, rgba(7,7,7,0.98), rgba(25,25,25,0.96))'
+                : 'linear-gradient(135deg,#ffffff,#f7f7f7)',
+            border: `1px solid ${alpha(theme.palette.divider, 0.72)}`,
           }}
         >
           <Stack
@@ -930,7 +944,7 @@ const ConnectPage = () => {
             <Box>
               <Typography
                 variant="overline"
-                sx={{ color: 'primary.light', fontWeight: 900 }}
+                sx={{ color: 'text.secondary', fontWeight: 900 }}
               >
                 XXLink
               </Typography>
@@ -951,7 +965,7 @@ const ConnectPage = () => {
                 alignSelf: { xs: 'flex-start', md: 'center' },
                 p: 0.5,
                 borderRadius: 999,
-                bgcolor: alpha(theme.palette.primary.main, 0.09),
+                bgcolor: subtlePanelBg,
                 '& .MuiButton-root': {
                   border: '0 !important',
                   borderRadius: '999px !important',
@@ -984,16 +998,12 @@ const ConnectPage = () => {
             </ButtonGroup>
           </Stack>
 
-          <Paper
-            elevation={0}
+          <Box
             sx={{
               p: { xs: 1.75, md: 2.25 },
               mb: 1.25,
-              borderRadius: 4,
-              background:
-                theme.palette.mode === 'dark'
-                  ? 'linear-gradient(135deg,rgba(13,25,36,0.98),rgba(8,18,27,0.94))'
-                  : '#fff',
+              borderRadius: 3,
+              bgcolor: subtlePanelBg,
             }}
           >
             <Stack direction="column" spacing={1.25} alignItems="center">
@@ -1011,7 +1021,7 @@ const ConnectPage = () => {
                   transition: 'all 0.28s ease-in-out',
                   boxShadow: connected
                     ? `0 0 0 18px ${alpha(theme.palette.success.main, 0.12)}`
-                    : `0 0 0 18px ${alpha(theme.palette.primary.main, 0.08)}`,
+                    : `0 0 0 18px ${alpha(brandAccent, 0.08)}`,
                   animation: busy ? `${pulse} 1.4s infinite` : 'none',
                   '&:hover': {
                     bgcolor: buttonColor,
@@ -1077,7 +1087,7 @@ const ConnectPage = () => {
                 ) : null}
               </Box>
             </Stack>
-          </Paper>
+          </Box>
 
           <Box
             sx={{
@@ -1092,16 +1102,16 @@ const ConnectPage = () => {
           >
             {[
               {
-                icon: <AccessTimeRounded color="primary" />,
+                icon: <AccessTimeRounded sx={{ color: 'text.primary' }} />,
                 label: t('layout.components.connect.session.duration'),
                 value: connected ? connectedDurationLabel : '0:00',
                 color: 'text.primary',
               },
               {
-                icon: <DataUsageRounded sx={{ color: 'primary.light' }} />,
+                icon: <DataUsageRounded sx={{ color: 'text.primary' }} />,
                 label: t('layout.components.connect.session.localTraffic'),
                 value: connected ? sessionTrafficLabel : formatTrafficTotal(0),
-                color: 'primary.light',
+                color: 'text.primary',
               },
               {
                 icon: <DataUsageRounded color="success" />,
@@ -1110,16 +1120,12 @@ const ConnectPage = () => {
                 color: 'success.main',
               },
             ].map((metric) => (
-              <Paper
+              <Box
                 key={metric.label}
-                elevation={0}
                 sx={{
                   p: 2,
                   borderRadius: 3,
-                  bgcolor:
-                    theme.palette.mode === 'dark'
-                      ? 'rgba(24,27,36,0.96)'
-                      : '#fff',
+                  bgcolor: subtlePanelBg,
                 }}
               >
                 <Stack direction="row" spacing={1.2} alignItems="center">
@@ -1153,18 +1159,16 @@ const ConnectPage = () => {
                       }}
                     />
                   )}
-              </Paper>
+              </Box>
             ))}
           </Box>
 
-          <Paper
-            elevation={0}
+          <Box
             sx={{
               px: 2,
               py: 1.4,
               borderRadius: 3,
-              bgcolor:
-                theme.palette.mode === 'dark' ? 'rgba(24,27,36,0.96)' : '#fff',
+              bgcolor: subtlePanelBg,
             }}
           >
             <Stack
@@ -1203,7 +1207,11 @@ const ConnectPage = () => {
                   endIcon={<KeyboardArrowDownRounded />}
                   onClick={handleNodeMenuOpen}
                   disabled={busy || modeChanging || isEmpty}
-                  sx={{ borderRadius: 999, fontWeight: 950 }}
+                  sx={{
+                    borderRadius: 999,
+                    fontWeight: 950,
+                    '&:hover': { bgcolor: subtlePanelHover },
+                  }}
                 >
                   {t('layout.components.connect.actions.switchNode')}
                 </Button>
@@ -1247,7 +1255,7 @@ const ConnectPage = () => {
                 )
               })}
             </Menu>
-          </Paper>
+          </Box>
         </Paper>
       </Stack>
     </BasePage>
