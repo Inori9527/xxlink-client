@@ -32,6 +32,7 @@ import { useTranslation } from 'react-i18next'
 
 import { BasePage } from '@/components/base'
 import {
+  ApiError,
   api,
   isSubscriptionActiveNow,
   type Plan,
@@ -42,6 +43,7 @@ import {
 import { showNotice } from '@/services/notice-service'
 
 const DASHBOARD_RECHARGE_URL = 'https://xxlink.net/dashboard/recharge'
+const TRUSTED_CHECKOUT_HOSTS = new Set(['checkout.stripe.com'])
 type BillingPeriod = 'month' | 'quarter' | 'year'
 
 const BILLING_PERIODS: Array<{ value: BillingPeriod; labelKey: string }> = [
@@ -127,6 +129,21 @@ function formatPrice(price: number): string {
     currency: 'USD',
     minimumFractionDigits: normalized % 1 === 0 ? 0 : 2,
   }).format(normalized)
+}
+
+function isTrustedCheckoutUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'https:') return false
+    const hostname = url.hostname.toLowerCase()
+    return (
+      TRUSTED_CHECKOUT_HOSTS.has(hostname) ||
+      hostname === 'paypal.com' ||
+      hostname.endsWith('.paypal.com')
+    )
+  } catch {
+    return false
+  }
 }
 
 function formatCooldownHours(
@@ -283,9 +300,26 @@ const PlansPage = () => {
     setCheckoutPlanId(plan.id)
     setError(null)
     try {
-      await open(DASHBOARD_RECHARGE_URL)
-    } catch {
+      const checkout = await api.payment.createSubscriptionCheckout(plan.id)
+      if (checkout.approvalUrl) {
+        if (!isTrustedCheckoutUrl(checkout.approvalUrl)) {
+          setError(t('plans.page.feedback.errors.untrustedCheckout'))
+          return
+        }
+        await open(checkout.approvalUrl)
+        return
+      }
+      if (checkout.status === 'COMPLETED') {
+        await loadPlans()
+        return
+      }
       setError(t('plans.page.feedback.errors.purchaseFailed'))
+    } catch (checkoutError) {
+      if (checkoutError instanceof ApiError && checkoutError.status === 401) {
+        setError(t('plans.page.feedback.errors.sessionExpired'))
+      } else {
+        setError(t('plans.page.feedback.errors.purchaseFailed'))
+      }
     } finally {
       setCheckoutPlanId(null)
     }
@@ -328,11 +362,11 @@ const PlansPage = () => {
             borderRadius: 4,
             overflow: 'hidden',
             position: 'relative',
-            border: `1px solid ${alpha(theme.palette.primary.main, 0.18)}`,
+            border: `1px solid ${alpha(theme.palette.divider, 0.72)}`,
             background:
               theme.palette.mode === 'dark'
-                ? 'radial-gradient(circle at 8% 0%, rgba(34,211,238,0.18), transparent 36%), linear-gradient(135deg, rgba(12,18,28,0.98), rgba(14,23,31,0.96))'
-                : 'linear-gradient(135deg,#F7FCFF,#FFFFFF)',
+                ? 'linear-gradient(135deg, rgba(12,12,12,0.98), rgba(25,25,25,0.96))'
+                : 'linear-gradient(135deg,#FFFFFF,#F7F7F8)',
           }}
         >
           <Stack
@@ -349,8 +383,8 @@ const PlansPage = () => {
                   borderRadius: 3,
                   display: 'grid',
                   placeItems: 'center',
-                  color: '#0FEDD2',
-                  bgcolor: alpha('#0FEDD2', 0.12),
+                  color: theme.palette.text.primary,
+                  bgcolor: alpha(theme.palette.text.primary, 0.08),
                 }}
               >
                 <WorkspacePremiumRounded />
@@ -397,7 +431,10 @@ const PlansPage = () => {
                     background:
                       percent > 80
                         ? 'linear-gradient(90deg,#F59E0B,#EF4444)'
-                        : 'linear-gradient(90deg,#0FEDD2,#2F80ED)',
+                        : `linear-gradient(90deg,${theme.palette.text.primary},${alpha(
+                            theme.palette.text.primary,
+                            0.64,
+                          )})`,
                   },
                 }}
               />
@@ -416,11 +453,11 @@ const PlansPage = () => {
             sx={{
               p: 2,
               borderRadius: 4,
-              border: `1px solid ${alpha('#0FEDD2', 0.28)}`,
+              border: `1px solid ${alpha(theme.palette.text.primary, 0.16)}`,
               bgcolor:
                 theme.palette.mode === 'dark'
-                  ? alpha('#0FEDD2', 0.08)
-                  : alpha('#0FEDD2', 0.06),
+                  ? alpha(theme.palette.common.white, 0.06)
+                  : alpha(theme.palette.common.black, 0.03),
             }}
           >
             <Stack
@@ -437,8 +474,8 @@ const PlansPage = () => {
                     borderRadius: 3,
                     display: 'grid',
                     placeItems: 'center',
-                    color: '#0FEDD2',
-                    bgcolor: alpha('#0FEDD2', 0.14),
+                    color: theme.palette.text.primary,
+                    bgcolor: alpha(theme.palette.text.primary, 0.08),
                   }}
                 >
                   <CardGiftcardRounded />
@@ -529,8 +566,11 @@ const PlansPage = () => {
                 px: 2.4,
               },
               '& .Mui-selected': {
-                color: '#03151A !important',
-                bgcolor: '#0FEDD2 !important',
+                color:
+                  theme.palette.mode === 'dark'
+                    ? '#050505 !important'
+                    : '#FFFFFF !important',
+                bgcolor: `${theme.palette.text.primary} !important`,
               },
             }}
           >
@@ -572,7 +612,7 @@ const PlansPage = () => {
               border: `1px dashed ${alpha(theme.palette.divider, 0.7)}`,
               bgcolor:
                 theme.palette.mode === 'dark'
-                  ? alpha('#101923', 0.84)
+                  ? alpha(theme.palette.common.white, 0.045)
                   : '#FFFFFF',
             }}
           >
@@ -611,10 +651,9 @@ const PlansPage = () => {
               const processing = checkoutPlanId === plan.id
               const accent =
                 index % 3 === 0
-                  ? '#0FEDD2'
-                  : index % 3 === 1
-                    ? '#2F80ED'
-                    : '#14B8A6'
+                  ? theme.palette.text.primary
+                  : theme.palette.text.secondary
+              const accentText = theme.palette.getContrastText(accent)
 
               return (
                 <Paper
@@ -633,7 +672,7 @@ const PlansPage = () => {
                     }`,
                     bgcolor:
                       theme.palette.mode === 'dark'
-                        ? alpha('#101923', 0.92)
+                        ? alpha(theme.palette.common.white, 0.045)
                         : '#FFFFFF',
                     boxShadow: isCurrent
                       ? `0 20px 60px ${alpha(accent, 0.12)}`
@@ -728,7 +767,7 @@ const PlansPage = () => {
                       py: 1.1,
                       fontWeight: 950,
                       bgcolor: isCurrent ? undefined : accent,
-                      color: isCurrent ? accent : '#03151A',
+                      color: isCurrent ? accent : accentText,
                       '&:hover': {
                         bgcolor: isCurrent ? alpha(accent, 0.08) : accent,
                         filter: 'brightness(1.04)',
