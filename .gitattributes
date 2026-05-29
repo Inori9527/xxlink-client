@@ -1,2 +1,10 @@
 .github/workflows/*.lock.yml linguist-generated=true merge=ours
 Changelog.md merge=union
+
+.gitattributes text eol=lf
+scripts/prebuild.mjs text eol=lf
+scripts/validate-core-version.mjs text eol=lf
+scripts/validate-service-helper-branding.mjs text eol=lf
+src/pages/connect.tsx text eol=lf
+src/pages/plans.tsx text eol=lf
+src/services/api.ts text eol=lf
