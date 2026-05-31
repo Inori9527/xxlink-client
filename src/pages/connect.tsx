@@ -781,12 +781,12 @@ const ConnectPage = () => {
       : theme.palette.common.black
   const subtlePanelBg =
     theme.palette.mode === 'dark'
-      ? alpha(theme.palette.common.white, 0.045)
-      : alpha(theme.palette.common.black, 0.025)
+      ? alpha(theme.palette.common.white, 0.055)
+      : alpha(theme.palette.common.black, 0.035)
   const subtlePanelHover =
     theme.palette.mode === 'dark'
-      ? alpha(theme.palette.common.white, 0.08)
-      : alpha(theme.palette.common.black, 0.05)
+      ? alpha(theme.palette.common.white, 0.085)
+      : alpha(theme.palette.common.black, 0.055)
 
   // Button colors
   const getButtonColor = () => {
@@ -927,10 +927,7 @@ const ConnectPage = () => {
             p: { xs: 1.5, md: 2.25 },
             borderRadius: 5,
             overflow: 'visible',
-            background:
-              theme.palette.mode === 'dark'
-                ? 'linear-gradient(135deg, rgba(7,7,7,0.98), rgba(25,25,25,0.96))'
-                : 'linear-gradient(135deg,#ffffff,#f7f7f7)',
+            bgcolor: theme.palette.mode === 'dark' ? '#0B0B0D' : '#FFFFFF',
             border: `1px solid ${alpha(theme.palette.divider, 0.72)}`,
           }}
         >
@@ -1020,8 +1017,8 @@ const ConnectPage = () => {
                   border: `10px solid ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.08 : 0.72)}`,
                   transition: 'all 0.28s ease-in-out',
                   boxShadow: connected
-                    ? `0 0 0 18px ${alpha(theme.palette.success.main, 0.12)}`
-                    : `0 0 0 18px ${alpha(brandAccent, 0.08)}`,
+                    ? `0 0 0 12px ${alpha(theme.palette.success.main, 0.1)}`
+                    : `0 0 0 12px ${alpha(brandAccent, theme.palette.mode === 'dark' ? 0.08 : 0.045)}`,
                   animation: busy ? `${pulse} 1.4s infinite` : 'none',
                   '&:hover': {
                     bgcolor: buttonColor,
