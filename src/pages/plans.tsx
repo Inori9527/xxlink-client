@@ -32,7 +32,6 @@ import { useTranslation } from 'react-i18next'
 
 import { BasePage } from '@/components/base'
 import {
-  ApiError,
   api,
   isSubscriptionActiveNow,
   type Plan,
@@ -43,7 +42,6 @@ import {
 import { showNotice } from '@/services/notice-service'
 
 const DASHBOARD_RECHARGE_URL = 'https://xxlink.net/dashboard/recharge'
-const TRUSTED_CHECKOUT_HOSTS = new Set(['checkout.stripe.com'])
 type BillingPeriod = 'month' | 'quarter' | 'year'
 
 const BILLING_PERIODS: Array<{ value: BillingPeriod; labelKey: string }> = [
@@ -131,21 +129,6 @@ function formatPrice(price: number): string {
   }).format(normalized)
 }
 
-function isTrustedCheckoutUrl(value: string): boolean {
-  try {
-    const url = new URL(value)
-    if (url.protocol !== 'https:') return false
-    const hostname = url.hostname.toLowerCase()
-    return (
-      TRUSTED_CHECKOUT_HOSTS.has(hostname) ||
-      hostname === 'paypal.com' ||
-      hostname.endsWith('.paypal.com')
-    )
-  } catch {
-    return false
-  }
-}
-
 function formatCooldownHours(
   status: PublicBenefitStatus,
   labels: {
@@ -176,7 +159,7 @@ const PlansPage = () => {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [claimingBenefit, setClaimingBenefit] = useState(false)
-  const [checkoutPlanId, setCheckoutPlanId] = useState<string | null>(null)
+  const [openingPlanId, setOpeningPlanId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [preferredBillingPeriod, setPreferredBillingPeriod] =
     useState<BillingPeriod>('month')
@@ -297,31 +280,14 @@ const PlansPage = () => {
   })
 
   const handleSubscribe = useLockFn(async (plan: Plan) => {
-    setCheckoutPlanId(plan.id)
+    setOpeningPlanId(plan.id)
     setError(null)
     try {
-      const checkout = await api.payment.createSubscriptionCheckout(plan.id)
-      if (checkout.approvalUrl) {
-        if (!isTrustedCheckoutUrl(checkout.approvalUrl)) {
-          setError(t('plans.page.feedback.errors.untrustedCheckout'))
-          return
-        }
-        await open(checkout.approvalUrl)
-        return
-      }
-      if (checkout.status === 'COMPLETED') {
-        await loadPlans()
-        return
-      }
+      await open(DASHBOARD_RECHARGE_URL)
+    } catch {
       setError(t('plans.page.feedback.errors.purchaseFailed'))
-    } catch (checkoutError) {
-      if (checkoutError instanceof ApiError && checkoutError.status === 401) {
-        setError(t('plans.page.feedback.errors.sessionExpired'))
-      } else {
-        setError(t('plans.page.feedback.errors.purchaseFailed'))
-      }
     } finally {
-      setCheckoutPlanId(null)
+      setOpeningPlanId(null)
     }
   })
 
@@ -648,7 +614,7 @@ const PlansPage = () => {
           >
             {visiblePlans.map((plan, index) => {
               const isCurrent = activeSubscription?.planId === plan.id
-              const processing = checkoutPlanId === plan.id
+              const processing = openingPlanId === plan.id
               const accent =
                 index % 3 === 0
                   ? theme.palette.text.primary
@@ -672,11 +638,11 @@ const PlansPage = () => {
                     }`,
                     bgcolor:
                       theme.palette.mode === 'dark'
-                        ? alpha(theme.palette.common.white, 0.045)
-                        : '#FFFFFF',
+                        ? alpha(theme.palette.common.white, 0.05)
+                        : alpha(theme.palette.common.white, 0.94),
                     boxShadow: isCurrent
-                      ? `0 20px 60px ${alpha(accent, 0.12)}`
-                      : `0 16px 42px ${alpha('#020617', theme.palette.mode === 'dark' ? 0.22 : 0.06)}`,
+                      ? `0 14px 34px ${alpha(accent, theme.palette.mode === 'dark' ? 0.12 : 0.08)}`
+                      : `0 10px 28px ${alpha(theme.palette.common.black, theme.palette.mode === 'dark' ? 0.2 : 0.055)}`,
                   }}
                 >
                   <Stack
@@ -750,9 +716,7 @@ const PlansPage = () => {
                   <Button
                     fullWidth
                     variant={isCurrent ? 'outlined' : 'contained'}
-                    disabled={
-                      isCurrent || processing || checkoutPlanId !== null
-                    }
+                    disabled={isCurrent || processing || openingPlanId !== null}
                     onClick={() => void handleSubscribe(plan)}
                     endIcon={
                       processing ? (
