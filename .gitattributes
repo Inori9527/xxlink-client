@@ -2,9 +2,14 @@
 Changelog.md merge=union
 
 .gitattributes text eol=lf
+package.json text eol=lf
 scripts/prebuild.mjs text eol=lf
 scripts/validate-core-version.mjs text eol=lf
 scripts/validate-service-helper-branding.mjs text eol=lf
+src-tauri/Cargo.toml text eol=lf
+src-tauri/tauri.conf.json text eol=lf
+src/assets/styles/index.scss text eol=lf
+src/pages/_theme.tsx text eol=lf
 src/pages/connect.tsx text eol=lf
 src/pages/plans.tsx text eol=lf
 src/services/api.ts text eol=lf
