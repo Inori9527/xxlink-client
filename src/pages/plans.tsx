@@ -22,8 +22,6 @@ import {
   Typography,
   ToggleButton,
   ToggleButtonGroup,
-  alpha,
-  useTheme,
 } from '@mui/material'
 import { open } from '@tauri-apps/plugin-shell'
 import { useLockFn } from 'ahooks'
@@ -150,7 +148,6 @@ function formatCooldownHours(
 
 const PlansPage = () => {
   const { i18n, t } = useTranslation()
-  const theme = useTheme()
   const [plans, setPlans] = useState<Plan[]>([])
   const [subscription, setSubscription] = useState<Subscription | null>(null)
   const [usage, setUsage] = useState<UsageData | null>(null)
@@ -163,6 +160,9 @@ const PlansPage = () => {
   const [error, setError] = useState<string | null>(null)
   const [preferredBillingPeriod, setPreferredBillingPeriod] =
     useState<BillingPeriod>('month')
+  const surfaceColor = '#FFFFFF'
+  const textColor = '#111111'
+  const mutedTextColor = '#444444'
   const cooldownLabels = useMemo(
     () => ({
       available: t('plans.trial.available'),
@@ -303,12 +303,21 @@ const PlansPage = () => {
           }
           onClick={handleRefresh}
           disabled={refreshing || loading}
-          sx={{ borderRadius: 999, fontWeight: 900 }}
+          sx={{
+            borderRadius: 999,
+            fontWeight: 900,
+            color: textColor,
+            borderColor: 'transparent',
+            '&:hover': {
+              borderColor: 'transparent',
+              bgcolor: surfaceColor,
+            },
+          }}
         >
           {t('plans.page.actions.refresh')}
         </Button>
       }
-      contentStyle={{ padding: '8px 12px 16px' }}
+      contentStyle={{ padding: '8px 12px 16px', backgroundColor: surfaceColor }}
     >
       <Stack spacing={1.5} sx={{ maxWidth: 1080, mx: 'auto' }}>
         {error && (
@@ -328,11 +337,8 @@ const PlansPage = () => {
             borderRadius: 4,
             overflow: 'hidden',
             position: 'relative',
-            border: `1px solid ${alpha(theme.palette.divider, 0.72)}`,
-            background:
-              theme.palette.mode === 'dark'
-                ? 'linear-gradient(135deg, rgba(12,12,12,0.98), rgba(25,25,25,0.96))'
-                : 'linear-gradient(135deg,#FFFFFF,#F7F7F8)',
+            bgcolor: surfaceColor,
+            boxShadow: 'none',
           }}
         >
           <Stack
@@ -349,8 +355,8 @@ const PlansPage = () => {
                   borderRadius: 3,
                   display: 'grid',
                   placeItems: 'center',
-                  color: theme.palette.text.primary,
-                  bgcolor: alpha(theme.palette.text.primary, 0.08),
+                  color: textColor,
+                  bgcolor: surfaceColor,
                 }}
               >
                 <WorkspacePremiumRounded />
@@ -361,7 +367,7 @@ const PlansPage = () => {
                     activeSubscription?.plan.name ??
                     t('plans.page.current.fallback')}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color={mutedTextColor}>
                   {usage?.expireAt || activeSubscription?.expireAt
                     ? t('plans.page.current.expirePrefix', {
                         date: formatDate(
@@ -376,7 +382,7 @@ const PlansPage = () => {
 
             <Box sx={{ minWidth: { md: 360 } }}>
               <Stack direction="row" justifyContent="space-between">
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color={mutedTextColor}>
                   {t('plans.page.current.labels.trafficUsage')}
                 </Typography>
                 <Typography variant="body2" fontWeight={900}>
@@ -391,20 +397,14 @@ const PlansPage = () => {
                   mt: 1,
                   height: 9,
                   borderRadius: 999,
-                  bgcolor: alpha(theme.palette.common.white, 0.08),
+                  bgcolor: '#F2F2F2',
                   '& .MuiLinearProgress-bar': {
                     borderRadius: 999,
-                    background:
-                      percent > 80
-                        ? 'linear-gradient(90deg,#F59E0B,#EF4444)'
-                        : `linear-gradient(90deg,${theme.palette.text.primary},${alpha(
-                            theme.palette.text.primary,
-                            0.64,
-                          )})`,
+                    bgcolor: textColor,
                   },
                 }}
               />
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" color={mutedTextColor}>
                 {t('plans.page.current.labels.remaining', {
                   traffic: formatTraffic(remaining),
                 })}
@@ -419,11 +419,8 @@ const PlansPage = () => {
             sx={{
               p: 2,
               borderRadius: 4,
-              border: `1px solid ${alpha(theme.palette.text.primary, 0.16)}`,
-              bgcolor:
-                theme.palette.mode === 'dark'
-                  ? alpha(theme.palette.common.white, 0.06)
-                  : alpha(theme.palette.common.black, 0.03),
+              bgcolor: surfaceColor,
+              boxShadow: 'none',
             }}
           >
             <Stack
@@ -440,8 +437,8 @@ const PlansPage = () => {
                     borderRadius: 3,
                     display: 'grid',
                     placeItems: 'center',
-                    color: theme.palette.text.primary,
-                    bgcolor: alpha(theme.palette.text.primary, 0.08),
+                    color: textColor,
+                    bgcolor: surfaceColor,
                   }}
                 >
                   <CardGiftcardRounded />
@@ -450,7 +447,7 @@ const PlansPage = () => {
                   <Typography fontWeight={950}>
                     {t('plans.trial.title')}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" color={mutedTextColor}>
                     {t('plans.trial.subtitle', {
                       traffic: formatTraffic(
                         getNumericBytes(publicBenefit.claimBytes),
@@ -464,14 +461,21 @@ const PlansPage = () => {
               </Stack>
               <Button
                 variant="contained"
-                color="success"
                 onClick={handleClaimBenefit}
                 disabled={
                   claimingBenefit ||
                   !publicBenefit.emailVerified ||
                   !publicBenefit.canClaim
                 }
-                sx={{ borderRadius: 999, fontWeight: 950, px: 3 }}
+                sx={{
+                  borderRadius: 999,
+                  fontWeight: 950,
+                  px: 3,
+                  bgcolor: textColor,
+                  color: surfaceColor,
+                  boxShadow: 'none',
+                  '&:hover': { bgcolor: textColor },
+                }}
               >
                 {claimingBenefit
                   ? t('plans.trial.claiming')
@@ -496,7 +500,7 @@ const PlansPage = () => {
             <Typography variant="h6" fontWeight={950}>
               {t('plans.page.sections.available')}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color={mutedTextColor}>
               {t('plans.page.sections.availableHint')}
             </Typography>
           </Box>
@@ -504,7 +508,7 @@ const PlansPage = () => {
             variant="text"
             endIcon={<OpenInNewRounded />}
             onClick={() => void open(DASHBOARD_RECHARGE_URL)}
-            sx={{ borderRadius: 999, fontWeight: 900 }}
+            sx={{ borderRadius: 999, fontWeight: 900, color: textColor }}
           >
             {t('plans.page.actions.openDashboard')}
           </Button>
@@ -522,21 +526,18 @@ const PlansPage = () => {
               alignSelf: 'center',
               p: 0.4,
               borderRadius: 999,
-              bgcolor: alpha(theme.palette.common.white, 0.06),
-              border: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+              bgcolor: surfaceColor,
               '& .MuiToggleButton-root': {
                 minWidth: 92,
                 border: 0,
                 borderRadius: 999,
                 fontWeight: 950,
                 px: 2.4,
+                color: textColor,
               },
               '& .Mui-selected': {
-                color:
-                  theme.palette.mode === 'dark'
-                    ? '#050505 !important'
-                    : '#FFFFFF !important',
-                bgcolor: `${theme.palette.text.primary} !important`,
+                color: `${surfaceColor} !important`,
+                bgcolor: `${textColor} !important`,
               },
             }}
           >
@@ -575,11 +576,8 @@ const PlansPage = () => {
               p: 4,
               borderRadius: 4,
               textAlign: 'center',
-              border: `1px dashed ${alpha(theme.palette.divider, 0.7)}`,
-              bgcolor:
-                theme.palette.mode === 'dark'
-                  ? alpha(theme.palette.common.white, 0.045)
-                  : '#FFFFFF',
+              bgcolor: surfaceColor,
+              boxShadow: 'none',
             }}
           >
             <Typography variant="h6" fontWeight={950}>
@@ -587,7 +585,7 @@ const PlansPage = () => {
             </Typography>
             <Typography
               variant="body2"
-              color="text.secondary"
+              color={mutedTextColor}
               sx={{ mt: 0.75 }}
             >
               {t('plans.page.empty.subtitle')}
@@ -596,7 +594,15 @@ const PlansPage = () => {
               variant="contained"
               endIcon={<OpenInNewRounded />}
               onClick={() => void open(DASHBOARD_RECHARGE_URL)}
-              sx={{ mt: 2, borderRadius: 999, fontWeight: 950 }}
+              sx={{
+                mt: 2,
+                borderRadius: 999,
+                fontWeight: 950,
+                bgcolor: textColor,
+                color: surfaceColor,
+                boxShadow: 'none',
+                '&:hover': { bgcolor: textColor },
+              }}
             >
               {t('plans.page.actions.openDashboard')}
             </Button>
@@ -612,14 +618,9 @@ const PlansPage = () => {
               gap: 1.5,
             }}
           >
-            {visiblePlans.map((plan, index) => {
+            {visiblePlans.map((plan) => {
               const isCurrent = activeSubscription?.planId === plan.id
               const processing = openingPlanId === plan.id
-              const accent =
-                index % 3 === 0
-                  ? theme.palette.text.primary
-                  : theme.palette.text.secondary
-              const accentText = theme.palette.getContrastText(accent)
 
               return (
                 <Paper
@@ -631,18 +632,8 @@ const PlansPage = () => {
                     display: 'flex',
                     flexDirection: 'column',
                     borderRadius: 4,
-                    border: `1px solid ${
-                      isCurrent
-                        ? alpha(accent, 0.78)
-                        : alpha(theme.palette.divider, 0.5)
-                    }`,
-                    bgcolor:
-                      theme.palette.mode === 'dark'
-                        ? alpha(theme.palette.common.white, 0.05)
-                        : alpha(theme.palette.common.white, 0.94),
-                    boxShadow: isCurrent
-                      ? `0 14px 34px ${alpha(accent, theme.palette.mode === 'dark' ? 0.12 : 0.08)}`
-                      : `0 10px 28px ${alpha(theme.palette.common.black, theme.palette.mode === 'dark' ? 0.2 : 0.055)}`,
+                    bgcolor: surfaceColor,
+                    boxShadow: 'none',
                   }}
                 >
                   <Stack
@@ -661,10 +652,10 @@ const PlansPage = () => {
                         icon={<CheckCircleRounded />}
                         label={t('plans.page.card.badge')}
                         sx={{
-                          bgcolor: alpha(accent, 0.16),
-                          color: accent,
+                          bgcolor: surfaceColor,
+                          color: textColor,
                           fontWeight: 950,
-                          '.MuiChip-icon': { color: accent },
+                          '.MuiChip-icon': { color: textColor },
                         }}
                       />
                     )}
@@ -678,8 +669,8 @@ const PlansPage = () => {
 
                   <Stack spacing={1.1} sx={{ flex: 1 }}>
                     <Stack direction="row" spacing={1} alignItems="center">
-                      <BoltRounded sx={{ color: accent, fontSize: 19 }} />
-                      <Typography variant="body2" color="text.secondary">
+                      <BoltRounded sx={{ color: textColor, fontSize: 19 }} />
+                      <Typography variant="body2" color={mutedTextColor}>
                         {t('plans.page.card.features.trafficValue', {
                           traffic: formatTraffic(
                             getNumericBytes(plan.trafficLimit),
@@ -688,8 +679,8 @@ const PlansPage = () => {
                       </Typography>
                     </Stack>
                     <Stack direction="row" spacing={1} alignItems="center">
-                      <SpeedRounded sx={{ color: accent, fontSize: 19 }} />
-                      <Typography variant="body2" color="text.secondary">
+                      <SpeedRounded sx={{ color: textColor, fontSize: 19 }} />
+                      <Typography variant="body2" color={mutedTextColor}>
                         {plan.speedLimit
                           ? t('plans.page.card.features.speedMbps', {
                               value: plan.speedLimit,
@@ -698,16 +689,16 @@ const PlansPage = () => {
                       </Typography>
                     </Stack>
                     <Stack direction="row" spacing={1} alignItems="center">
-                      <DevicesRounded sx={{ color: accent, fontSize: 19 }} />
-                      <Typography variant="body2" color="text.secondary">
+                      <DevicesRounded sx={{ color: textColor, fontSize: 19 }} />
+                      <Typography variant="body2" color={mutedTextColor}>
                         {t('plans.page.card.features.devicesValue', {
                           count: plan.maxDevices,
                         })}
                       </Typography>
                     </Stack>
                     <Stack direction="row" spacing={1} alignItems="center">
-                      <ShieldRounded sx={{ color: accent, fontSize: 19 }} />
-                      <Typography variant="body2" color="text.secondary">
+                      <ShieldRounded sx={{ color: textColor, fontSize: 19 }} />
+                      <Typography variant="body2" color={mutedTextColor}>
                         {t('plans.page.card.features.validUntilExpire')}
                       </Typography>
                     </Stack>
@@ -730,11 +721,13 @@ const PlansPage = () => {
                       borderRadius: 999,
                       py: 1.1,
                       fontWeight: 950,
-                      bgcolor: isCurrent ? undefined : accent,
-                      color: isCurrent ? accent : accentText,
+                      bgcolor: isCurrent ? surfaceColor : textColor,
+                      color: isCurrent ? textColor : surfaceColor,
+                      boxShadow: 'none',
+                      borderColor: 'transparent',
                       '&:hover': {
-                        bgcolor: isCurrent ? alpha(accent, 0.08) : accent,
-                        filter: 'brightness(1.04)',
+                        bgcolor: isCurrent ? surfaceColor : textColor,
+                        borderColor: 'transparent',
                       },
                     }}
                   >

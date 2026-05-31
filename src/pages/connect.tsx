@@ -21,7 +21,6 @@ import {
   Stack,
   Tooltip,
   Typography,
-  alpha,
   keyframes,
   useTheme,
 } from '@mui/material'
@@ -74,9 +73,9 @@ const STARTUP_SYNC_ERROR_TTL_MS = 5 * 60 * 1000
 const DASHBOARD_URL = 'https://xxlink.net/dashboard'
 
 const pulse = keyframes`
-  0% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.6); }
-  70% { box-shadow: 0 0 0 22px rgba(255, 152, 0, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0); }
+  0% { transform: scale(1); }
+  50% { transform: scale(0.97); }
+  100% { transform: scale(1); }
 `
 
 type ProxyEntry = {
@@ -775,25 +774,13 @@ const ConnectPage = () => {
     }
   }, [connected, currentNodeId, disconnectForTrafficExceeded])
 
-  const brandAccent =
-    theme.palette.mode === 'dark'
-      ? theme.palette.common.white
-      : theme.palette.common.black
-  const subtlePanelBg =
-    theme.palette.mode === 'dark'
-      ? alpha(theme.palette.common.white, 0.055)
-      : alpha(theme.palette.common.black, 0.035)
-  const subtlePanelHover =
-    theme.palette.mode === 'dark'
-      ? alpha(theme.palette.common.white, 0.085)
-      : alpha(theme.palette.common.black, 0.055)
+  const surfaceColor = theme.palette.common.white
+  const textColor = theme.palette.common.black
+  const mutedTextColor = '#444444'
 
   // Button colors
   const getButtonColor = () => {
-    if (errorFlash) return theme.palette.error.main
-    if (busy) return theme.palette.warning.main
-    if (connected) return theme.palette.success.main
-    return brandAccent
+    return textColor
   }
 
   const buttonColor = getButtonColor()
@@ -823,12 +810,6 @@ const ConnectPage = () => {
         )}`
       : `${formatTrafficTotal(periodUsage?.used ?? 0)} / --`
 
-  const getChipColor = (delay: number): 'success' | 'warning' | 'error' => {
-    if (delay < 200) return 'success'
-    if (delay < 500) return 'warning'
-    return 'error'
-  }
-
   const refreshControl = hasSubscription === true && (
     <Tooltip title={t('layout.components.connect.empty.rebuild')}>
       <span>
@@ -840,11 +821,10 @@ const ConnectPage = () => {
           sx={{
             width: 34,
             height: 34,
-            border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
-            bgcolor: subtlePanelBg,
-            color: 'text.primary',
+            bgcolor: surfaceColor,
+            color: textColor,
             '&:hover': {
-              bgcolor: subtlePanelHover,
+              bgcolor: surfaceColor,
             },
           }}
         >
@@ -858,7 +838,7 @@ const ConnectPage = () => {
     <BasePage
       title={t('layout.components.connect.title')}
       header={refreshControl}
-      contentStyle={{ height: '100%' }}
+      contentStyle={{ height: '100%', backgroundColor: surfaceColor }}
     >
       <Stack
         spacing={1.5}
@@ -927,8 +907,8 @@ const ConnectPage = () => {
             p: { xs: 1.5, md: 2.25 },
             borderRadius: 5,
             overflow: 'visible',
-            bgcolor: theme.palette.mode === 'dark' ? '#0B0B0D' : '#FFFFFF',
-            border: `1px solid ${alpha(theme.palette.divider, 0.72)}`,
+            bgcolor: surfaceColor,
+            boxShadow: 'none',
           }}
         >
           <Stack
@@ -941,7 +921,7 @@ const ConnectPage = () => {
             <Box>
               <Typography
                 variant="overline"
-                sx={{ color: 'text.secondary', fontWeight: 900 }}
+                sx={{ color: mutedTextColor, fontWeight: 900 }}
               >
                 XXLink
               </Typography>
@@ -950,7 +930,7 @@ const ConnectPage = () => {
               </Typography>
               <Typography
                 variant="body2"
-                color="text.secondary"
+                color={mutedTextColor}
                 sx={{ mt: 0.25 }}
               >
                 {t('layout.components.connect.labels.heroSubtitle')}
@@ -962,12 +942,18 @@ const ConnectPage = () => {
                 alignSelf: { xs: 'flex-start', md: 'center' },
                 p: 0.5,
                 borderRadius: 999,
-                bgcolor: subtlePanelBg,
+                bgcolor: surfaceColor,
                 '& .MuiButton-root': {
                   border: '0 !important',
                   borderRadius: '999px !important',
                   px: 2,
                   fontWeight: 900,
+                  color: textColor,
+                  boxShadow: 'none',
+                  '&.MuiButton-contained': {
+                    bgcolor: textColor,
+                    color: surfaceColor,
+                  },
                 },
               }}
             >
@@ -1000,7 +986,7 @@ const ConnectPage = () => {
               p: { xs: 1.75, md: 2.25 },
               mb: 1.25,
               borderRadius: 3,
-              bgcolor: subtlePanelBg,
+              bgcolor: surfaceColor,
             }}
           >
             <Stack direction="column" spacing={1.25} alignItems="center">
@@ -1014,11 +1000,9 @@ const ConnectPage = () => {
                   borderRadius: '50%',
                   bgcolor: buttonColor,
                   color: theme.palette.getContrastText(buttonColor),
-                  border: `10px solid ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.08 : 0.72)}`,
+                  border: '10px solid #FFFFFF',
                   transition: 'all 0.28s ease-in-out',
-                  boxShadow: connected
-                    ? `0 0 0 12px ${alpha(theme.palette.success.main, 0.1)}`
-                    : `0 0 0 12px ${alpha(brandAccent, theme.palette.mode === 'dark' ? 0.08 : 0.045)}`,
+                  boxShadow: 'none',
                   animation: busy ? `${pulse} 1.4s infinite` : 'none',
                   '&:hover': {
                     bgcolor: buttonColor,
@@ -1050,13 +1034,7 @@ const ConnectPage = () => {
                 <Typography
                   variant="h4"
                   fontWeight={950}
-                  color={
-                    errorFlash
-                      ? 'error.main'
-                      : connected
-                        ? 'success.main'
-                        : 'text.primary'
-                  }
+                  color={errorFlash ? 'error.main' : 'text.primary'}
                 >
                   {connected
                     ? t('layout.components.connect.labels.connected')
@@ -1111,10 +1089,10 @@ const ConnectPage = () => {
                 color: 'text.primary',
               },
               {
-                icon: <DataUsageRounded color="success" />,
+                icon: <DataUsageRounded sx={{ color: 'text.primary' }} />,
                 label: t('layout.components.connect.session.packageTraffic'),
                 value: periodTrafficLabel,
-                color: 'success.main',
+                color: 'text.primary',
               },
             ].map((metric) => (
               <Box
@@ -1122,7 +1100,7 @@ const ConnectPage = () => {
                 sx={{
                   p: 2,
                   borderRadius: 3,
-                  bgcolor: subtlePanelBg,
+                  bgcolor: surfaceColor,
                 }}
               >
                 <Stack direction="row" spacing={1.2} alignItems="center">
@@ -1151,8 +1129,11 @@ const ConnectPage = () => {
                         mt: 1.2,
                         height: 5,
                         borderRadius: 999,
-                        bgcolor: alpha(theme.palette.success.main, 0.16),
-                        '& .MuiLinearProgress-bar': { borderRadius: 999 },
+                        bgcolor: '#F2F2F2',
+                        '& .MuiLinearProgress-bar': {
+                          borderRadius: 999,
+                          bgcolor: textColor,
+                        },
                       }}
                     />
                   )}
@@ -1165,7 +1146,7 @@ const ConnectPage = () => {
               px: 2,
               py: 1.4,
               borderRadius: 3,
-              bgcolor: subtlePanelBg,
+              bgcolor: surfaceColor,
             }}
           >
             <Stack
@@ -1185,8 +1166,14 @@ const ConnectPage = () => {
                 {latencyMap.get(currentNodeDisplay) !== undefined && (
                   <Chip
                     size="small"
-                    color={getChipColor(latencyMap.get(currentNodeDisplay)!)}
+                    variant="outlined"
                     label={`${latencyMap.get(currentNodeDisplay)}ms`}
+                    sx={{
+                      bgcolor: surfaceColor,
+                      color: textColor,
+                      borderColor: 'transparent',
+                      fontWeight: 800,
+                    }}
                   />
                 )}
               </Stack>
@@ -1207,7 +1194,12 @@ const ConnectPage = () => {
                   sx={{
                     borderRadius: 999,
                     fontWeight: 950,
-                    '&:hover': { bgcolor: subtlePanelHover },
+                    color: textColor,
+                    borderColor: 'transparent',
+                    '&:hover': {
+                      bgcolor: surfaceColor,
+                      borderColor: 'transparent',
+                    },
                   }}
                 >
                   {t('layout.components.connect.actions.switchNode')}
