@@ -26,8 +26,7 @@
       -moz-user-select: none;
       -ms-user-select: none;
       overflow: hidden;
-      border-right: 1px solid
-        color-mix(in srgb, var(--divider-color) 72%, transparent);
+      border-right: none;
 
       .the-logo {
         position: relative;
@@ -121,7 +120,7 @@
       padding: 10px;
       box-sizing: border-box;
       height: 36px;
-      border-bottom: 1px solid var(--divider-color);
+      border-bottom: none;
     }
 
     .layout-content__left .the-logo {
@@ -149,7 +148,7 @@
       padding: 10px;
       box-sizing: border-box;
       height: 36px;
-      border-bottom: 1px solid var(--divider-color);
+      border-bottom: none;
     }
 
     .layout-content__left {

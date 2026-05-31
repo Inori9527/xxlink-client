@@ -1,5 +1,4 @@
 import { Typography } from '@mui/material'
-import { useTheme } from '@mui/material/styles'
 import React, { ReactNode } from 'react'
 
 import { BaseErrorBoundary } from './base-error-boundary'
@@ -14,13 +13,7 @@ interface Props {
 
 export const BasePage: React.FC<Props> = (props) => {
   const { title, header, contentStyle, full, children } = props
-  const theme = useTheme()
-
-  const isDark = theme.palette.mode === 'dark'
-  const pageBg = isDark
-    ? 'radial-gradient(circle at 88% 0%, rgba(15, 237, 210, 0.12), transparent 30%), radial-gradient(circle at 4% 100%, rgba(47, 128, 237, 0.10), transparent 34%), #071018'
-    : 'linear-gradient(135deg, #F6FCFF 0%, #EEF7FF 100%)'
-  const panelBg = isDark ? '#071018' : '#FFFFFF'
+  const pageBg = '#FFFFFF'
 
   return (
     <BaseErrorBoundary>
@@ -38,11 +31,11 @@ export const BasePage: React.FC<Props> = (props) => {
 
         <div
           className={full ? 'base-container no-padding' : 'base-container'}
-          style={{ backgroundColor: panelBg }}
+          style={{ backgroundColor: pageBg }}
         >
           <section
             style={{
-              background: pageBg,
+              backgroundColor: pageBg,
             }}
           >
             <div className="base-content" style={contentStyle}>

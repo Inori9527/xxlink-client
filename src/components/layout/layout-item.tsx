@@ -3,7 +3,6 @@ import type {
   DraggableSyntheticListeners,
 } from '@dnd-kit/core'
 import {
-  alpha,
   ListItem,
   ListItemButton,
   ListItemIcon,
@@ -77,26 +76,20 @@ export const LayoutItem = (props: Props) => {
               fontSize: 14,
             },
           },
-          ({ palette: { mode, primary } }) => {
-            const bgcolor =
-              mode === 'light'
-                ? alpha(primary.main, 0.12)
-                : alpha(primary.main, 0.18)
-            const color = mode === 'light' ? '#172033' : '#F4F4F5'
+          ({ palette: { mode } }) => {
+            const color = mode === 'light' ? '#111111' : '#F4F4F5'
             return {
               '&.Mui-selected': {
-                background:
-                  mode === 'light'
-                    ? 'linear-gradient(135deg, rgba(47,128,237,0.13), rgba(15,237,210,0.10))'
-                    : 'linear-gradient(135deg, rgba(47,128,237,0.20), rgba(15,237,210,0.13))',
-                border: `1px solid ${alpha('#0FEDD2', mode === 'light' ? 0.24 : 0.34)}`,
-                boxShadow:
-                  mode === 'dark'
-                    ? `inset 0 1px 0 ${alpha('#fff', 0.08)}, 0 10px 30px ${alpha('#0FEDD2', 0.08)}`
-                    : `0 8px 24px ${alpha(primary.main, 0.08)}`,
+                background: 'transparent',
+                border: 0,
+                boxShadow: 'none',
               },
-              '&.Mui-selected:hover': { bgcolor },
-              '&.Mui-selected .MuiListItemText-primary': { color },
+              '&.Mui-selected:hover': { background: 'transparent' },
+              '&.Mui-selected .MuiListItemText-primary': {
+                color,
+                fontWeight: 950,
+              },
+              '&.Mui-selected .MuiListItemIcon-root': { color },
             }
           },
         ]}
@@ -120,8 +113,17 @@ export const LayoutItem = (props: Props) => {
           </ListItemIcon>
         )}
         {effectiveMenuIcon === 'colorful' && (
-          <ListItemIcon sx={{ cursor: draggable ? 'grab' : 'inherit' }}>
-            {icon[1]}
+          <ListItemIcon
+            sx={{
+              color: 'text.primary',
+              cursor: draggable ? 'grab' : 'inherit',
+              minWidth: 34,
+              '& .MuiSvgIcon-root': {
+                fontSize: 22,
+              },
+            }}
+          >
+            {icon[0]}
           </ListItemIcon>
         )}
         <ListItemText
