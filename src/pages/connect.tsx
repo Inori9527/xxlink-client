@@ -991,11 +991,8 @@ const ConnectPage = () => {
               p: { xs: 1.75, md: 2.25 },
               mb: 1.25,
               borderRadius: 4,
-              border: `1px solid ${alpha(theme.palette.common.white, 0.1)}`,
-              background:
-                theme.palette.mode === 'dark'
-                  ? 'linear-gradient(135deg,rgba(13,25,36,0.98),rgba(8,18,27,0.94))'
-                  : '#fff',
+              border: 'none',
+              background: 'transparent',
             }}
           >
             <Stack direction="column" spacing={1.25} alignItems="center">
