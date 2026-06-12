@@ -32,6 +32,7 @@ import { WindowControls } from '@/components/layout/window-controller'
 import { useI18n } from '@/hooks/use-i18n'
 import { useVerge } from '@/hooks/use-verge'
 import { useWindowDecorations } from '@/hooks/use-window'
+import { useThemeMode } from '@/services/states'
 import getSystem from '@/utils/get-system'
 
 import {
@@ -100,6 +101,7 @@ dayjs.extend(relativeTime)
 const OS = getSystem()
 
 const Layout = () => {
+  const mode = useThemeMode()
   const { t } = useTranslation()
   const { theme } = useCustomTheme()
   const { verge, mutateVerge, patchVerge } = useVerge()
@@ -233,12 +235,12 @@ const Layout = () => {
         style={{
           width: '100vw',
           height: '100vh',
-          background: '#fff',
+          background: mode === 'light' ? '#fff' : '#181a1b',
           transition: 'background 0.2s',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: '#111',
+          color: mode === 'light' ? '#333' : '#fff',
         }}
       ></div>
     )
@@ -335,8 +337,11 @@ const Layout = () => {
                   fontSize: 12,
                   fontWeight: 600,
                   textAlign: 'center',
-                  color: theme.palette.text.primary,
-                  bgcolor: theme.palette.background.paper,
+                  color: theme.palette.warning.contrastText,
+                  bgcolor:
+                    theme.palette.mode === 'light'
+                      ? theme.palette.warning.main
+                      : theme.palette.warning.dark,
                 })}
               >
                 {t('layout.components.navigation.menu.reorderMode')}

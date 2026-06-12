@@ -21,6 +21,7 @@ import {
   Stack,
   Tooltip,
   Typography,
+  alpha,
   keyframes,
   useTheme,
 } from '@mui/material'
@@ -73,9 +74,9 @@ const STARTUP_SYNC_ERROR_TTL_MS = 5 * 60 * 1000
 const DASHBOARD_URL = 'https://xxlink.net/dashboard'
 
 const pulse = keyframes`
-  0% { transform: scale(1); }
-  50% { transform: scale(0.97); }
-  100% { transform: scale(1); }
+  0% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.6); }
+  70% { box-shadow: 0 0 0 22px rgba(255, 152, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0); }
 `
 
 type ProxyEntry = {
@@ -774,13 +775,12 @@ const ConnectPage = () => {
     }
   }, [connected, currentNodeId, disconnectForTrafficExceeded])
 
-  const surfaceColor = theme.palette.common.white
-  const textColor = theme.palette.common.black
-  const mutedTextColor = '#444444'
-
   // Button colors
   const getButtonColor = () => {
-    return textColor
+    if (errorFlash) return theme.palette.error.main
+    if (busy) return theme.palette.warning.main
+    if (connected) return theme.palette.success.main
+    return theme.palette.primary.main
   }
 
   const buttonColor = getButtonColor()
@@ -810,6 +810,12 @@ const ConnectPage = () => {
         )}`
       : `${formatTrafficTotal(periodUsage?.used ?? 0)} / --`
 
+  const getChipColor = (delay: number): 'success' | 'warning' | 'error' => {
+    if (delay < 200) return 'success'
+    if (delay < 500) return 'warning'
+    return 'error'
+  }
+
   const refreshControl = hasSubscription === true && (
     <Tooltip title={t('layout.components.connect.empty.rebuild')}>
       <span>
@@ -821,10 +827,11 @@ const ConnectPage = () => {
           sx={{
             width: 34,
             height: 34,
-            bgcolor: surfaceColor,
-            color: textColor,
+            border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
+            bgcolor: alpha(theme.palette.primary.main, 0.08),
+            color: 'primary.main',
             '&:hover': {
-              bgcolor: surfaceColor,
+              bgcolor: alpha(theme.palette.primary.main, 0.16),
             },
           }}
         >
@@ -838,7 +845,7 @@ const ConnectPage = () => {
     <BasePage
       title={t('layout.components.connect.title')}
       header={refreshControl}
-      contentStyle={{ height: '100%', backgroundColor: surfaceColor }}
+      contentStyle={{ height: '100%' }}
     >
       <Stack
         spacing={1.5}
@@ -907,8 +914,11 @@ const ConnectPage = () => {
             p: { xs: 1.5, md: 2.25 },
             borderRadius: 5,
             overflow: 'visible',
-            bgcolor: surfaceColor,
-            boxShadow: 'none',
+            border: `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
+            background:
+              theme.palette.mode === 'dark'
+                ? 'radial-gradient(circle at 88% 2%, rgba(15,237,210,0.16), transparent 32%), radial-gradient(circle at 4% 100%, rgba(47,128,237,0.14), transparent 28%), rgba(7,16,24,0.97)'
+                : 'linear-gradient(135deg,#ffffff,#f2fbff)',
           }}
         >
           <Stack
@@ -921,7 +931,7 @@ const ConnectPage = () => {
             <Box>
               <Typography
                 variant="overline"
-                sx={{ color: mutedTextColor, fontWeight: 900 }}
+                sx={{ color: 'primary.light', fontWeight: 900 }}
               >
                 XXLink
               </Typography>
@@ -930,7 +940,7 @@ const ConnectPage = () => {
               </Typography>
               <Typography
                 variant="body2"
-                color={mutedTextColor}
+                color="text.secondary"
                 sx={{ mt: 0.25 }}
               >
                 {t('layout.components.connect.labels.heroSubtitle')}
@@ -942,18 +952,12 @@ const ConnectPage = () => {
                 alignSelf: { xs: 'flex-start', md: 'center' },
                 p: 0.5,
                 borderRadius: 999,
-                bgcolor: surfaceColor,
+                bgcolor: alpha(theme.palette.primary.main, 0.09),
                 '& .MuiButton-root': {
                   border: '0 !important',
                   borderRadius: '999px !important',
                   px: 2,
                   fontWeight: 900,
-                  color: textColor,
-                  boxShadow: 'none',
-                  '&.MuiButton-contained': {
-                    bgcolor: textColor,
-                    color: surfaceColor,
-                  },
                 },
               }}
             >
@@ -981,12 +985,17 @@ const ConnectPage = () => {
             </ButtonGroup>
           </Stack>
 
-          <Box
+          <Paper
+            elevation={0}
             sx={{
               p: { xs: 1.75, md: 2.25 },
               mb: 1.25,
-              borderRadius: 3,
-              bgcolor: surfaceColor,
+              borderRadius: 4,
+              border: `1px solid ${alpha(theme.palette.common.white, 0.1)}`,
+              background:
+                theme.palette.mode === 'dark'
+                  ? 'linear-gradient(135deg,rgba(13,25,36,0.98),rgba(8,18,27,0.94))'
+                  : '#fff',
             }}
           >
             <Stack direction="column" spacing={1.25} alignItems="center">
@@ -1000,9 +1009,11 @@ const ConnectPage = () => {
                   borderRadius: '50%',
                   bgcolor: buttonColor,
                   color: theme.palette.getContrastText(buttonColor),
-                  border: '10px solid #FFFFFF',
+                  border: `10px solid ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.08 : 0.72)}`,
                   transition: 'all 0.28s ease-in-out',
-                  boxShadow: 'none',
+                  boxShadow: connected
+                    ? `0 0 0 18px ${alpha(theme.palette.success.main, 0.12)}`
+                    : `0 0 0 18px ${alpha(theme.palette.primary.main, 0.08)}`,
                   animation: busy ? `${pulse} 1.4s infinite` : 'none',
                   '&:hover': {
                     bgcolor: buttonColor,
@@ -1034,7 +1045,13 @@ const ConnectPage = () => {
                 <Typography
                   variant="h4"
                   fontWeight={950}
-                  color={errorFlash ? 'error.main' : 'text.primary'}
+                  color={
+                    errorFlash
+                      ? 'error.main'
+                      : connected
+                        ? 'success.main'
+                        : 'text.primary'
+                  }
                 >
                   {connected
                     ? t('layout.components.connect.labels.connected')
@@ -1062,7 +1079,7 @@ const ConnectPage = () => {
                 ) : null}
               </Box>
             </Stack>
-          </Box>
+          </Paper>
 
           <Box
             sx={{
@@ -1077,30 +1094,35 @@ const ConnectPage = () => {
           >
             {[
               {
-                icon: <AccessTimeRounded sx={{ color: 'text.primary' }} />,
+                icon: <AccessTimeRounded color="primary" />,
                 label: t('layout.components.connect.session.duration'),
                 value: connected ? connectedDurationLabel : '0:00',
                 color: 'text.primary',
               },
               {
-                icon: <DataUsageRounded sx={{ color: 'text.primary' }} />,
+                icon: <DataUsageRounded sx={{ color: 'primary.light' }} />,
                 label: t('layout.components.connect.session.localTraffic'),
                 value: connected ? sessionTrafficLabel : formatTrafficTotal(0),
-                color: 'text.primary',
+                color: 'primary.light',
               },
               {
-                icon: <DataUsageRounded sx={{ color: 'text.primary' }} />,
+                icon: <DataUsageRounded color="success" />,
                 label: t('layout.components.connect.session.packageTraffic'),
                 value: periodTrafficLabel,
-                color: 'text.primary',
+                color: 'success.main',
               },
             ].map((metric) => (
-              <Box
+              <Paper
                 key={metric.label}
+                elevation={0}
                 sx={{
                   p: 2,
                   borderRadius: 3,
-                  bgcolor: surfaceColor,
+                  border: `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
+                  bgcolor:
+                    theme.palette.mode === 'dark'
+                      ? 'rgba(24,27,36,0.96)'
+                      : '#fff',
                 }}
               >
                 <Stack direction="row" spacing={1.2} alignItems="center">
@@ -1129,24 +1151,24 @@ const ConnectPage = () => {
                         mt: 1.2,
                         height: 5,
                         borderRadius: 999,
-                        bgcolor: '#F2F2F2',
-                        '& .MuiLinearProgress-bar': {
-                          borderRadius: 999,
-                          bgcolor: textColor,
-                        },
+                        bgcolor: alpha(theme.palette.success.main, 0.16),
+                        '& .MuiLinearProgress-bar': { borderRadius: 999 },
                       }}
                     />
                   )}
-              </Box>
+              </Paper>
             ))}
           </Box>
 
-          <Box
+          <Paper
+            elevation={0}
             sx={{
               px: 2,
               py: 1.4,
               borderRadius: 3,
-              bgcolor: surfaceColor,
+              border: `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
+              bgcolor:
+                theme.palette.mode === 'dark' ? 'rgba(24,27,36,0.96)' : '#fff',
             }}
           >
             <Stack
@@ -1166,14 +1188,8 @@ const ConnectPage = () => {
                 {latencyMap.get(currentNodeDisplay) !== undefined && (
                   <Chip
                     size="small"
-                    variant="outlined"
+                    color={getChipColor(latencyMap.get(currentNodeDisplay)!)}
                     label={`${latencyMap.get(currentNodeDisplay)}ms`}
-                    sx={{
-                      bgcolor: surfaceColor,
-                      color: textColor,
-                      borderColor: 'transparent',
-                      fontWeight: 800,
-                    }}
                   />
                 )}
               </Stack>
@@ -1191,16 +1207,7 @@ const ConnectPage = () => {
                   endIcon={<KeyboardArrowDownRounded />}
                   onClick={handleNodeMenuOpen}
                   disabled={busy || modeChanging || isEmpty}
-                  sx={{
-                    borderRadius: 999,
-                    fontWeight: 950,
-                    color: textColor,
-                    borderColor: 'transparent',
-                    '&:hover': {
-                      bgcolor: surfaceColor,
-                      borderColor: 'transparent',
-                    },
-                  }}
+                  sx={{ borderRadius: 999, fontWeight: 950 }}
                 >
                   {t('layout.components.connect.actions.switchNode')}
                 </Button>
@@ -1244,7 +1251,7 @@ const ConnectPage = () => {
                 )
               })}
             </Menu>
-          </Box>
+          </Paper>
         </Paper>
       </Stack>
     </BasePage>
