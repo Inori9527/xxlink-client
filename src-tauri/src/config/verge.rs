@@ -295,7 +295,7 @@ impl IVerge {
             app_log_max_count: Some(8),
             clash_core: Some("xxlink-mihomo".into()),
             language: Some(xxlink_i18n::system_language().into()),
-            theme_mode: Some("system".into()),
+            theme_mode: Some("light".into()),
             start_page: Some("/connect".into()),
             traffic_graph: Some(true),
             enable_memory_usage: Some(true),

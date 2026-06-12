@@ -23,6 +23,8 @@ export const useCustomTheme = () => {
   useEffect(() => {
     if (theme_mode === 'light' || theme_mode === 'dark') {
       setMode(theme_mode)
+    } else {
+      setMode('light')
     }
   }, [theme_mode, setMode])
 
@@ -31,54 +33,13 @@ export const useCustomTheme = () => {
       return
     }
 
-    let isMounted = true
-
-    const timerId = setTimeout(() => {
-      if (!isMounted) return
-      appWindow
-        .theme()
-        .then((systemTheme) => {
-          if (isMounted && systemTheme) {
-            setMode(systemTheme)
-          }
-        })
-        .catch((err) => {
-          console.error('Failed to get initial system theme:', err)
-        })
-    }, 0)
-
-    const unlistenPromise = appWindow.onThemeChanged(({ payload }) => {
-      if (isMounted) {
-        setMode(payload)
-      }
-    })
-
-    return () => {
-      isMounted = false
-      clearTimeout(timerId)
-      unlistenPromise
-        .then((unlistenFn) => {
-          if (typeof unlistenFn === 'function') {
-            unlistenFn()
-          }
-        })
-        .catch((err) => {
-          console.error('Failed to unlisten from theme changes:', err)
-        })
-    }
+    setMode('light')
   }, [theme_mode, appWindow, setMode])
 
   useEffect(() => {
-    if (theme_mode === undefined) {
-      return
-    }
-
-    if (theme_mode === 'system') {
-      appWindow.setTheme(null).catch((err) => {
-        console.error(
-          'Failed to set window theme to follow system (setTheme(null)):',
-          err,
-        )
+    if (theme_mode === undefined || theme_mode === 'system') {
+      appWindow.setTheme('light' as TauriOsTheme).catch((err) => {
+        console.error('Failed to set window theme to light:', err)
       })
     } else if (mode) {
       appWindow.setTheme(mode as TauriOsTheme).catch((err) => {
