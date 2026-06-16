@@ -240,14 +240,24 @@ let refreshPromise: Promise<void> | null = null
 const AUTH_FATAL_CODES = new Set([
   'ACCOUNT_DISABLED',
   'ACCOUNT_NOT_FOUND',
-  'AUTH_REQUIRED',
   'INVALID_REFRESH_TOKEN',
-  'INVALID_TOKEN',
   'REFRESH_TOKEN_INVALID',
+  'SESSION_REVOKED',
   'SESSION_EXPIRED',
-  'TOKEN_EXPIRED',
-  'TOKEN_INVALID',
-  'UNAUTHENTICATED',
+  'ACCOUNT_BLOCKED',
+  'USER_DELETED',
+  'USER_DISABLED',
+  'USER_NOT_FOUND',
+])
+
+const REFRESH_TERMINAL_CODES = new Set([
+  'ACCOUNT_DISABLED',
+  'ACCOUNT_NOT_FOUND',
+  'ACCOUNT_BLOCKED',
+  'INVALID_REFRESH_TOKEN',
+  'REFRESH_TOKEN_INVALID',
+  'SESSION_REVOKED',
+  'SESSION_EXPIRED',
   'USER_DELETED',
   'USER_DISABLED',
   'USER_NOT_FOUND',
@@ -266,12 +276,16 @@ const isAuthFatalResponse = (
   code?: string,
   path?: string,
 ): boolean => {
-  if (status === 401) return true
   if (code && AUTH_FATAL_CODES.has(code)) return true
 
   const identityPath = path?.startsWith('/user/')
 
   return identityPath === true && (status === 403 || status === 404)
+}
+
+const isTerminalRefreshFailure = (status?: number, code?: string): boolean => {
+  if (code && REFRESH_TERMINAL_CODES.has(code)) return true
+  return false
 }
 
 export function isAuthFatalError(error: unknown): boolean {
@@ -351,11 +365,10 @@ async function request<T>(
           .catch((error) => {
             if (
               error instanceof AuthError &&
-              error.status !== undefined &&
-              isAuthFatalResponse(error.status, error.code, '/auth/refresh')
+              isTerminalRefreshFailure(error.status, error.code)
             ) {
               handleAuthFatal(
-                error.status,
+                error.status ?? 401,
                 error.code || 'REFRESH_TOKEN_INVALID',
               )
             }
