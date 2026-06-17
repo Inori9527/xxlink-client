@@ -44,10 +44,7 @@ pub async fn build_new_window() -> Result<WebviewWindow, String> {
         _ => Some(Theme::Light),
     };
 
-    let prefers_dark_background = match resolved_theme {
-        Some(Theme::Dark) => true,
-        _ => false,
-    };
+    let prefers_dark_background = matches!(resolved_theme, Some(Theme::Dark));
 
     let background_color = if prefers_dark_background {
         DARK_BACKGROUND_COLOR
