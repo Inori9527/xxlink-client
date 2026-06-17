@@ -27,9 +27,9 @@ notifications:
     title: 应用已隐藏
     body: XXLink 正在后台运行。
   updateReady:
-    title: XXLink 更新
-    body: 新版本 (v{version}) 已下载完成，是否立即安装？
-    installNow: 立即安装
+    title: 发现新版本
+    body: XXLink {version} 已准备就绪。建议立即安装并重启，以获得最新修复。
+    installNow: 立即安装并重启
     later: 稍后
 service:
   adminInstallPrompt: 安装 XXLink 服务需要管理员权限

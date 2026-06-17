@@ -134,6 +134,47 @@ fn version_lte(a: &str, b: &str) -> bool {
 // ─── Startup Install & Cache Management ─────────────────────────────────────
 
 impl SilentUpdater {
+    async fn install_update_bytes(
+        app_handle: &tauri::AppHandle,
+        update: Update,
+        bytes: Vec<u8>,
+        version: &str,
+        log_prefix: &str,
+    ) -> bool {
+        Self::show_update_splash(app_handle, version);
+
+        let install_result = tokio::task::spawn_blocking({
+            let update = update.clone();
+            move || update.install(&bytes)
+        });
+
+        let success = match tokio::time::timeout(std::time::Duration::from_secs(30), install_result).await {
+            Ok(Ok(Ok(()))) => {
+                logging!(info, Type::System, "{log_prefix}: update v{version} install triggered");
+                Self::delete_cache();
+                true
+            }
+            Ok(Ok(Err(e))) => {
+                logging!(warn, Type::System, "{log_prefix}: install failed: {e}");
+                false
+            }
+            Ok(Err(e)) => {
+                logging!(warn, Type::System, "{log_prefix}: install task panicked: {e}");
+                false
+            }
+            Err(_) => {
+                logging!(warn, Type::System, "{log_prefix}: install timed out (30s)");
+                false
+            }
+        };
+
+        if !success {
+            Self::close_update_splash(app_handle);
+        }
+
+        success
+    }
+
     /// Called at app startup. If a cached update exists and is newer than the current version,
     /// attempt to install it immediately (before the main app initializes).
     /// Returns true if install was triggered (app should relaunch), false otherwise.
@@ -487,8 +528,23 @@ impl SilentUpdater {
         logging!(
             info,
             Type::System,
-            "Silent updater: v{version} ready for startup install on next launch"
+            "Silent updater: v{version} ready; asking user to install now"
         );
+        if Self::ask_user_to_install(app_handle, &version).await {
+            let bytes = self.pending_bytes.read().clone();
+            let update = self.pending_update.read().clone();
+            if let (Some(bytes), Some(update)) = (bytes, update)
+                && Self::install_update_bytes(app_handle, update, bytes, &version, "Silent updater").await
+            {
+                app_handle.restart();
+            }
+        } else {
+            logging!(
+                info,
+                Type::System,
+                "Silent updater: user deferred v{version}; cached update will be offered on next startup"
+            );
+        }
         Ok(())
     }
 
