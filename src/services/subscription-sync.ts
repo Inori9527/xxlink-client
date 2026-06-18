@@ -6,7 +6,13 @@
  * corresponding Clash remote profile is imported and set as current.
  */
 
-import { api, getSubUrl, isSubscriptionActiveNow } from '@/services/api'
+import {
+  api,
+  getSubUrl,
+  isSubscriptionActiveNow,
+  type Node,
+  type Subscription,
+} from '@/services/api'
 import {
   getProfiles,
   importProfile,
@@ -15,6 +21,7 @@ import {
   patchProfile,
   patchProfilesConfig,
 } from '@/services/cmds'
+import delayManager from '@/services/delay'
 
 /**
  * Fetch the current subscription from the backend, import (or refresh) the
@@ -24,6 +31,7 @@ import {
  *   syncSubscription().catch(console.error)
  */
 let inflight: Promise<void> | null = null
+const APPLIED_GENERATION_KEY = 'xxlink:subscription-profile-generation'
 
 export interface SyncOptions {
   /**
@@ -70,7 +78,22 @@ async function doSync(force: boolean): Promise<void> {
     return
   }
 
+  let visibleNodes: Node[] | null = null
+  try {
+    visibleNodes = await api.nodes.list()
+  } catch (err) {
+    console.warn('[subscription-sync] node generation probe failed', err)
+  }
+
   const clashUrl = getSubUrl(sub.subUrl, 'clash')
+  const nextGeneration = visibleNodes
+    ? buildSubscriptionProfileGeneration(sub, visibleNodes)
+    : null
+  const lastGeneration = readAppliedGeneration()
+  const generationChanged =
+    nextGeneration !== null &&
+    lastGeneration !== null &&
+    nextGeneration !== lastGeneration
   const profilesConfig = await getProfiles()
 
   const remoteProfiles =
@@ -94,7 +117,8 @@ async function doSync(force: boolean): Promise<void> {
 
   // Rebuild on force refresh or when the token/format changed. This avoids
   // reusing a same-origin profile that still points at an expired token.
-  const shouldReimport = force || (remoteProfiles.length > 0 && !exactMatch)
+  const shouldReimport =
+    force || generationChanged || (remoteProfiles.length > 0 && !exactMatch)
 
   if (shouldReimport && remoteProfiles.length > 0) {
     console.log(
@@ -120,6 +144,7 @@ async function doSync(force: boolean): Promise<void> {
   }
 
   const existingItem = shouldReimport ? undefined : exactMatch
+  const profileWillChange = shouldReimport || !existingItem
   let targetUid: string
 
   if (existingItem) {
@@ -173,13 +198,65 @@ async function doSync(force: boolean): Promise<void> {
     /* ignore */
   }
 
-  if (shouldReimport) {
+  if (nextGeneration) {
+    writeAppliedGeneration(nextGeneration)
+  }
+
+  if (profileWillChange) {
+    delayManager.clearCache()
+    console.log('[subscription-sync] Cleared delay cache after profile refresh')
     try {
       window.dispatchEvent(new CustomEvent('xxlink:subscription-resync'))
     } catch {
       /* ignore */
     }
   }
+}
+
+function readAppliedGeneration(): string | null {
+  try {
+    return localStorage.getItem(APPLIED_GENERATION_KEY)
+  } catch {
+    return null
+  }
+}
+
+function writeAppliedGeneration(value: string): void {
+  try {
+    localStorage.setItem(APPLIED_GENERATION_KEY, value)
+  } catch {
+    /* ignore */
+  }
+}
+
+function buildSubscriptionProfileGeneration(
+  sub: Subscription,
+  nodes: Node[],
+): string {
+  const plan = sub.plan
+  const nodeKey = nodes
+    .map((node) =>
+      [
+        node.id,
+        node.protocol,
+        node.host ?? '',
+        node.port ?? '',
+        node.isActive ? '1' : '0',
+      ].join(':'),
+    )
+    .sort()
+    .join('|')
+
+  return JSON.stringify({
+    status: sub.status,
+    planId: sub.planId,
+    planName: plan.name,
+    speedLimit: plan.speedLimit,
+    trafficLimit: plan.trafficLimit,
+    maxDevices: plan.maxDevices,
+    expireAt: sub.expireAt,
+    nodes: nodeKey,
+  })
 }
 
 function isSameSubscriptionOrigin(urlA: string, urlB: string): boolean {

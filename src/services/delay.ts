@@ -109,6 +109,25 @@ class DelayManager {
     this.scheduleGroupFlush()
   }
 
+  clearCache(group?: string) {
+    if (!group) {
+      this.cache.clear()
+      this.pendingItemUpdates.clear()
+      this.pendingGroupUpdates.clear()
+      this.groupListenerMap.forEach((_, key) =>
+        this.queueGroupNotification(key),
+      )
+      return
+    }
+
+    for (const key of this.cache.keys()) {
+      if (key.startsWith(`${group}::`)) {
+        this.cache.delete(key)
+      }
+    }
+    this.queueGroupNotification(group)
+  }
+
   setUrl(group: string, url: string) {
     debugLog(`[DelayManager] 设置测试URL，组: ${group}, URL: ${url}`)
     this.urlMap.set(group, url)

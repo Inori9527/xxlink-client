@@ -224,6 +224,7 @@ const ConnectPage = () => {
   const [errorFlash, setErrorFlash] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [hasSubscription, setHasSubscription] = useState<boolean | null>(null)
+  const [accountRefreshFailed, setAccountRefreshFailed] = useState(false)
   const [publicBenefit, setPublicBenefit] =
     useState<PublicBenefitStatus | null>(null)
   const [periodUsage, setPeriodUsage] = useState<PeriodUsageState | null>(null)
@@ -265,10 +266,17 @@ const ConnectPage = () => {
         api.nodes.list(),
       ])
 
+    const hadFailure = [
+      subscriptionResult,
+      benefitResult,
+      usageResult,
+      nodesResult,
+    ].some((result) => result.status === 'rejected')
+
+    setAccountRefreshFailed(hadFailure)
+
     if (subscriptionResult.status === 'fulfilled') {
       setHasSubscription(isSubscriptionActiveNow(subscriptionResult.value))
-    } else {
-      setHasSubscription(false)
     }
     if (benefitResult.status === 'fulfilled') {
       setPublicBenefit(benefitResult.value)
@@ -293,7 +301,7 @@ const ConnectPage = () => {
         if (cancelled) return
       })
       .catch(() => {
-        if (!cancelled) setHasSubscription(false)
+        if (!cancelled) setAccountRefreshFailed(true)
       })
     return () => {
       cancelled = true
@@ -858,7 +866,10 @@ const ConnectPage = () => {
           justifyContent: 'center',
         }}
       >
-        {(trialNeedsClaim || trialOutOfTraffic || startupSyncError) && (
+        {(trialNeedsClaim ||
+          trialOutOfTraffic ||
+          startupSyncError ||
+          accountRefreshFailed) && (
           <Stack spacing={1}>
             {trialNeedsClaim && (
               <Alert
@@ -902,6 +913,11 @@ const ConnectPage = () => {
                 }
               >
                 {t('layout.components.connect.startupSyncFailed')}
+              </Alert>
+            )}
+            {accountRefreshFailed && (
+              <Alert severity="warning" sx={{ borderRadius: 3 }}>
+                正在显示上次成功加载的账户和节点信息，请稍后重试刷新。
               </Alert>
             )}
           </Stack>
