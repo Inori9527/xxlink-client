@@ -134,6 +134,64 @@ fn version_lte(a: &str, b: &str) -> bool {
 // ─── Startup Install & Cache Management ─────────────────────────────────────
 
 impl SilentUpdater {
+    async fn run_install_handoff(update: Update, bytes: Vec<u8>, version: &str, log_prefix: &str) -> bool {
+        #[cfg(target_os = "windows")]
+        {
+            logging!(
+                info,
+                Type::System,
+                "{log_prefix}: handing off v{version} to Windows installer"
+            );
+
+            let install_result = tokio::task::spawn_blocking(move || update.install(&bytes));
+
+            match install_result.await {
+                Ok(Ok(())) => {
+                    logging!(
+                        info,
+                        Type::System,
+                        "{log_prefix}: update v{version} install handoff returned"
+                    );
+                    Self::delete_cache();
+                    true
+                }
+                Ok(Err(e)) => {
+                    logging!(warn, Type::System, "{log_prefix}: install handoff failed: {e}");
+                    false
+                }
+                Err(e) => {
+                    logging!(warn, Type::System, "{log_prefix}: install handoff task panicked: {e}");
+                    false
+                }
+            }
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            let install_result = tokio::task::spawn_blocking(move || update.install(&bytes));
+
+            match tokio::time::timeout(std::time::Duration::from_secs(30), install_result).await {
+                Ok(Ok(Ok(()))) => {
+                    logging!(info, Type::System, "{log_prefix}: update v{version} install triggered");
+                    Self::delete_cache();
+                    true
+                }
+                Ok(Ok(Err(e))) => {
+                    logging!(warn, Type::System, "{log_prefix}: install failed: {e}");
+                    false
+                }
+                Ok(Err(e)) => {
+                    logging!(warn, Type::System, "{log_prefix}: install task panicked: {e}");
+                    false
+                }
+                Err(_) => {
+                    logging!(warn, Type::System, "{log_prefix}: install timed out (30s)");
+                    false
+                }
+            }
+        }
+    }
+
     async fn install_update_bytes(
         app_handle: &tauri::AppHandle,
         update: Update,
@@ -143,30 +201,7 @@ impl SilentUpdater {
     ) -> bool {
         Self::show_update_splash(app_handle, version);
 
-        let install_result = tokio::task::spawn_blocking({
-            let update = update.clone();
-            move || update.install(&bytes)
-        });
-
-        let success = match tokio::time::timeout(std::time::Duration::from_secs(30), install_result).await {
-            Ok(Ok(Ok(()))) => {
-                logging!(info, Type::System, "{log_prefix}: update v{version} install triggered");
-                Self::delete_cache();
-                true
-            }
-            Ok(Ok(Err(e))) => {
-                logging!(warn, Type::System, "{log_prefix}: install failed: {e}");
-                false
-            }
-            Ok(Err(e)) => {
-                logging!(warn, Type::System, "{log_prefix}: install task panicked: {e}");
-                false
-            }
-            Err(_) => {
-                logging!(warn, Type::System, "{log_prefix}: install timed out (30s)");
-                false
-            }
-        };
+        let success = Self::run_install_handoff(update, bytes, version, log_prefix).await;
 
         if !success {
             Self::close_update_splash(app_handle);
@@ -282,45 +317,9 @@ impl SilentUpdater {
         // Show splash window so user knows the app is updating, not frozen
         Self::show_update_splash(app_handle, &version);
 
-        // install() is sync and may hang (known bug #2558), so run with a timeout.
-        // On Windows, NSIS takes over the process so install() may never return — that's OK.
-        let install_result = tokio::task::spawn_blocking({
-            let bytes = bytes.clone();
-            let update = update.clone();
-            move || update.install(&bytes)
-        });
-
-        let success = match tokio::time::timeout(std::time::Duration::from_secs(30), install_result).await {
-            Ok(Ok(Ok(()))) => {
-                logging!(info, Type::System, "Update v{version} install triggered at startup");
-                Self::delete_cache();
-                true
-            }
-            Ok(Ok(Err(e))) => {
-                logging!(
-                    warn,
-                    Type::System,
-                    "Startup install failed: {e}, will retry next launch"
-                );
-                false
-            }
-            Ok(Err(e)) => {
-                logging!(
-                    warn,
-                    Type::System,
-                    "Startup install task panicked: {e}, will retry next launch"
-                );
-                false
-            }
-            Err(_) => {
-                logging!(
-                    warn,
-                    Type::System,
-                    "Startup install timed out (30s), will retry next launch"
-                );
-                false
-            }
-        };
+        // On Windows, the updater hands off to NSIS and exits the app process.
+        // Do not use the generic 30s timeout there; elevation can take longer.
+        let success = Self::run_install_handoff(update, bytes, &version, "Startup install").await;
 
         // Close splash window if install failed and app continues normally
         if !success {
