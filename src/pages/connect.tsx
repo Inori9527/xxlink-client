@@ -52,6 +52,12 @@ import { useTrafficData } from '@/hooks/use-traffic-data'
 import { useVerge } from '@/hooks/use-verge'
 import { useVisibility } from '@/hooks/use-visibility'
 import { useAppData } from '@/providers/app-data-context'
+import { formatUsagePairLabel } from '@/services/account-display-state'
+import {
+  ACCOUNT_LKG_CHANGED_EVENT,
+  readAccountLkgCache,
+  writeAccountLkgCache,
+} from '@/services/account-lkg-cache'
 import {
   api,
   isTrafficExceededError,
@@ -60,7 +66,9 @@ import {
   type PublicBenefitStatus,
   type UsageData,
 } from '@/services/api'
+import { authStore } from '@/services/auth-store'
 import { showNotice } from '@/services/notice-service'
+import { runResumeRecovery } from '@/services/resume-recovery'
 import { syncSubscription } from '@/services/subscription-sync'
 import parseTraffic from '@/utils/parse-traffic'
 import {
@@ -213,6 +221,11 @@ const ConnectPage = () => {
   const { verge, patchVerge } = useVerge()
   const { patchClash } = useClash()
   const { proxies, refreshProxy } = useAppData()
+  const currentUserId = authStore.getState().user?.id ?? null
+  const initialAccountCache = useMemo(
+    () => readAccountLkgCache(currentUserId),
+    [currentUserId],
+  )
   const { changeProxy } = useProxySelection({
     onSuccess: () => refreshProxy(),
     onError: (error) => console.error('[Connect] proxy change failed', error),
@@ -223,12 +236,26 @@ const ConnectPage = () => {
   const [busy, setBusy] = useState(false)
   const [errorFlash, setErrorFlash] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [hasSubscription, setHasSubscription] = useState<boolean | null>(null)
-  const [accountRefreshFailed, setAccountRefreshFailed] = useState(false)
+  const [hasSubscription, setHasSubscription] = useState<boolean | null>(() =>
+    initialAccountCache?.subscription
+      ? isSubscriptionActiveNow(initialAccountCache.subscription)
+      : null,
+  )
+  const [accountRefreshFailed, setAccountRefreshFailed] = useState(() =>
+    Boolean(initialAccountCache),
+  )
   const [publicBenefit, setPublicBenefit] =
-    useState<PublicBenefitStatus | null>(null)
-  const [periodUsage, setPeriodUsage] = useState<PeriodUsageState | null>(null)
-  const [accountNodes, setAccountNodes] = useState<Node[]>([])
+    useState<PublicBenefitStatus | null>(
+      () => initialAccountCache?.publicBenefit ?? null,
+    )
+  const [periodUsage, setPeriodUsage] = useState<PeriodUsageState | null>(() =>
+    initialAccountCache?.usage
+      ? toPeriodUsageState(initialAccountCache.usage)
+      : null,
+  )
+  const [accountNodes, setAccountNodes] = useState<Node[]>(
+    () => initialAccountCache?.nodes ?? [],
+  )
   const [nodeMenuAnchor, setNodeMenuAnchor] = useState<HTMLElement | null>(null)
   const [modeChanging, setModeChanging] = useState(false)
   const [durationNow, setDurationNow] = useState(() => Date.now())
@@ -287,6 +314,23 @@ const ConnectPage = () => {
     if (nodesResult.status === 'fulfilled') {
       setAccountNodes(nodesResult.value)
     }
+    const userId = authStore.getState().user?.id
+    if (userId) {
+      writeAccountLkgCache(userId, {
+        subscription:
+          subscriptionResult.status === 'fulfilled'
+            ? subscriptionResult.value
+            : undefined,
+        publicBenefit:
+          benefitResult.status === 'fulfilled'
+            ? benefitResult.value
+            : undefined,
+        usage:
+          usageResult.status === 'fulfilled' ? usageResult.value : undefined,
+        nodes:
+          nodesResult.status === 'fulfilled' ? nodesResult.value : undefined,
+      })
+    }
   }, [])
 
   // Probe current subscription status every time the page becomes visible.
@@ -296,6 +340,7 @@ const ConnectPage = () => {
   useEffect(() => {
     if (!pageVisible) return
     let cancelled = false
+    void runResumeRecovery('connect-visible')
     refreshAccountState()
       .then(() => {
         if (cancelled) return
@@ -307,6 +352,22 @@ const ConnectPage = () => {
       cancelled = true
     }
   }, [pageVisible, refreshAccountState])
+
+  useEffect(() => {
+    const applyCache = () => {
+      const cache = readAccountLkgCache(authStore.getState().user?.id)
+      if (!cache) return
+      setHasSubscription(
+        cache.subscription ? isSubscriptionActiveNow(cache.subscription) : null,
+      )
+      setPublicBenefit(cache.publicBenefit)
+      setPeriodUsage(cache.usage ? toPeriodUsageState(cache.usage) : null)
+      setAccountNodes(cache.nodes)
+    }
+    window.addEventListener(ACCOUNT_LKG_CHANGED_EVENT, applyCache)
+    return () =>
+      window.removeEventListener(ACCOUNT_LKG_CHANGED_EVENT, applyCache)
+  }, [])
 
   // Listen for startup-sync-error changes (written async by main.tsx or
   // cleared by subscription-sync success). Keeps the Alert in sync with
@@ -811,12 +872,13 @@ const ConnectPage = () => {
   )
   const periodTrafficLimit = periodUsage?.limit ?? 0
   const periodTrafficPct = periodUsage?.percentUsed ?? 0
-  const periodTrafficLabel =
-    periodTrafficLimit > 0
-      ? `${formatTrafficTotal(periodUsage?.used ?? 0)} / ${formatTrafficTotal(
-          periodTrafficLimit,
-        )}`
-      : `${formatTrafficTotal(periodUsage?.used ?? 0)} / --`
+  const periodTrafficLabel = formatUsagePairLabel({
+    usageKnown: periodUsage !== null,
+    usedLabel: formatTrafficTotal(periodUsage?.used ?? 0),
+    limitLabel:
+      periodTrafficLimit > 0 ? formatTrafficTotal(periodTrafficLimit) : null,
+    unknownLabel: t('layout.components.connect.session.usageUnavailable'),
+  })
 
   const getChipColor = (delay: number): 'success' | 'warning' | 'error' => {
     if (delay < 200) return 'success'

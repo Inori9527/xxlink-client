@@ -15,6 +15,7 @@
       "fallback": "Choose a plan",
       "expirePrefix": "Expires {{date}}",
       "syncHint": "Purchases sync to the client automatically.",
+      "usageUnavailable": "Usage temporarily unavailable",
       "status": {
         "active": "Active",
         "expired": "Expired",
@@ -54,7 +55,12 @@
     },
     "empty": {
       "title": "No plans available",
-      "subtitle": "Open the dashboard to view plans."
+      "subtitle": "Open the dashboard to view plans.",
+      "loadFailedTitle": "Plans temporarily unavailable",
+      "loadFailedSubtitle": "Network or service is temporarily unavailable. Refresh again in a moment."
+    },
+    "cached": {
+      "banner": "Showing the last successfully loaded plan information. Try refresh again later."
     },
     "form": {
       "promoPlaceholder": "Enter promo code (optional)",

@@ -82,7 +82,8 @@
         "duration": "已连接时长",
         "traffic": "当前周期用量",
         "localTraffic": "本次连接",
-        "packageTraffic": "套餐周期用量"
+        "packageTraffic": "套餐周期用量",
+        "usageUnavailable": "用量暂时不可用"
       },
       "startupSyncFailed": "节点同步失败，点击重试",
       "feedback": {

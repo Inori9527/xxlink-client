@@ -17,6 +17,7 @@ import {
   type ReactNode,
 } from 'react'
 
+import { clearAccountLkgCache } from './account-lkg-cache'
 import type { AuthUser } from './auth'
 
 // ---------------------------------------------------------------------------
@@ -105,12 +106,17 @@ class AuthStoreSingleton {
   }
 
   setAuth(user: AuthUser, accessToken: string, refreshToken: string): void {
+    const previousUserId = this.state.user?.id
+    if (previousUserId && previousUserId !== user.id) {
+      clearAccountLkgCache(previousUserId)
+    }
     saveToStorage(user, accessToken, refreshToken)
     this.state = { user, accessToken, refreshToken, isAuthenticated: true }
     this.notify()
   }
 
   clearAuth(): void {
+    clearAccountLkgCache(this.state.user?.id)
     clearStorage()
     this.state = {
       user: null,

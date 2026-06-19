@@ -238,6 +238,7 @@ export interface TranslationResources {
             localTraffic: string
             packageTraffic: string
             traffic: string
+            usageUnavailable: string
           }
           startupSyncFailed: string
           title: string
@@ -385,6 +386,9 @@ export interface TranslationResources {
           openDashboard: string
           refresh: string
         }
+        cached: {
+          banner: string
+        }
         card: {
           actions: {
             current: string
@@ -426,6 +430,7 @@ export interface TranslationResources {
           tooltips: {
             copy: string
           }
+          usageUnavailable: string
         }
         duration: {
           days: string
@@ -433,6 +438,8 @@ export interface TranslationResources {
           months: string
         }
         empty: {
+          loadFailedSubtitle: string
+          loadFailedTitle: string
           subtitle: string
           title: string
         }

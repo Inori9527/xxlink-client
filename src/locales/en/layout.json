@@ -82,7 +82,8 @@
         "duration": "Connected time",
         "traffic": "Current cycle usage",
         "localTraffic": "This connection",
-        "packageTraffic": "Plan cycle usage"
+        "packageTraffic": "Plan cycle usage",
+        "usageUnavailable": "Usage temporarily unavailable"
       },
       "startupSyncFailed": "Node sync failed. Click to retry.",
       "feedback": {

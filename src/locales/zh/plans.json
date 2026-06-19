@@ -15,6 +15,7 @@
       "fallback": "选择适合你的套餐",
       "expirePrefix": "到期 {{date}}",
       "syncHint": "购买后会自动同步到客户端",
+      "usageUnavailable": "用量暂时不可用",
       "status": {
         "active": "活跃",
         "expired": "已到期",
@@ -54,7 +55,12 @@
     },
     "empty": {
       "title": "暂无可选套餐",
-      "subtitle": "可先在账户页查看套餐。"
+      "subtitle": "可先在账户页查看套餐。",
+      "loadFailedTitle": "套餐暂时不可用",
+      "loadFailedSubtitle": "当前网络或服务暂时不可用，请稍后刷新重试。"
+    },
+    "cached": {
+      "banner": "正在显示上次成功加载的套餐信息，请稍后重试刷新。"
     },
     "form": {
       "promoPlaceholder": "输入优惠码（可选）",

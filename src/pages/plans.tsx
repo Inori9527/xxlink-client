@@ -31,6 +31,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { BasePage } from '@/components/base'
+import { useVisibility } from '@/hooks/use-visibility'
+import {
+  formatUsagePairLabel,
+  shouldShowConfirmedEmptyPlans,
+} from '@/services/account-display-state'
+import {
+  ACCOUNT_LKG_CHANGED_EVENT,
+  readAccountLkgCache,
+  type SafeSubscriptionSnapshot,
+  writeAccountLkgCache,
+} from '@/services/account-lkg-cache'
 import {
   api,
   isSubscriptionActiveNow,
@@ -39,7 +50,9 @@ import {
   type Subscription,
   type UsageData,
 } from '@/services/api'
+import { authStore } from '@/services/auth-store'
 import { showNotice } from '@/services/notice-service'
+import { runResumeRecovery } from '@/services/resume-recovery'
 
 const DASHBOARD_RECHARGE_URL = 'https://xxlink.net/dashboard/recharge'
 type BillingPeriod = 'month' | 'quarter' | 'year'
@@ -151,13 +164,31 @@ function formatCooldownHours(
 const PlansPage = () => {
   const { i18n, t } = useTranslation()
   const theme = useTheme()
-  const [plans, setPlans] = useState<Plan[]>([])
-  const [subscription, setSubscription] = useState<Subscription | null>(null)
-  const [usage, setUsage] = useState<UsageData | null>(null)
+  const pageVisible = useVisibility()
+  const currentUserId = authStore.getState().user?.id ?? null
+  const initialAccountCache = useMemo(
+    () => readAccountLkgCache(currentUserId),
+    [currentUserId],
+  )
+  const [plans, setPlans] = useState<Plan[]>(
+    () => initialAccountCache?.plans ?? [],
+  )
+  const [subscription, setSubscription] = useState<
+    Subscription | SafeSubscriptionSnapshot | null
+  >(() => initialAccountCache?.subscription ?? null)
+  const [usage, setUsage] = useState<UsageData | null>(
+    () => initialAccountCache?.usage ?? null,
+  )
   const [publicBenefit, setPublicBenefit] =
-    useState<PublicBenefitStatus | null>(null)
+    useState<PublicBenefitStatus | null>(
+      () => initialAccountCache?.publicBenefit ?? null,
+    )
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [showingCachedAccountState, setShowingCachedAccountState] = useState(
+    () => Boolean(initialAccountCache),
+  )
+  const [accountLoadFailed, setAccountLoadFailed] = useState(false)
   const [claimingBenefit, setClaimingBenefit] = useState(false)
   const [openingPlanId, setOpeningPlanId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -192,11 +223,55 @@ const PlansPage = () => {
     if (usageResult.status === 'fulfilled') setUsage(usageResult.value)
     if (benefitResult.status === 'fulfilled')
       setPublicBenefit(benefitResult.value)
+
+    const userId = authStore.getState().user?.id
+    if (userId) {
+      writeAccountLkgCache(userId, {
+        plans:
+          plansResult.status === 'fulfilled' ? plansResult.value : undefined,
+        subscription:
+          subResult.status === 'fulfilled' ? subResult.value : undefined,
+        usage:
+          usageResult.status === 'fulfilled' ? usageResult.value : undefined,
+        publicBenefit:
+          benefitResult.status === 'fulfilled'
+            ? benefitResult.value
+            : undefined,
+      })
+    }
+
+    const hadFailure = [
+      plansResult,
+      subResult,
+      usageResult,
+      benefitResult,
+    ].some((result) => result.status === 'rejected')
+    setAccountLoadFailed(hadFailure)
+    setShowingCachedAccountState(hadFailure)
   }, [t])
 
   useEffect(() => {
     loadPlans().finally(() => setLoading(false))
   }, [loadPlans])
+
+  useEffect(() => {
+    if (!pageVisible) return
+    void runResumeRecovery('plans-visible')
+  }, [pageVisible])
+
+  useEffect(() => {
+    const applyCache = () => {
+      const cache = readAccountLkgCache(authStore.getState().user?.id)
+      if (!cache) return
+      setPlans(cache.plans)
+      setSubscription(cache.subscription)
+      setUsage(cache.usage)
+      setPublicBenefit(cache.publicBenefit)
+    }
+    window.addEventListener(ACCOUNT_LKG_CHANGED_EVENT, applyCache)
+    return () =>
+      window.removeEventListener(ACCOUNT_LKG_CHANGED_EVENT, applyCache)
+  }, [])
 
   const activeSubscription = isSubscriptionActiveNow(subscription)
     ? subscription
@@ -250,6 +325,18 @@ const PlansPage = () => {
       : limit > 0
         ? Math.min((used / limit) * 100, 100)
         : 0
+  const planLoadFailed = accountLoadFailed && plans.length === 0
+  const trafficUsageLabel = formatUsagePairLabel({
+    usageKnown: usage !== null,
+    usedLabel: formatTraffic(used),
+    limitLabel: limit > 0 ? formatTraffic(limit) : null,
+    unknownLabel: t('plans.page.current.usageUnavailable'),
+  })
+  const showConfirmedEmptyPlans = shouldShowConfirmedEmptyPlans({
+    loading,
+    planCount: visiblePlans.length,
+    loadFailed: planLoadFailed,
+  })
 
   const handleRefresh = useLockFn(async () => {
     setRefreshing(true)
@@ -320,6 +407,11 @@ const PlansPage = () => {
             {error}
           </Alert>
         )}
+        {showingCachedAccountState && !loading && (
+          <Alert severity="warning" sx={{ borderRadius: 3 }}>
+            {t('plans.page.cached.banner')}
+          </Alert>
+        )}
 
         <Paper
           elevation={0}
@@ -380,12 +472,11 @@ const PlansPage = () => {
                   {t('plans.page.current.labels.trafficUsage')}
                 </Typography>
                 <Typography variant="body2" fontWeight={900}>
-                  {formatTraffic(used)} /{' '}
-                  {limit > 0 ? formatTraffic(limit) : '--'}
+                  {trafficUsageLabel}
                 </Typography>
               </Stack>
               <LinearProgress
-                variant="determinate"
+                variant={usage ? 'determinate' : 'indeterminate'}
                 value={percent}
                 sx={{
                   mt: 1,
@@ -402,9 +493,11 @@ const PlansPage = () => {
                 }}
               />
               <Typography variant="caption" color="text.secondary">
-                {t('plans.page.current.labels.remaining', {
-                  traffic: formatTraffic(remaining),
-                })}
+                {usage
+                  ? t('plans.page.current.labels.remaining', {
+                      traffic: formatTraffic(remaining),
+                    })
+                  : t('plans.page.current.usageUnavailable')}
               </Typography>
             </Box>
           </Stack>
@@ -562,7 +655,40 @@ const PlansPage = () => {
               />
             ))}
           </Box>
-        ) : visiblePlans.length === 0 ? (
+        ) : planLoadFailed ? (
+          <Paper
+            elevation={0}
+            sx={{
+              p: 4,
+              borderRadius: 4,
+              textAlign: 'center',
+              border: `1px dashed ${alpha(theme.palette.warning.main, 0.7)}`,
+              bgcolor:
+                theme.palette.mode === 'dark'
+                  ? alpha('#101923', 0.84)
+                  : '#FFFFFF',
+            }}
+          >
+            <Typography variant="h6" fontWeight={950}>
+              {t('plans.page.empty.loadFailedTitle')}
+            </Typography>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mt: 0.75 }}
+            >
+              {t('plans.page.empty.loadFailedSubtitle')}
+            </Typography>
+            <Button
+              variant="contained"
+              startIcon={<RefreshRounded />}
+              onClick={() => void handleRefresh()}
+              sx={{ mt: 2, borderRadius: 999, fontWeight: 950 }}
+            >
+              {t('plans.page.actions.refresh')}
+            </Button>
+          </Paper>
+        ) : showConfirmedEmptyPlans ? (
           <Paper
             elevation={0}
             sx={{

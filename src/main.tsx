@@ -18,7 +18,6 @@ import {
 import { hideInitialOverlay } from './pages/_layout/utils'
 import { router } from './pages/_routers'
 import { WindowProvider } from './providers/window'
-import { api, isAuthFatalError } from './services/api'
 import { AuthProvider, authStore } from './services/auth-store'
 import { FALLBACK_LANGUAGE, initializeLanguage } from './services/i18n'
 import {
@@ -27,6 +26,10 @@ import {
   resolveThemeMode,
 } from './services/preload'
 import { queryClient } from './services/query-client'
+import {
+  runResumeRecovery,
+  startResumeRecoveryListeners,
+} from './services/resume-recovery'
 import { SESSION_EXPIRED_EVENT } from './services/session'
 import {
   LoadingCacheProvider,
@@ -34,7 +37,6 @@ import {
   UpdateStateProvider,
 } from './services/states'
 import { startSubscriptionAutoSync } from './services/subscription-auto-sync'
-import { syncSubscription } from './services/subscription-sync'
 import { disableWebViewShortcuts } from './utils/disable-webview-shortcuts'
 
 if (!window.ResizeObserver) {
@@ -182,36 +184,10 @@ const rememberStartupTimeout = (error: unknown) => {
 
 const startBackgroundStartupTasks = () => {
   startSubscriptionAutoSync()
+  startResumeRecoveryListeners()
 
   if (!authStore.getState().isAuthenticated) return
-
-  api.user
-    .profile()
-    .then(() => syncSubscription({ force: true, timeoutMs: 10_000 }))
-    .then(() => {
-      try {
-        localStorage.removeItem('xxlink:last-sync-error')
-        window.dispatchEvent(new CustomEvent('xxlink:last-sync-error-changed'))
-      } catch {
-        /* ignore */
-      }
-    })
-    .catch((error) => {
-      if (isAuthFatalError(error)) return
-      console.error(error)
-      try {
-        localStorage.setItem(
-          'xxlink:last-sync-error',
-          JSON.stringify({
-            message: error instanceof Error ? error.message : String(error),
-            ts: Date.now(),
-          }),
-        )
-        window.dispatchEvent(new CustomEvent('xxlink:last-sync-error-changed'))
-      } catch {
-        /* ignore */
-      }
-    })
+  void runResumeRecovery('startup', { force: true })
 }
 
 const bootstrap = async () => {

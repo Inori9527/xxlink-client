@@ -3,6 +3,7 @@ import { asyncRetry } from 'foxts/async-retry'
 import { once } from 'foxts/once'
 
 import { apiRefreshToken, AuthError } from '@/services/auth'
+import { isAuthFatalCode, isRefreshTerminalCode } from '@/services/auth-errors'
 import { authStore } from '@/services/auth-store'
 import { BASE_URL } from '@/services/config'
 import { fetchWithTimeout } from '@/services/http'
@@ -214,36 +215,6 @@ interface BackendResponse<T> {
 let isRefreshing = false
 let refreshPromise: Promise<void> | null = null
 
-const AUTH_FATAL_CODES = new Set([
-  'ACCOUNT_DISABLED',
-  'ACCOUNT_NOT_FOUND',
-  'ACCOUNT_BLOCKED',
-  'ACCOUNT_SUSPENDED',
-  'INVALID_REFRESH_TOKEN',
-  'REFRESH_TOKEN_INVALID',
-  'SESSION_REVOKED',
-  'SESSION_EXPIRED',
-  'TOKEN_REVOKED',
-  'USER_DELETED',
-  'USER_DISABLED',
-  'USER_NOT_FOUND',
-])
-
-const REFRESH_TERMINAL_CODES = new Set([
-  'ACCOUNT_DISABLED',
-  'ACCOUNT_NOT_FOUND',
-  'ACCOUNT_BLOCKED',
-  'ACCOUNT_SUSPENDED',
-  'INVALID_REFRESH_TOKEN',
-  'REFRESH_TOKEN_INVALID',
-  'SESSION_REVOKED',
-  'SESSION_EXPIRED',
-  'TOKEN_REVOKED',
-  'USER_DELETED',
-  'USER_DISABLED',
-  'USER_NOT_FOUND',
-])
-
 const getBackendError = <T>(json: BackendResponse<T> | null | undefined) => {
   const error = json?.error
   if (typeof error === 'string') {
@@ -257,7 +228,7 @@ const isAuthFatalResponse = (
   code?: string,
   path?: string,
 ): boolean => {
-  if (code && AUTH_FATAL_CODES.has(code)) return true
+  if (isAuthFatalCode(code)) return true
 
   const identityPath = path?.startsWith('/user/')
 
@@ -265,7 +236,7 @@ const isAuthFatalResponse = (
 }
 
 const isTerminalRefreshFailure = (status?: number, code?: string): boolean => {
-  if (code && REFRESH_TERMINAL_CODES.has(code)) return true
+  if (isRefreshTerminalCode(code)) return true
   return false
 }
 
@@ -283,7 +254,12 @@ function getAuthFatalMessage(code?: string): string {
   ) {
     return '账号不存在或已失效，请重新登录'
   }
-  if (code === 'USER_DISABLED' || code === 'ACCOUNT_DISABLED') {
+  if (
+    code === 'USER_DISABLED' ||
+    code === 'ACCOUNT_DISABLED' ||
+    code === 'ACCOUNT_BLOCKED' ||
+    code === 'ACCOUNT_SUSPENDED'
+  ) {
     return '账号状态不可用，请联系客服'
   }
   return '登录状态已失效，请重新登录'
