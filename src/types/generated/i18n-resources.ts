@@ -191,6 +191,7 @@ export interface TranslationResources {
             connect: string
             connecting: string
             disconnect: string
+            retry: string
             switchNode: string
           }
           empty: {
@@ -206,6 +207,7 @@ export interface TranslationResources {
           feedback: {
             refreshed: string
             refreshFailed: string
+            selectedNodeFailed: string
             toggleFailed: string
             trafficExceeded: string
           }
@@ -213,6 +215,8 @@ export interface TranslationResources {
             both: string
             connected: string
             connectedHint: string
+            connecting: string
+            connectionFailed: string
             disconnected: string
             disconnectFirst: string
             download: string
@@ -226,6 +230,7 @@ export interface TranslationResources {
             system: string
             tun: string
             upload: string
+            validating: string
           }
           mode: {
             both: string

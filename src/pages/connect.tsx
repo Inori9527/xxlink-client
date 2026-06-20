@@ -69,6 +69,12 @@ import {
 import { authStore } from '@/services/auth-store'
 import { showNotice } from '@/services/notice-service'
 import { runResumeRecovery } from '@/services/resume-recovery'
+import {
+  checkSelectedNodeReadiness,
+  isSelectedNodeConnected,
+  shouldAutoSelectNode,
+  type SelectedNodeReadinessStatus,
+} from '@/services/selected-node-readiness'
 import { syncSubscription } from '@/services/subscription-sync'
 import parseTraffic from '@/utils/parse-traffic'
 import {
@@ -234,6 +240,8 @@ const ConnectPage = () => {
 
   const [mode, setMode] = useState<ConnectMode>(() => loadConnectMode())
   const [busy, setBusy] = useState(false)
+  const [readinessStatus, setReadinessStatus] =
+    useState<SelectedNodeReadinessStatus>('disconnected')
   const [errorFlash, setErrorFlash] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [hasSubscription, setHasSubscription] = useState<boolean | null>(() =>
@@ -275,6 +283,8 @@ const ConnectPage = () => {
     }
   })
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const readinessAttemptRef = useRef(0)
+  const lastReadinessNodeRef = useRef<string | null>(null)
   const wasConnectedRef = useRef(false)
   const currentTrafficRateRef = useRef({ up: 0, down: 0 })
   const heartbeatTrafficRef = useRef({ up: 0, down: 0 })
@@ -396,8 +406,9 @@ const ConnectPage = () => {
   const tunEnabled = verge?.enable_tun_mode ?? false
   const sysEnabled = verge?.enable_system_proxy ?? false
 
-  // Connected state per selected mode
-  const connected = useMemo(() => {
+  // Runtime state per selected mode. User-facing "connected" still waits for
+  // the selected-node data-plane readiness check below.
+  const runtimeConnected = useMemo(() => {
     switch (mode) {
       case 'system':
         return sysEnabled
@@ -408,6 +419,8 @@ const ConnectPage = () => {
         return false
     }
   }, [mode, tunEnabled, sysEnabled])
+
+  const connected = isSelectedNodeConnected(runtimeConnected, readinessStatus)
 
   const {
     response: { data: traffic },
@@ -596,16 +609,33 @@ const ConnectPage = () => {
   // Self-healing: re-fires whenever the selection becomes invalid (e.g. after
   // a force-rebuild) but is idempotent when the current selection is valid.
   useEffect(() => {
-    if (connected || !globalGroup?.name || nodeEntries.length === 0) return
-    if (currentNode && nodeEntries.some((entry) => entry.name === currentNode))
+    const groupName = globalGroup?.name
+    if (!groupName) return
+    const currentSelectionValid = Boolean(
+      currentNode && nodeEntries.some((entry) => entry.name === currentNode),
+    )
+    if (
+      !shouldAutoSelectNode({
+        runtimeConnected,
+        groupName,
+        nodeCount: nodeEntries.length,
+        currentSelectionValid,
+      })
+    )
       return
     const target =
       nodeEntries.find((entry) => entry.displayName.toLowerCase() === 'auto') ??
       nodeEntries[0]
     if (target && target.name !== currentNode) {
-      changeProxy(globalGroup.name, target.name, currentNode, true)
+      changeProxy(groupName, target.name, currentNode, true)
     }
-  }, [connected, globalGroup?.name, nodeEntries, currentNode, changeProxy])
+  }, [
+    runtimeConnected,
+    globalGroup?.name,
+    nodeEntries,
+    currentNode,
+    changeProxy,
+  ])
 
   const triggerErrorFlash = useCallback(() => {
     setErrorFlash(true)
@@ -621,17 +651,17 @@ const ConnectPage = () => {
       setMode(next)
       persistConnectMode(next)
 
-      const payload = connected
+      const payload = runtimeConnected
         ? getConnectModePayload(next, true)
         : ({ connect_mode: next } as Partial<IVergeConfig>)
-      const rollbackPayload = connected
+      const rollbackPayload = runtimeConnected
         ? getConnectModePayload(previousMode, true)
         : ({ connect_mode: previousMode } as Partial<IVergeConfig>)
 
       void (async () => {
         try {
           setModeChanging(true)
-          if (connected) {
+          if (runtimeConnected) {
             await patchClash({ mode: next === 'smart' ? 'rule' : 'global' })
           }
           await patchVerge(payload)
@@ -641,7 +671,7 @@ const ConnectPage = () => {
           persistConnectMode(previousMode)
 
           try {
-            if (connected) {
+            if (runtimeConnected) {
               await patchClash({
                 mode: previousMode === 'smart' ? 'rule' : 'global',
               })
@@ -664,12 +694,12 @@ const ConnectPage = () => {
       })()
     },
     [
-      connected,
       mode,
       modeChanging,
       patchClash,
       patchVerge,
       refreshProxy,
+      runtimeConnected,
       triggerErrorFlash,
     ],
   )
@@ -709,11 +739,77 @@ const ConnectPage = () => {
     ],
   )
 
+  const validateSelectedNodeReadiness = useCallback(async () => {
+    const selectedNode = currentRuntimeNode || currentNode
+    const attempt = readinessAttemptRef.current + 1
+    readinessAttemptRef.current = attempt
+    lastReadinessNodeRef.current = selectedNode || null
+    setReadinessStatus('validating')
+
+    if (!selectedNode) {
+      if (readinessAttemptRef.current === attempt) {
+        setReadinessStatus('failed')
+        triggerErrorFlash()
+        showNotice.error(
+          'layout.components.connect.feedback.selectedNodeFailed',
+        )
+      }
+      return false
+    }
+
+    const result = await checkSelectedNodeReadiness({
+      proxyName: selectedNode,
+    })
+
+    if (readinessAttemptRef.current !== attempt) {
+      return result.ok
+    }
+
+    if (result.ok) {
+      setReadinessStatus('ready')
+      return true
+    }
+
+    setReadinessStatus('failed')
+    triggerErrorFlash()
+    showNotice.error('layout.components.connect.feedback.selectedNodeFailed')
+    return false
+  }, [currentNode, currentRuntimeNode, triggerErrorFlash])
+
+  useEffect(() => {
+    if (!runtimeConnected) {
+      readinessAttemptRef.current += 1
+      lastReadinessNodeRef.current = null
+      Promise.resolve().then(() => setReadinessStatus('disconnected'))
+      return
+    }
+
+    const selectedNode = currentRuntimeNode || currentNode
+    if (!selectedNode) {
+      Promise.resolve().then(() => setReadinessStatus('failed'))
+      return
+    }
+
+    if (lastReadinessNodeRef.current === selectedNode) return
+    void validateSelectedNodeReadiness()
+  }, [
+    currentNode,
+    currentRuntimeNode,
+    runtimeConnected,
+    validateSelectedNodeReadiness,
+  ])
+
   const handleToggle = useLockFn(async () => {
-    if (busy) return
+    if (
+      busy ||
+      modeChanging ||
+      readinessStatus === 'connecting' ||
+      readinessStatus === 'validating'
+    )
+      return
     setBusy(true)
     try {
-      const next = !connected
+      const next = !runtimeConnected
       const payload: Partial<IVergeConfig> = {}
       if (mode === 'system') {
         payload.enable_tun_mode = false
@@ -724,14 +820,24 @@ const ConnectPage = () => {
         payload.enable_system_proxy = next
       }
       if (next) {
+        setReadinessStatus('connecting')
         await refreshAccountState()
         await patchClash({ mode: mode === 'smart' ? 'rule' : 'global' })
+      } else {
+        readinessAttemptRef.current += 1
+        lastReadinessNodeRef.current = null
+        setReadinessStatus('disconnected')
       }
       await patchVerge({ ...payload, connect_mode: mode })
+      if (next) {
+        await refreshProxy()
+        await validateSelectedNodeReadiness()
+      }
       await refreshAccountState()
     } catch (error) {
       console.error('[Connect] toggle failed', error)
       showNotice.error('layout.components.connect.feedback.toggleFailed', error)
+      setReadinessStatus(runtimeConnected ? 'failed' : 'disconnected')
       triggerErrorFlash()
     } finally {
       setBusy(false)
@@ -788,6 +894,9 @@ const ConnectPage = () => {
         enable_tun_mode: false,
         enable_system_proxy: false,
       })
+      readinessAttemptRef.current += 1
+      lastReadinessNodeRef.current = null
+      setReadinessStatus('disconnected')
       updateConnectionSession({ type: 'stop' })
       heartbeatTrafficRef.current = { up: 0, down: 0 }
       lastTrafficSampleRef.current = null
@@ -844,10 +953,49 @@ const ConnectPage = () => {
     }
   }, [connected, currentNodeId, disconnectForTrafficExceeded])
 
+  const connectionBusy =
+    busy ||
+    modeChanging ||
+    readinessStatus === 'connecting' ||
+    readinessStatus === 'validating'
+
+  const connectionStatusLabel = useMemo(() => {
+    if (isEmpty) return t('layout.components.connect.labels.disconnected')
+    switch (readinessStatus) {
+      case 'connecting':
+        return t('layout.components.connect.labels.connecting')
+      case 'validating':
+        return t('layout.components.connect.labels.validating')
+      case 'failed':
+        return t('layout.components.connect.labels.connectionFailed')
+      case 'ready':
+        return t('layout.components.connect.labels.connected')
+      default:
+        return t('layout.components.connect.labels.disconnected')
+    }
+  }, [isEmpty, readinessStatus, t])
+
+  const connectionStatusHint = useMemo(() => {
+    if (isEmpty) return t('layout.components.connect.empty.subtitle')
+    switch (readinessStatus) {
+      case 'connecting':
+        return t('layout.components.connect.labels.connecting')
+      case 'validating':
+        return t('layout.components.connect.labels.validating')
+      case 'failed':
+        return t('layout.components.connect.feedback.selectedNodeFailed')
+      case 'ready':
+        return t('layout.components.connect.labels.connected')
+      default:
+        return t('layout.components.connect.actions.clickToConnect')
+    }
+  }, [isEmpty, readinessStatus, t])
+
   // Button colors
   const getButtonColor = () => {
-    if (errorFlash) return theme.palette.error.main
-    if (busy) return theme.palette.warning.main
+    if (errorFlash || readinessStatus === 'failed')
+      return theme.palette.error.main
+    if (connectionBusy) return theme.palette.warning.main
     if (connected) return theme.palette.success.main
     return theme.palette.primary.main
   }
@@ -1076,7 +1224,7 @@ const ConnectPage = () => {
             <Stack direction="column" spacing={1.25} alignItems="center">
               <Button
                 onClick={handleToggle}
-                disabled={busy || modeChanging || isEmpty}
+                disabled={connectionBusy || isEmpty}
                 sx={{
                   width: 104,
                   height: 104,
@@ -1089,7 +1237,7 @@ const ConnectPage = () => {
                   boxShadow: connected
                     ? `0 0 0 18px ${alpha(theme.palette.success.main, 0.12)}`
                     : `0 0 0 18px ${alpha(theme.palette.primary.main, 0.08)}`,
-                  animation: busy ? `${pulse} 1.4s infinite` : 'none',
+                  animation: connectionBusy ? `${pulse} 1.4s infinite` : 'none',
                   '&:hover': {
                     bgcolor: buttonColor,
                     filter: 'brightness(1.08)',
@@ -1101,11 +1249,11 @@ const ConnectPage = () => {
                     color: isEmpty
                       ? theme.palette.action.disabled
                       : theme.palette.getContrastText(buttonColor),
-                    opacity: busy ? 0.75 : 0.9,
+                    opacity: connectionBusy ? 0.75 : 0.9,
                   },
                 }}
               >
-                {busy ? (
+                {connectionBusy ? (
                   <CircularProgress
                     size={38}
                     thickness={4}
@@ -1125,22 +1273,25 @@ const ConnectPage = () => {
                       ? 'error.main'
                       : connected
                         ? 'success.main'
-                        : 'text.primary'
+                        : readinessStatus === 'failed'
+                          ? 'error.main'
+                          : 'text.primary'
                   }
                 >
-                  {connected
-                    ? t('layout.components.connect.labels.connected')
-                    : t('layout.components.connect.labels.disconnected')}
+                  {connectionStatusLabel}
                 </Typography>
                 <Typography
                   color="text.secondary"
-                  sx={{ mt: 0.5, mb: isEmpty ? 1.5 : 0 }}
+                  sx={{
+                    mt: 0.5,
+                    mb:
+                      isEmpty ||
+                      (runtimeConnected && readinessStatus === 'failed')
+                        ? 1.5
+                        : 0,
+                  }}
                 >
-                  {isEmpty
-                    ? t('layout.components.connect.empty.subtitle')
-                    : connected
-                      ? t('layout.components.connect.labels.connectedHint')
-                      : t('layout.components.connect.labels.startHint')}
+                  {connectionStatusHint}
                 </Typography>
                 {isEmpty ? (
                   <Button
@@ -1150,6 +1301,17 @@ const ConnectPage = () => {
                     sx={{ borderRadius: 2.5, px: 4, fontWeight: 950 }}
                   >
                     {t('layout.components.connect.empty.goToPlans')}
+                  </Button>
+                ) : null}
+                {runtimeConnected && readinessStatus === 'failed' ? (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={validateSelectedNodeReadiness}
+                    disabled={connectionBusy}
+                    sx={{ borderRadius: 2.5, fontWeight: 850 }}
+                  >
+                    {t('layout.components.connect.actions.retry')}
                   </Button>
                 ) : null}
               </Box>

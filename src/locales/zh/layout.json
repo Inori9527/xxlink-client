@@ -33,7 +33,8 @@
         "connecting": "连接中...",
         "clickToConnect": "点击连接",
         "clickToDisconnect": "点击断开",
-        "switchNode": "切换"
+        "switchNode": "切换",
+        "retry": "重试"
       },
       "labels": {
         "heroTitle": "一键连接",
@@ -48,6 +49,9 @@
         "both": "两者",
         "upload": "上传",
         "download": "下载",
+        "connecting": "连接中",
+        "validating": "验证中",
+        "connectionFailed": "连接失败",
         "connected": "已连接",
         "disconnected": "未连接",
         "connectedHint": "已连接",
@@ -88,6 +92,7 @@
       "startupSyncFailed": "节点同步失败，点击重试",
       "feedback": {
         "toggleFailed": "连接切换失败",
+        "selectedNodeFailed": "该节点连接失败，请切换其他节点或稍后重试",
         "refreshFailed": "刷新节点失败",
         "trafficExceeded": "今日公益流量已用完，请等待下次刷新或升级套餐",
         "refreshed": "节点已刷新"

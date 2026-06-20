@@ -33,7 +33,8 @@
         "connecting": "Connecting...",
         "clickToConnect": "Click to connect",
         "clickToDisconnect": "Click to disconnect",
-        "switchNode": "Switch"
+        "switchNode": "Switch",
+        "retry": "Retry"
       },
       "labels": {
         "heroTitle": "One-click connect",
@@ -48,6 +49,9 @@
         "both": "Both",
         "upload": "Upload",
         "download": "Download",
+        "connecting": "Connecting",
+        "validating": "Validating",
+        "connectionFailed": "Connection failed",
         "connected": "Connected",
         "disconnected": "Disconnected",
         "connectedHint": "Connected",
@@ -88,6 +92,7 @@
       "startupSyncFailed": "Node sync failed. Click to retry.",
       "feedback": {
         "toggleFailed": "Failed to toggle connection",
+        "selectedNodeFailed": "This node failed to connect. Switch to another node or try again later.",
         "refreshFailed": "Failed to refresh nodes",
         "trafficExceeded": "Today's public benefit traffic is used up. Please wait for the next refresh or upgrade your plan.",
         "refreshed": "Nodes refreshed"
