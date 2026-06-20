@@ -152,6 +152,25 @@ test('readiness failure keeps selected node and blocks false connected state', a
   assert.equal(selectedNode, '日本-ISP专线-01')
 })
 
+test('readiness failure auto-disconnects failed runtime and keeps failure copy briefly visible', () => {
+  const readiness = loadReadinessModule()
+
+  const payload = readiness.getReadinessFailureDisconnectPayload()
+  assert.equal(payload.enable_tun_mode, false)
+  assert.equal(payload.enable_system_proxy, false)
+  assert.equal(readiness.shouldDisplayReadinessFailure('failed', false), true)
+  assert.equal(
+    readiness.shouldDisplayReadinessFailure('disconnected', true),
+    true,
+  )
+  assert.equal(
+    readiness.shouldDisplayReadinessFailure('disconnected', false),
+    false,
+  )
+  assert.equal(readiness.shouldShowReadinessRetryAction(true, 'failed'), true)
+  assert.equal(readiness.shouldShowReadinessRetryAction(false, 'failed'), false)
+})
+
 test('readiness gate preserves account state ownership and disconnected self-heal', () => {
   const readiness = loadReadinessModule()
   const source = readFileSync(
@@ -210,14 +229,21 @@ test('manual retry reruns bounded readiness probes', async () => {
   )
 })
 
-test('failed readiness state still exposes disconnect and separate retry', () => {
+test('failed readiness state stops the failed route without switching nodes', () => {
   const source = readFileSync(
     resolve(repoRoot, 'src/pages/connect.tsx'),
     'utf8',
   )
 
   assert.equal(source.includes('const next = !runtimeConnected'), true)
-  assert.equal(source.includes('runtimeConnected && !connected'), false)
+  assert.equal(source.includes('stopFailedReadinessConnection'), true)
+  assert.equal(source.includes('getReadinessFailureDisconnectPayload()'), true)
+  const stopBlock = source.slice(
+    source.indexOf('const stopFailedReadinessConnection'),
+    source.indexOf('const validateSelectedNodeReadiness'),
+  )
+  assert.equal(stopBlock.includes('changeProxy('), false)
+  assert.equal(source.includes('showReadinessRetryAction'), true)
   assert.equal(source.includes('layout.components.connect.actions.retry'), true)
   assert.equal(source.includes('onClick={validateSelectedNodeReadiness}'), true)
 })

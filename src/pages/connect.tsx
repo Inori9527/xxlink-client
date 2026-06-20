@@ -71,8 +71,11 @@ import { showNotice } from '@/services/notice-service'
 import { runResumeRecovery } from '@/services/resume-recovery'
 import {
   checkSelectedNodeReadiness,
+  getReadinessFailureDisconnectPayload,
   isSelectedNodeConnected,
   shouldAutoSelectNode,
+  shouldDisplayReadinessFailure,
+  shouldShowReadinessRetryAction,
   type SelectedNodeReadinessStatus,
 } from '@/services/selected-node-readiness'
 import { syncSubscription } from '@/services/subscription-sync'
@@ -739,6 +742,35 @@ const ConnectPage = () => {
     ],
   )
 
+  const stopFailedReadinessConnection = useCallback(
+    async (attempt: number) => {
+      try {
+        await patchVerge({
+          ...getReadinessFailureDisconnectPayload(),
+          connect_mode: mode,
+        })
+        if (readinessAttemptRef.current === attempt) {
+          lastReadinessNodeRef.current = null
+          setReadinessStatus('disconnected')
+          updateConnectionSession({ type: 'stop' })
+          heartbeatTrafficRef.current = { up: 0, down: 0 }
+          lastTrafficSampleRef.current = null
+        }
+        await refreshProxy()
+      } catch (error) {
+        console.error(
+          '[Connect] readiness failure auto-disconnect failed',
+          error,
+        )
+        showNotice.error(
+          'layout.components.connect.feedback.toggleFailed',
+          error,
+        )
+      }
+    },
+    [mode, patchVerge, refreshProxy],
+  )
+
   const validateSelectedNodeReadiness = useCallback(async () => {
     const selectedNode = currentRuntimeNode || currentNode
     const attempt = readinessAttemptRef.current + 1
@@ -753,6 +785,7 @@ const ConnectPage = () => {
         showNotice.error(
           'layout.components.connect.feedback.selectedNodeFailed',
         )
+        await stopFailedReadinessConnection(attempt)
       }
       return false
     }
@@ -773,8 +806,14 @@ const ConnectPage = () => {
     setReadinessStatus('failed')
     triggerErrorFlash()
     showNotice.error('layout.components.connect.feedback.selectedNodeFailed')
+    await stopFailedReadinessConnection(attempt)
     return false
-  }, [currentNode, currentRuntimeNode, triggerErrorFlash])
+  }, [
+    currentNode,
+    currentRuntimeNode,
+    stopFailedReadinessConnection,
+    triggerErrorFlash,
+  ])
 
   useEffect(() => {
     if (!runtimeConnected) {
@@ -958,6 +997,14 @@ const ConnectPage = () => {
     modeChanging ||
     readinessStatus === 'connecting' ||
     readinessStatus === 'validating'
+  const showReadinessFailure = shouldDisplayReadinessFailure(
+    readinessStatus,
+    errorFlash,
+  )
+  const showReadinessRetryAction = shouldShowReadinessRetryAction(
+    runtimeConnected,
+    readinessStatus,
+  )
 
   const connectionStatusLabel = useMemo(() => {
     if (isEmpty) return t('layout.components.connect.labels.disconnected')
@@ -971,9 +1018,12 @@ const ConnectPage = () => {
       case 'ready':
         return t('layout.components.connect.labels.connected')
       default:
+        if (showReadinessFailure) {
+          return t('layout.components.connect.labels.connectionFailed')
+        }
         return t('layout.components.connect.labels.disconnected')
     }
-  }, [isEmpty, readinessStatus, t])
+  }, [isEmpty, readinessStatus, showReadinessFailure, t])
 
   const connectionStatusHint = useMemo(() => {
     if (isEmpty) return t('layout.components.connect.empty.subtitle')
@@ -987,14 +1037,16 @@ const ConnectPage = () => {
       case 'ready':
         return t('layout.components.connect.labels.connected')
       default:
+        if (showReadinessFailure) {
+          return t('layout.components.connect.feedback.selectedNodeFailed')
+        }
         return t('layout.components.connect.actions.clickToConnect')
     }
-  }, [isEmpty, readinessStatus, t])
+  }, [isEmpty, readinessStatus, showReadinessFailure, t])
 
   // Button colors
   const getButtonColor = () => {
-    if (errorFlash || readinessStatus === 'failed')
-      return theme.palette.error.main
+    if (showReadinessFailure) return theme.palette.error.main
     if (connectionBusy) return theme.palette.warning.main
     if (connected) return theme.palette.success.main
     return theme.palette.primary.main
@@ -1284,11 +1336,7 @@ const ConnectPage = () => {
                   color="text.secondary"
                   sx={{
                     mt: 0.5,
-                    mb:
-                      isEmpty ||
-                      (runtimeConnected && readinessStatus === 'failed')
-                        ? 1.5
-                        : 0,
+                    mb: isEmpty || showReadinessFailure ? 1.5 : 0,
                   }}
                 >
                   {connectionStatusHint}
@@ -1303,7 +1351,7 @@ const ConnectPage = () => {
                     {t('layout.components.connect.empty.goToPlans')}
                   </Button>
                 ) : null}
-                {runtimeConnected && readinessStatus === 'failed' ? (
+                {showReadinessRetryAction ? (
                   <Button
                     variant="outlined"
                     size="small"

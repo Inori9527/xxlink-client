@@ -38,6 +38,23 @@ export const isSelectedNodeConnected = (
   readinessStatus: SelectedNodeReadinessStatus,
 ) => runtimeConnected && readinessStatus === 'ready'
 
+export const getReadinessFailureDisconnectPayload = () => ({
+  enable_tun_mode: false,
+  enable_system_proxy: false,
+})
+
+export const shouldDisplayReadinessFailure = (
+  readinessStatus: SelectedNodeReadinessStatus,
+  errorFlash: boolean,
+) =>
+  readinessStatus === 'failed' ||
+  (readinessStatus === 'disconnected' && errorFlash)
+
+export const shouldShowReadinessRetryAction = (
+  runtimeConnected: boolean,
+  readinessStatus: SelectedNodeReadinessStatus,
+) => runtimeConnected && readinessStatus === 'failed'
+
 export const shouldAutoSelectNode = ({
   runtimeConnected,
   groupName,
