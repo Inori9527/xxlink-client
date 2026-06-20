@@ -37,6 +37,7 @@ const DESKTOP_COMPAT_POLICY: &str = "XXLink-Desktop";
 const GLOBAL_POLICY: &str = "GLOBAL";
 const SMART_SPLIT_DIRECT_RULES: &[&str] = &["GEOSITE,cn,DIRECT", "GEOIP,CN,DIRECT,no-resolve"];
 const SMART_SPLIT_FALLBACK_RULE: &str = "MATCH,GLOBAL";
+const CONTROL_PLANE_DIRECT_DOMAINS: &[&str] = &["api.xxlink.net"];
 
 #[derive(Debug)]
 struct ConfigValues {
@@ -380,6 +381,12 @@ fn apply_desktop_compatibility_rules(mut config: Mapping) -> Mapping {
         .collect::<HashSet<_>>();
 
     let mut compatibility_rules = Vec::new();
+    for domain in CONTROL_PLANE_DIRECT_DOMAINS {
+        let rule = format!("DOMAIN,{domain},DIRECT");
+        if !existing.contains(&rule.to_ascii_lowercase()) {
+            compatibility_rules.push(Value::String(rule));
+        }
+    }
     for process in ADOBE_PROCESS_NAMES {
         let rule = format!("PROCESS-NAME,{process},{policy}");
         if !existing.contains(&rule.to_ascii_lowercase()) {
@@ -569,7 +576,7 @@ pub async fn enhance() -> (Mapping, HashSet<String>, HashMap<String, ResultLog>)
 #[allow(clippy::expect_used)]
 #[cfg(test)]
 mod tests {
-    use super::{apply_smart_split_rules, cleanup_proxy_groups};
+    use super::{apply_desktop_compatibility_rules, apply_smart_split_rules, cleanup_proxy_groups};
 
     #[test]
     fn remove_missing_proxies_from_groups() {
@@ -773,5 +780,76 @@ rules:
 
         assert_eq!(rules.len(), 1);
         assert_eq!(rules[0].as_str(), Some("MATCH,DIRECT"));
+    }
+
+    #[test]
+    fn add_control_plane_direct_rule_before_match() {
+        let config_str = r#"
+proxies:
+  - name: "node"
+    type: http
+    server: 127.0.0.1
+    port: 9
+proxy-groups:
+  - name: "Proxy"
+    type: select
+    proxies:
+      - "node"
+rules:
+  - "MATCH,Proxy"
+"#;
+
+        let config: serde_yaml_ng::Mapping = serde_yaml_ng::from_str(config_str).expect("Failed to parse test yaml");
+        let config = apply_desktop_compatibility_rules(config);
+
+        let rules = config
+            .get("rules")
+            .and_then(|v| v.as_sequence())
+            .expect("rules should be a sequence");
+        let rule_strings = rules
+            .iter()
+            .filter_map(serde_yaml_ng::Value::as_str)
+            .collect::<Vec<_>>();
+
+        let api_rule_index = rule_strings
+            .iter()
+            .position(|rule| *rule == "DOMAIN,api.xxlink.net,DIRECT")
+            .expect("api control-plane domain should be direct");
+        let match_index = rule_strings
+            .iter()
+            .position(|rule| *rule == "MATCH,Proxy")
+            .expect("existing match rule should remain");
+
+        assert!(api_rule_index < match_index);
+        assert!(!rule_strings.contains(&"DOMAIN-SUFFIX,xxlink.net,DIRECT"));
+    }
+
+    #[test]
+    fn keep_existing_control_plane_direct_rule_deduped() {
+        let config_str = r#"
+proxies:
+  - name: "node"
+    type: http
+    server: 127.0.0.1
+    port: 9
+rules:
+  - "DOMAIN,api.xxlink.net,DIRECT"
+  - "MATCH,Proxy"
+"#;
+
+        let config: serde_yaml_ng::Mapping = serde_yaml_ng::from_str(config_str).expect("Failed to parse test yaml");
+        let config = apply_desktop_compatibility_rules(config);
+
+        let rules = config
+            .get("rules")
+            .and_then(|v| v.as_sequence())
+            .expect("rules should be a sequence");
+        let api_rule_count = rules
+            .iter()
+            .filter_map(serde_yaml_ng::Value::as_str)
+            .filter(|rule| *rule == "DOMAIN,api.xxlink.net,DIRECT")
+            .count();
+
+        assert_eq!(api_rule_count, 1);
     }
 }
