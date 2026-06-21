@@ -8,25 +8,26 @@ use tauri::Url;
 use crate::{
     config::{Config, PrfItem, profiles},
     core::{CoreManager, handle},
+    utils::help,
 };
 use xxlink_logging::{Type, logging, logging_error};
 
 pub(super) async fn resolve_scheme(param: &str) -> Result<()> {
-    logging!(info, Type::Config, "received deep link: {param}");
+    let redacted_param = redacted_deep_link_for_log(param);
+    logging!(info, Type::Config, "received deep link: {}", redacted_param);
 
-    let param_str = if param.starts_with("[") && param.len() > 4 {
-        param
-            .get(2..param.len() - 2)
-            .ok_or_else(|| anyhow::anyhow!("Invalid string slice boundaries"))?
-    } else {
-        param
-    };
+    let param_str = unwrap_deep_link_param(param)?;
 
     let link_parsed =
-        Url::parse(param_str).map_err(|e| anyhow::anyhow!("failed to parse deep link: {:?}, param: {:?}", e, param))?;
+        Url::parse(param_str).map_err(|e| anyhow::anyhow!("failed to parse deep link: {:?}, {}", e, redacted_param))?;
 
     let Some((url, name)) = extract_subscription_info(&link_parsed) else {
-        logging!(error, Type::Config, "missing url parameter in deep link: {}", param_str);
+        logging!(
+            error,
+            Type::Config,
+            "missing url parameter in deep link: {}",
+            redacted_deep_link_url_summary(&link_parsed)
+        );
         return Ok(());
     };
 
@@ -87,9 +88,10 @@ async fn import_subscription(url: &str, name: Option<&String>) {
 
     let uid = item.uid.clone().unwrap_or_default();
     if let Err(e) = profiles::profiles_append_item_safe(&mut item).await {
-        logging!(error, Type::Config, "failed to import subscription url: {:?}", e);
+        let message = help::mask_err(&e.to_string());
+        logging!(error, Type::Config, "failed to import subscription url: {}", message);
         Config::profiles().await.discard();
-        handle::Handle::notice_message("import_sub_url::error", e.to_string());
+        handle::Handle::notice_message("import_sub_url::error", message);
         return;
     }
 
@@ -107,11 +109,98 @@ async fn fetch_profile_item(url: &str, name: Option<&String>) -> Option<PrfItem>
     match PrfItem::from_url(url, name, None, None).await {
         Ok(item) => Some(item),
         Err(e) => {
-            logging!(error, Type::Config, "failed to parse profile from url: {:?}", e);
-            handle::Handle::notice_message("import_sub_url::error", e.to_string());
+            let message = help::mask_err(&e.to_string());
+            logging!(error, Type::Config, "failed to parse profile from url: {}", message);
+            handle::Handle::notice_message("import_sub_url::error", message);
             None
         }
     }
+}
+
+fn unwrap_deep_link_param(param: &str) -> Result<&str> {
+    if param.starts_with("[") && param.len() > 4 {
+        param
+            .get(2..param.len() - 2)
+            .ok_or_else(|| anyhow::anyhow!("Invalid string slice boundaries"))
+    } else {
+        Ok(param)
+    }
+}
+
+fn redacted_deep_link_for_log(param: &str) -> std::string::String {
+    let Ok(param_str) = unwrap_deep_link_param(param) else {
+        return format!("scheme=<invalid>, input_len={}", param.len());
+    };
+
+    match Url::parse(param_str) {
+        Ok(url) => redacted_deep_link_url_summary(&url),
+        Err(_) => format!("scheme=<invalid>, input_len={}", param.len()),
+    }
+}
+
+fn redacted_deep_link_url_summary(link_parsed: &Url) -> std::string::String {
+    let has_name = link_parsed.query_pairs().any(|(key, _)| key == "name");
+    let subscription_url = extract_subscription_url(link_parsed);
+    let has_url = subscription_url.is_some();
+    let subscription_url = subscription_url
+        .as_deref()
+        .map(redacted_subscription_url_for_log)
+        .unwrap_or_else(|| std::string::String::from("<missing>"));
+
+    format!(
+        "scheme={}, has_url={}, has_name={}, subscription_url={}",
+        link_parsed.scheme(),
+        has_url,
+        has_name,
+        subscription_url
+    )
+}
+
+fn redacted_subscription_url_for_log(url: &str) -> std::string::String {
+    let Ok(parsed) = Url::parse(url) else {
+        return format!("<unparseable-url len={}>", url.len());
+    };
+
+    let mut output = format!(
+        "{}://{}",
+        parsed.scheme(),
+        parsed.host_str().unwrap_or("<missing-host>")
+    );
+    if let Some(port) = parsed.port() {
+        output.push_str(&format!(":{port}"));
+    }
+    output.push_str(&redacted_subscription_path(parsed.path()));
+    if parsed.query().is_some() {
+        output.push_str(" [query-redacted]");
+    }
+    output
+}
+
+fn redacted_subscription_path(path: &str) -> std::string::String {
+    let mut mask_next_segment = false;
+    let segments = path.split('/').map(|segment| {
+        if segment.is_empty() {
+            return segment.to_string();
+        }
+
+        if mask_next_segment {
+            mask_next_segment = false;
+            return std::string::String::from("***");
+        }
+
+        if segment == "subscription" {
+            mask_next_segment = true;
+            return segment.to_string();
+        }
+
+        if segment.len() > 8 {
+            std::string::String::from("***")
+        } else {
+            segment.to_string()
+        }
+    });
+
+    segments.collect::<Vec<_>>().join("/")
 }
 
 async fn post_import_updates(uid: &String, had_current_profile: bool) {
@@ -153,5 +242,71 @@ async fn refresh_core_config() {
             logging!(error, Type::Config, "Apply config error: {}", err);
             handle::Handle::notice_message("update_failed", format!("{err}"));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn encoded_subscription_url_extraction_keeps_import_behavior() {
+        let link = Url::parse(
+            "xxlink://install?name=prod&url=https%3A%2F%2Fapi.xxlink.net%2Fapi%2Fv1%2Fsubscription%2Fsecret-token-123456%3Fformat%3Dclash%26token%3Dabc123",
+        )
+        .unwrap();
+
+        assert_eq!(
+            extract_subscription_url(&link).unwrap(),
+            "https://api.xxlink.net/api/v1/subscription/secret-token-123456?format=clash&token=abc123"
+        );
+    }
+
+    #[test]
+    fn deep_link_log_summary_redacts_subscription_token_and_query() {
+        let summary = redacted_deep_link_for_log(
+            "xxlink://install?name=prod&url=https%3A%2F%2Fapi.xxlink.net%2Fapi%2Fv1%2Fsubscription%2Fsecret-token-123456%3Fformat%3Dclash%26token%3Dabc123",
+        );
+
+        assert!(summary.contains("scheme=xxlink"));
+        assert!(summary.contains("has_url=true"));
+        assert!(summary.contains("has_name=true"));
+        assert!(summary.contains("/subscription/***"));
+        assert!(summary.contains("[query-redacted]"));
+        assert!(!summary.contains("secret-token"));
+        assert!(!summary.contains("format=clash"));
+        assert!(!summary.contains("token=abc123"));
+        assert!(!summary.contains("url="));
+    }
+
+    #[test]
+    fn invalid_deep_link_log_summary_hides_raw_payload() {
+        let summary =
+            redacted_deep_link_for_log("not a url https://api.xxlink.net/subscription/secret-token?format=clash");
+
+        assert!(summary.contains("scheme=<invalid>"));
+        assert!(!summary.contains("secret-token"));
+        assert!(!summary.contains("format=clash"));
+        assert!(!summary.contains("https://"));
+    }
+
+    #[test]
+    fn missing_url_log_summary_does_not_include_other_query_values() {
+        let link = Url::parse("xxlink://install?name=secret-name").unwrap();
+        let summary = redacted_deep_link_url_summary(&link);
+
+        assert!(summary.contains("has_url=false"));
+        assert!(summary.contains("has_name=true"));
+        assert!(summary.contains("subscription_url=<missing>"));
+        assert!(!summary.contains("secret-name"));
+    }
+
+    #[test]
+    fn redacted_subscription_url_masks_short_subscription_tokens() {
+        let summary = redacted_subscription_url_for_log("https://api.xxlink.net/subscription/short?format=clash");
+
+        assert_eq!(summary, "https://api.xxlink.net/subscription/*** [query-redacted]");
+        assert!(!summary.contains("short"));
+        assert!(!summary.contains("format=clash"));
     }
 }

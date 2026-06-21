@@ -590,9 +590,9 @@ fn fix_dirty_url(input: &str) -> Result<Url> {
         Ok(u) => u,
         Err(e) => {
             return Err(anyhow::anyhow!(
-                "failed to parse deep link url: {:?}, input: {:?}",
+                "failed to parse deep link url: {:?}, input: {}",
                 e,
-                input
+                help::mask_err(input)
             ));
         }
     };
