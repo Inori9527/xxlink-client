@@ -1,5 +1,5 @@
 import { writeAccountLkgCache } from '@/services/account-lkg-cache'
-import { api, isAuthFatalError } from '@/services/api'
+import { api } from '@/services/api'
 import { authStore } from '@/services/auth-store'
 import { syncSubscription } from '@/services/subscription-sync'
 
@@ -115,9 +115,7 @@ export async function runResumeRecovery(
       clearResumeSyncError()
     } catch (error) {
       lastFailureAt = Date.now()
-      if (!isAuthFatalError(error)) {
-        rememberResumeSyncError(error, reason)
-      }
+      rememberResumeSyncError(error, reason)
     }
   })().finally(() => {
     running = null
