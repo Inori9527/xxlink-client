@@ -4,6 +4,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$tauriCli = Join-Path $PSScriptRoot "..\node_modules\.bin\tauri.cmd"
+if (-not (Test-Path -LiteralPath $tauriCli)) {
+  throw "Tauri CLI not found. Run pnpm install before signing."
+}
+
 $privateKeyPath = [Environment]::GetEnvironmentVariable("TAURI_SIGNING_PRIVATE_KEY_PATH", "User")
 if (-not $privateKeyPath) {
   $privateKeyPath = [Environment]::GetEnvironmentVariable("TAURI_SIGNING_PRIVATE_KEY_PATH", "Process")
@@ -32,20 +37,18 @@ if (-not $installers) {
 foreach ($installer in $installers) {
   Write-Host "Signing $($installer.Name)..."
   $args = @(
-    "pnpm",
-    "tauri",
     "signer",
     "sign",
     "--private-key-path",
     $privateKeyPath
   )
 
-  if ($privateKeyPassword) {
-    $args += @("--password", $privateKeyPassword)
+  if ($privateKeyPassword -and -not [Environment]::GetEnvironmentVariable("TAURI_SIGNING_PRIVATE_KEY_PASSWORD", "Process")) {
+    [Environment]::SetEnvironmentVariable("TAURI_SIGNING_PRIVATE_KEY_PASSWORD", $privateKeyPassword, "Process")
   }
 
   $args += $installer.FullName
-  & corepack @args
+  & $tauriCli @args
 
   if ($LASTEXITCODE -ne 0) {
     throw "Failed to sign $($installer.Name)"
