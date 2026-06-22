@@ -15,3 +15,29 @@ export function shouldShowConfirmedEmptyPlans(input: {
 }): boolean {
   return !input.loading && !input.loadFailed && input.planCount === 0
 }
+
+export function getAccountRefreshFailureState(input: {
+  subscriptionFailed: boolean
+  benefitFailed: boolean
+  usageFailed: boolean
+  nodesFailed: boolean
+}): {
+  accountDataRefreshFailed: boolean
+  nodeListRefreshFailed: boolean
+  anyRefreshFailed: boolean
+} {
+  const accountDataRefreshFailed =
+    input.subscriptionFailed || input.benefitFailed || input.usageFailed
+  return {
+    accountDataRefreshFailed,
+    nodeListRefreshFailed: input.nodesFailed,
+    anyRefreshFailed: accountDataRefreshFailed || input.nodesFailed,
+  }
+}
+
+export function shouldShowRefreshFailureNotice(input: {
+  refreshFailed: boolean
+  hasLastKnownGood: boolean
+}): boolean {
+  return input.refreshFailed && !input.hasLastKnownGood
+}

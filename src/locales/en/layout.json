@@ -93,6 +93,8 @@
       "feedback": {
         "toggleFailed": "Failed to toggle connection",
         "selectedNodeFailed": "This node failed to connect. Switch to another node or try again later.",
+        "accountRefreshFailed": "Plan and traffic data are temporarily unavailable. You are still signed in; retry refresh later.",
+        "nodeRefreshFailed": "Node list refresh failed. Your imported profile is preserved; retry refresh later.",
         "refreshFailed": "Failed to refresh nodes",
         "trafficExceeded": "Today's public benefit traffic is used up. Please wait for the next refresh or upgrade your plan.",
         "refreshed": "Nodes refreshed"

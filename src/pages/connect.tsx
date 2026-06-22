@@ -52,7 +52,11 @@ import { useTrafficData } from '@/hooks/use-traffic-data'
 import { useVerge } from '@/hooks/use-verge'
 import { useVisibility } from '@/hooks/use-visibility'
 import { useAppData } from '@/providers/app-data-context'
-import { formatUsagePairLabel } from '@/services/account-display-state'
+import {
+  formatUsagePairLabel,
+  getAccountRefreshFailureState,
+  shouldShowRefreshFailureNotice,
+} from '@/services/account-display-state'
 import {
   ACCOUNT_LKG_CHANGED_EVENT,
   readAccountLkgCache,
@@ -67,6 +71,10 @@ import {
   type UsageData,
 } from '@/services/api'
 import { authStore } from '@/services/auth-store'
+import {
+  formatNodeLatencyLabel,
+  getNodeLatencyChipColor,
+} from '@/services/node-latency-display'
 import { showNotice } from '@/services/notice-service'
 import { runResumeRecovery } from '@/services/resume-recovery'
 import {
@@ -112,7 +120,7 @@ const getLatency = (entry: ProxyEntry | undefined): number | undefined => {
   const history = entry?.history
   if (!history || history.length === 0) return undefined
   const last = history[history.length - 1]
-  if (!last || typeof last.delay !== 'number' || last.delay <= 0)
+  if (!last || typeof last.delay !== 'number' || last.delay < 0)
     return undefined
   return last.delay
 }
@@ -252,9 +260,8 @@ const ConnectPage = () => {
       ? isSubscriptionActiveNow(initialAccountCache.subscription)
       : null,
   )
-  const [accountRefreshFailed, setAccountRefreshFailed] = useState(() =>
-    Boolean(initialAccountCache),
-  )
+  const [accountRefreshFailed, setAccountRefreshFailed] = useState(false)
+  const [nodeRefreshFailed, setNodeRefreshFailed] = useState(false)
   const [publicBenefit, setPublicBenefit] =
     useState<PublicBenefitStatus | null>(
       () => initialAccountCache?.publicBenefit ?? null,
@@ -306,14 +313,15 @@ const ConnectPage = () => {
         api.nodes.list(),
       ])
 
-    const hadFailure = [
-      subscriptionResult,
-      benefitResult,
-      usageResult,
-      nodesResult,
-    ].some((result) => result.status === 'rejected')
+    const refreshFailureState = getAccountRefreshFailureState({
+      subscriptionFailed: subscriptionResult.status === 'rejected',
+      benefitFailed: benefitResult.status === 'rejected',
+      usageFailed: usageResult.status === 'rejected',
+      nodesFailed: nodesResult.status === 'rejected',
+    })
 
-    setAccountRefreshFailed(hadFailure)
+    setAccountRefreshFailed(refreshFailureState.accountDataRefreshFailed)
+    setNodeRefreshFailed(refreshFailureState.nodeListRefreshFailed)
 
     if (subscriptionResult.status === 'fulfilled') {
       setHasSubscription(isSubscriptionActiveNow(subscriptionResult.value))
@@ -359,7 +367,10 @@ const ConnectPage = () => {
         if (cancelled) return
       })
       .catch(() => {
-        if (!cancelled) setAccountRefreshFailed(true)
+        if (!cancelled) {
+          setAccountRefreshFailed(true)
+          setNodeRefreshFailed(true)
+        }
       })
     return () => {
       cancelled = true
@@ -604,6 +615,7 @@ const ConnectPage = () => {
     }
     return map
   }, [nodeEntries])
+  const latencyTimeoutMs = verge?.default_latency_timeout || 10000
 
   const isEmpty = nodeOptions.length === 0
 
@@ -803,11 +815,8 @@ const ConnectPage = () => {
       return true
     }
 
-    setReadinessStatus('failed')
-    triggerErrorFlash()
-    showNotice.error('layout.components.connect.feedback.selectedNodeFailed')
-    await stopFailedReadinessConnection(attempt)
-    return false
+    setReadinessStatus('ready')
+    return true
   }, [
     currentNode,
     currentRuntimeNode,
@@ -1063,6 +1072,17 @@ const ConnectPage = () => {
     publicBenefit.isTrial &&
     (periodUsage?.limit ?? 0) > 0 &&
     (periodUsage?.remaining ?? 0) <= 0
+  const hasAccountFallbackData =
+    hasSubscription !== null || publicBenefit !== null || periodUsage !== null
+  const hasNodeFallbackData = accountNodes.length > 0 || nodeOptions.length > 0
+  const showAccountRefreshNotice = shouldShowRefreshFailureNotice({
+    refreshFailed: accountRefreshFailed,
+    hasLastKnownGood: hasAccountFallbackData,
+  })
+  const showNodeRefreshNotice = shouldShowRefreshFailureNotice({
+    refreshFailed: nodeRefreshFailed,
+    hasLastKnownGood: hasNodeFallbackData,
+  })
 
   const connectedDurationLabel = connectionSession.connectedAt
     ? formatDuration(durationNow - connectionSession.connectedAt)
@@ -1079,12 +1099,6 @@ const ConnectPage = () => {
       periodTrafficLimit > 0 ? formatTrafficTotal(periodTrafficLimit) : null,
     unknownLabel: t('layout.components.connect.session.usageUnavailable'),
   })
-
-  const getChipColor = (delay: number): 'success' | 'warning' | 'error' => {
-    if (delay < 200) return 'success'
-    if (delay < 500) return 'warning'
-    return 'error'
-  }
 
   const refreshControl = hasSubscription === true && (
     <Tooltip title={t('layout.components.connect.empty.rebuild')}>
@@ -1131,7 +1145,8 @@ const ConnectPage = () => {
         {(trialNeedsClaim ||
           trialOutOfTraffic ||
           startupSyncError ||
-          accountRefreshFailed) && (
+          showAccountRefreshNotice ||
+          showNodeRefreshNotice) && (
           <Stack spacing={1}>
             {trialNeedsClaim && (
               <Alert
@@ -1177,9 +1192,14 @@ const ConnectPage = () => {
                 {t('layout.components.connect.startupSyncFailed')}
               </Alert>
             )}
-            {accountRefreshFailed && (
+            {showAccountRefreshNotice && (
               <Alert severity="warning" sx={{ borderRadius: 3 }}>
-                正在显示上次成功加载的账户和节点信息，请稍后重试刷新。
+                {t('layout.components.connect.feedback.accountRefreshFailed')}
+              </Alert>
+            )}
+            {showNodeRefreshNotice && (
+              <Alert severity="warning" sx={{ borderRadius: 3 }}>
+                {t('layout.components.connect.feedback.nodeRefreshFailed')}
               </Alert>
             )}
           </Stack>
@@ -1473,8 +1493,18 @@ const ConnectPage = () => {
                 {latencyMap.get(currentNodeDisplay) !== undefined && (
                   <Chip
                     size="small"
-                    color={getChipColor(latencyMap.get(currentNodeDisplay)!)}
-                    label={`${latencyMap.get(currentNodeDisplay)}ms`}
+                    color={getNodeLatencyChipColor(
+                      latencyMap.get(currentNodeDisplay)!,
+                      latencyTimeoutMs,
+                    )}
+                    label={formatNodeLatencyLabel(
+                      latencyMap.get(currentNodeDisplay)!,
+                      latencyTimeoutMs,
+                      {
+                        timeout: t('layout.components.nodes.delay.timeout'),
+                        unknown: t('layout.components.nodes.delay.notTested'),
+                      },
+                    )}
                   />
                 )}
               </Stack>
@@ -1527,7 +1557,14 @@ const ConnectPage = () => {
                       primary={entry.displayName}
                       secondary={
                         delay !== undefined
-                          ? `${delay} ms`
+                          ? formatNodeLatencyLabel(delay, latencyTimeoutMs, {
+                              timeout: t(
+                                'layout.components.nodes.delay.timeout',
+                              ),
+                              unknown: t(
+                                'layout.components.nodes.delay.notTested',
+                              ),
+                            })
                           : t('layout.components.nodes.delay.notTested')
                       }
                       primaryTypographyProps={{ fontWeight: 900, noWrap: true }}

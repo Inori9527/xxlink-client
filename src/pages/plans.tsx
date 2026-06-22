@@ -35,6 +35,7 @@ import { useVisibility } from '@/hooks/use-visibility'
 import {
   formatUsagePairLabel,
   shouldShowConfirmedEmptyPlans,
+  shouldShowRefreshFailureNotice,
 } from '@/services/account-display-state'
 import {
   ACCOUNT_LKG_CHANGED_EVENT,
@@ -185,9 +186,8 @@ const PlansPage = () => {
     )
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [showingCachedAccountState, setShowingCachedAccountState] = useState(
-    () => Boolean(initialAccountCache),
-  )
+  const [showRefreshFailureNotice, setShowRefreshFailureNotice] =
+    useState(false)
   const [accountLoadFailed, setAccountLoadFailed] = useState(false)
   const [claimingBenefit, setClaimingBenefit] = useState(false)
   const [openingPlanId, setOpeningPlanId] = useState<string | null>(null)
@@ -212,10 +212,14 @@ const PlansPage = () => {
         api.user.usage(),
         api.user.publicBenefit(),
       ])
+    const userId = authStore.getState().user?.id
+    const hasLastKnownGood = Boolean(
+      userId ? readAccountLkgCache(userId) : initialAccountCache,
+    )
 
     if (plansResult.status === 'fulfilled') {
       setPlans(plansResult.value)
-    } else {
+    } else if (!hasLastKnownGood) {
       setError(t('plans.page.feedback.errors.loadFailed'))
     }
 
@@ -224,7 +228,6 @@ const PlansPage = () => {
     if (benefitResult.status === 'fulfilled')
       setPublicBenefit(benefitResult.value)
 
-    const userId = authStore.getState().user?.id
     if (userId) {
       writeAccountLkgCache(userId, {
         plans:
@@ -247,8 +250,13 @@ const PlansPage = () => {
       benefitResult,
     ].some((result) => result.status === 'rejected')
     setAccountLoadFailed(hadFailure)
-    setShowingCachedAccountState(hadFailure)
-  }, [t])
+    setShowRefreshFailureNotice(
+      shouldShowRefreshFailureNotice({
+        refreshFailed: hadFailure,
+        hasLastKnownGood,
+      }),
+    )
+  }, [initialAccountCache, t])
 
   useEffect(() => {
     loadPlans().finally(() => setLoading(false))
@@ -407,9 +415,9 @@ const PlansPage = () => {
             {error}
           </Alert>
         )}
-        {showingCachedAccountState && !loading && (
+        {accountLoadFailed && showRefreshFailureNotice && !loading && (
           <Alert severity="warning" sx={{ borderRadius: 3 }}>
-            {t('plans.page.cached.banner')}
+            {t('plans.page.cached.partialFailure')}
           </Alert>
         )}
 

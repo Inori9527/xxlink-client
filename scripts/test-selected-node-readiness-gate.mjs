@@ -68,6 +68,10 @@ function loadReadinessModule(stubs = {}) {
   })
 }
 
+function loadLatencyModule() {
+  return loadTsModule('src/services/node-latency-display.ts')
+}
+
 test('selected node is connected only after runtime and readiness pass', () => {
   const readiness = loadReadinessModule()
 
@@ -76,6 +80,31 @@ test('selected node is connected only after runtime and readiness pass', () => {
   assert.equal(readiness.isSelectedNodeConnected(true, 'validating'), false)
   assert.equal(readiness.isSelectedNodeConnected(true, 'failed'), false)
   assert.equal(readiness.isSelectedNodeConnected(true, 'ready'), true)
+})
+
+test('node latency display is simple ms or timeout', () => {
+  const latency = loadLatencyModule()
+
+  const ok = latency.getNodeLatencyDisplay(88, 6000)
+  assert.equal(ok.kind, 'ms')
+  assert.equal(ok.value, 88)
+  assert.equal(latency.getNodeLatencyDisplay(0, 6000).kind, 'timeout')
+  assert.equal(latency.getNodeLatencyDisplay(6000, 6000).kind, 'timeout')
+  assert.equal(latency.getNodeLatencyDisplay(-1, 6000).kind, 'unknown')
+  assert.equal(
+    latency.formatNodeLatencyLabel(88, 6000, {
+      timeout: 'Timeout',
+      unknown: '-',
+    }),
+    '88 ms',
+  )
+  assert.equal(
+    latency.formatNodeLatencyLabel(0, 6000, {
+      timeout: 'Timeout',
+      unknown: '-',
+    }),
+    'Timeout',
+  )
 })
 
 test('readiness probes use selected proxy targets and never api.xxlink.net', async () => {
@@ -152,13 +181,15 @@ test('readiness failure keeps selected node and blocks false connected state', a
   assert.equal(selectedNode, '日本-ISP专线-01')
 })
 
-test('readiness failure auto-disconnects failed runtime and keeps failure copy briefly visible', () => {
+test('readiness probe failure keeps runtime enabled without prominent warning', () => {
   const readiness = loadReadinessModule()
 
   const payload = readiness.getReadinessFailureDisconnectPayload()
   assert.equal(payload.enable_tun_mode, false)
   assert.equal(payload.enable_system_proxy, false)
   assert.equal(readiness.shouldDisplayReadinessFailure('failed', false), true)
+  assert.equal(readiness.shouldDisplayReadinessFailure('ready', false), false)
+  assert.equal('shouldDisplayReadinessWarning' in readiness, false)
   assert.equal(
     readiness.shouldDisplayReadinessFailure('disconnected', true),
     true,
@@ -168,6 +199,7 @@ test('readiness failure auto-disconnects failed runtime and keeps failure copy b
     false,
   )
   assert.equal(readiness.shouldShowReadinessRetryAction(true, 'failed'), true)
+  assert.equal(readiness.shouldShowReadinessRetryAction(true, 'ready'), false)
   assert.equal(readiness.shouldShowReadinessRetryAction(false, 'failed'), false)
 })
 
@@ -229,7 +261,7 @@ test('manual retry reruns bounded readiness probes', async () => {
   )
 })
 
-test('failed readiness state stops the failed route without switching nodes', () => {
+test('probe timeout does not stop or switch the selected route', () => {
   const source = readFileSync(
     resolve(repoRoot, 'src/pages/connect.tsx'),
     'utf8',
@@ -243,6 +275,24 @@ test('failed readiness state stops the failed route without switching nodes', ()
     source.indexOf('const validateSelectedNodeReadiness'),
   )
   assert.equal(stopBlock.includes('changeProxy('), false)
+  const resultBlockStart = source.indexOf(
+    'const result = await checkSelectedNodeReadiness',
+  )
+  const probeFailureBlock = source.slice(
+    resultBlockStart,
+    source.indexOf('  }, [', resultBlockStart),
+  )
+  assert.equal(
+    probeFailureBlock.includes('stopFailedReadinessConnection'),
+    false,
+  )
+  assert.equal(probeFailureBlock.includes("setReadinessStatus('ready')"), true)
+  assert.equal(
+    probeFailureBlock.includes("setReadinessStatus('degraded')"),
+    false,
+  )
+  assert.equal(source.includes('selectedNodeProbeWarning'), false)
+  assert.equal(source.includes("'degraded'"), false)
   assert.equal(source.includes('showReadinessRetryAction'), true)
   assert.equal(source.includes('layout.components.connect.actions.retry'), true)
   assert.equal(source.includes('onClick={validateSelectedNodeReadiness}'), true)
@@ -263,5 +313,13 @@ test('readiness failure copy is localized for Chinese and English', () => {
   assert.equal(
     en.components.connect.feedback.selectedNodeFailed,
     'This node failed to connect. Switch to another node or try again later.',
+  )
+  assert.equal(
+    'selectedNodeProbeWarning' in zh.components.connect.feedback,
+    false,
+  )
+  assert.equal(
+    'selectedNodeProbeWarning' in en.components.connect.feedback,
+    false,
   )
 })

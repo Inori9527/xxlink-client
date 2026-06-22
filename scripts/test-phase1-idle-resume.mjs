@@ -334,4 +334,57 @@ test('display helpers distinguish unknown usage and confirmed empty plans', () =
     }),
     true,
   )
+
+  const accountOnlyFailure = display.getAccountRefreshFailureState({
+    subscriptionFailed: true,
+    benefitFailed: false,
+    usageFailed: true,
+    nodesFailed: false,
+  })
+  assert.equal(accountOnlyFailure.accountDataRefreshFailed, true)
+  assert.equal(accountOnlyFailure.nodeListRefreshFailed, false)
+  assert.equal(accountOnlyFailure.anyRefreshFailed, true)
+
+  const nodeOnlyFailure = display.getAccountRefreshFailureState({
+    subscriptionFailed: false,
+    benefitFailed: false,
+    usageFailed: false,
+    nodesFailed: true,
+  })
+  assert.equal(nodeOnlyFailure.accountDataRefreshFailed, false)
+  assert.equal(nodeOnlyFailure.nodeListRefreshFailed, true)
+  assert.equal(nodeOnlyFailure.anyRefreshFailed, true)
+  assert.equal(
+    display.shouldShowRefreshFailureNotice({
+      refreshFailed: true,
+      hasLastKnownGood: true,
+    }),
+    false,
+  )
+  assert.equal(
+    display.shouldShowRefreshFailureNotice({
+      refreshFailed: true,
+      hasLastKnownGood: false,
+    }),
+    true,
+  )
+  assert.equal(
+    display.shouldShowRefreshFailureNotice({
+      refreshFailed: false,
+      hasLastKnownGood: false,
+    }),
+    false,
+  )
+  assert.equal('shouldShowCachedAccountWarning' in display, false)
+
+  const plansSource = readFileSync(
+    resolve(repoRoot, 'src/pages/plans.tsx'),
+    'utf8',
+  )
+  const plansFailureBlock = plansSource.slice(
+    plansSource.indexOf("if (plansResult.status === 'fulfilled')"),
+    plansSource.indexOf("if (subResult.status === 'fulfilled')"),
+  )
+  assert.equal(plansFailureBlock.includes('!hasLastKnownGood'), true)
+  assert.equal(plansFailureBlock.includes('setError('), true)
 })

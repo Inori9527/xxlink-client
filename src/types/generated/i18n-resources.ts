@@ -205,6 +205,8 @@ export interface TranslationResources {
             title: string
           }
           feedback: {
+            accountRefreshFailed: string
+            nodeRefreshFailed: string
             refreshed: string
             refreshFailed: string
             selectedNodeFailed: string
@@ -393,6 +395,7 @@ export interface TranslationResources {
         }
         cached: {
           banner: string
+          partialFailure: string
         }
         card: {
           actions: {

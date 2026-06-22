@@ -60,7 +60,8 @@
       "loadFailedSubtitle": "Network or service is temporarily unavailable. Refresh again in a moment."
     },
     "cached": {
-      "banner": "Showing the last successfully loaded plan information. Try refresh again later."
+      "banner": "Showing the last successfully loaded plan information. Try refresh again later.",
+      "partialFailure": "Some plan, traffic, or account data could not refresh. You are still signed in; retry later."
     },
     "form": {
       "promoPlaceholder": "Enter promo code (optional)",

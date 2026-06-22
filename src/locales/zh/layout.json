@@ -93,6 +93,8 @@
       "feedback": {
         "toggleFailed": "连接切换失败",
         "selectedNodeFailed": "该节点连接失败，请切换其他节点或稍后重试",
+        "accountRefreshFailed": "套餐和流量信息暂时不可用。你仍已登录，请稍后重试刷新。",
+        "nodeRefreshFailed": "节点列表刷新失败。已导入的节点配置会保留，请稍后重试刷新。",
         "refreshFailed": "刷新节点失败",
         "trafficExceeded": "今日公益流量已用完，请等待下次刷新或升级套餐",
         "refreshed": "节点已刷新"
