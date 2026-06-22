@@ -250,16 +250,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn encoded_subscription_url_extraction_keeps_import_behavior() {
+    fn encoded_subscription_url_extraction_keeps_import_behavior() -> Result<(), String> {
         let link = Url::parse(
             "xxlink://install?name=prod&url=https%3A%2F%2Fapi.xxlink.net%2Fapi%2Fv1%2Fsubscription%2Fsecret-token-123456%3Fformat%3Dclash%26token%3Dabc123",
         )
-        .unwrap();
+        .map_err(|err| format!("test deep link should parse: {err}"))?;
+        let subscription_url = extract_subscription_url(&link)
+            .ok_or_else(|| "test deep link should include a subscription URL".to_string())?;
 
         assert_eq!(
-            extract_subscription_url(&link).unwrap(),
+            subscription_url,
             "https://api.xxlink.net/api/v1/subscription/secret-token-123456?format=clash&token=abc123"
         );
+        Ok(())
     }
 
     #[test]
@@ -291,14 +294,16 @@ mod tests {
     }
 
     #[test]
-    fn missing_url_log_summary_does_not_include_other_query_values() {
-        let link = Url::parse("xxlink://install?name=secret-name").unwrap();
+    fn missing_url_log_summary_does_not_include_other_query_values() -> Result<(), String> {
+        let link = Url::parse("xxlink://install?name=secret-name")
+            .map_err(|err| format!("test deep link should parse: {err}"))?;
         let summary = redacted_deep_link_url_summary(&link);
 
         assert!(summary.contains("has_url=false"));
         assert!(summary.contains("has_name=true"));
         assert!(summary.contains("subscription_url=<missing>"));
         assert!(!summary.contains("secret-name"));
+        Ok(())
     }
 
     #[test]
