@@ -221,6 +221,8 @@ export const translationKeys = [
   'mine.view',
   'mine.cancel',
   'mine.currentAccount',
+  'mine.usageUnavailable',
+  'mine.usageRefreshFailed',
   'mine.sections.common',
   'mine.sections.management',
   'mine.sections.account',

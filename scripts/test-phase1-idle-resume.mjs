@@ -180,6 +180,70 @@ test('account LKG cache clears only the requested account unless clearing all', 
   assert.equal(lkg.readAccountLkgCache('user-b'), null)
 })
 
+test('account LKG keeps fallback data on failed refresh and accepts later authoritative state', () => {
+  installMemoryLocalStorage()
+  const lkg = loadTsModule('src/services/account-lkg-cache.ts')
+  const userId = 'state@example.test'
+
+  lkg.writeAccountLkgCache(userId, {
+    subscription: {
+      id: 'sub_active',
+      planId: 'plan_active',
+      trafficUsed: 1024,
+      startAt: '2026-06-01T00:00:00Z',
+      expireAt: '2026-07-01T00:00:00Z',
+      status: 'ACTIVE',
+      plan: {
+        id: 'plan_active',
+        name: 'Flagship',
+        description: null,
+        price: 1000,
+        duration: 30,
+        trafficLimit: 1024,
+        speedLimit: 300,
+        maxDevices: 5,
+      },
+    },
+    usage: {
+      trafficUsed: 1024,
+      trafficLimit: 4096,
+      trafficRemaining: 3072,
+      percentUsed: 25,
+      plan: { id: 'plan_active', name: 'Flagship', duration: 30 },
+      status: 'ACTIVE',
+      expireAt: '2026-07-01T00:00:00Z',
+      startAt: '2026-06-01T00:00:00Z',
+    },
+  })
+
+  lkg.writeAccountLkgCache(userId, {
+    subscription: undefined,
+    usage: undefined,
+  })
+  const afterFailure = lkg.readAccountLkgCache(userId)
+  assert.equal(afterFailure.subscription.status, 'ACTIVE')
+  assert.equal(afterFailure.usage.trafficRemaining, 3072)
+
+  lkg.writeAccountLkgCache(userId, {
+    subscription: null,
+    usage: {
+      trafficUsed: 4096,
+      trafficLimit: 4096,
+      trafficRemaining: 0,
+      percentUsed: 100,
+      plan: null,
+      status: 'EXPIRED',
+      expireAt: '2026-06-15T00:00:00Z',
+      startAt: '2026-05-15T00:00:00Z',
+    },
+  })
+  const afterAuthoritativeInvalidation = lkg.readAccountLkgCache(userId)
+  assert.equal(afterAuthoritativeInvalidation.subscription, null)
+  assert.equal(afterAuthoritativeInvalidation.usage.status, 'EXPIRED')
+  assert.equal(afterAuthoritativeInvalidation.usage.trafficRemaining, 0)
+  assert.equal(afterAuthoritativeInvalidation.usage.plan, null)
+})
+
 test('resume recovery refreshes safe account state without exposing secrets', async () => {
   installMemoryLocalStorage()
   const calls = {
@@ -387,4 +451,56 @@ test('display helpers distinguish unknown usage and confirmed empty plans', () =
   )
   assert.equal(plansFailureBlock.includes('!hasLastKnownGood'), true)
   assert.equal(plansFailureBlock.includes('setError('), true)
+})
+
+test('mine page uses LKG usage and does not render transient failures as false zero state', () => {
+  const mineSource = readFileSync(
+    resolve(repoRoot, 'src/pages/mine.tsx'),
+    'utf8',
+  )
+
+  assert.match(mineSource, /readAccountLkgCache/)
+  assert.match(mineSource, /writeAccountLkgCache/)
+  assert.match(mineSource, /ACCOUNT_LKG_CHANGED_EVENT/)
+  assert.match(mineSource, /setUsageRefreshFailed\(true\)/)
+  assert.match(
+    mineSource,
+    /writeAccountLkgCache\(user\.id, \{ usage: value \}\)/,
+  )
+  const mineUsageRefreshBlock = mineSource.slice(
+    mineSource.indexOf('api.user'),
+    mineSource.indexOf('api.announcements'),
+  )
+  assert.equal(mineUsageRefreshBlock.includes('setUsage(null)'), false)
+  assert.match(
+    mineSource,
+    /variant=\{usage \? 'determinate' : 'indeterminate'\}/,
+  )
+  assert.match(mineSource, /formatUsagePairLabel\(/)
+  assert.match(mineSource, /shouldShowRefreshFailureNotice\(/)
+})
+
+test('home profile card uses LKG usage and avoids raw refresh error logging', () => {
+  const homeProfileSource = readFileSync(
+    resolve(repoRoot, 'src/components/home/home-profile-card.tsx'),
+    'utf8',
+  )
+
+  assert.match(homeProfileSource, /readAccountLkgCache/)
+  assert.match(homeProfileSource, /writeAccountLkgCache/)
+  assert.match(homeProfileSource, /ACCOUNT_LKG_CHANGED_EVENT/)
+  assert.match(
+    homeProfileSource,
+    /writeAccountLkgCache\(user\.id, \{ usage \}\)/,
+  )
+  assert.equal(
+    homeProfileSource.includes(
+      "console.debug('[HomeProfileCard] usage refresh failed', error)",
+    ),
+    false,
+  )
+  assert.match(
+    homeProfileSource,
+    /console\.debug\('\[HomeProfileCard\] usage refresh failed'\)/,
+  )
 })

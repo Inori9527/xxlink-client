@@ -7,6 +7,8 @@
   "view": "查看",
   "cancel": "取消",
   "currentAccount": "当前账号",
+  "usageUnavailable": "用量暂时不可用",
+  "usageRefreshFailed": "用量暂时无法刷新。你仍保持登录，可稍后重试。",
   "sections": {
     "common": "常用",
     "management": "管理",

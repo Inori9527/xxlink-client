@@ -7,6 +7,8 @@
   "view": "View",
   "cancel": "Cancel",
   "currentAccount": "Current account",
+  "usageUnavailable": "Usage temporarily unavailable",
+  "usageRefreshFailed": "Usage could not refresh. You are still signed in; retry later.",
   "sections": {
     "common": "Common",
     "management": "Management",

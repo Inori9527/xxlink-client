@@ -384,6 +384,8 @@ export interface TranslationResources {
         management: string
       }
       usage: string
+      usageRefreshFailed: string
+      usageUnavailable: string
       userFallback: string
       view: string
     }

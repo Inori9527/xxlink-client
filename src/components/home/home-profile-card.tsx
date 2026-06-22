@@ -25,7 +25,13 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 
 import { useAppData } from '@/providers/app-data-context'
+import {
+  ACCOUNT_LKG_CHANGED_EVENT,
+  readAccountLkgCache,
+  writeAccountLkgCache,
+} from '@/services/account-lkg-cache'
 import { api, type UsageData } from '@/services/api'
+import { useAuth } from '@/services/auth-store'
 import { openWebUrl, updateProfile } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
 import parseTraffic from '@/utils/parse-traffic'
@@ -293,22 +299,67 @@ export const HomeProfileCard = ({
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { refreshAll } = useAppData()
+  const { user } = useAuth()
 
   // 更新当前订阅
   const [updating, setUpdating] = useState(false)
-  const [usage, setUsage] = useState<UsageData | null>(null)
+  const [usage, setUsage] = useState<UsageData | null>(
+    () => readAccountLkgCache(user?.id)?.usage ?? null,
+  )
 
   const refreshUsage = useCallback(async () => {
-    try {
-      setUsage(await api.user.usage())
-    } catch (error) {
-      console.debug('[HomeProfileCard] usage refresh failed', error)
+    if (!user?.id) {
+      setUsage(null)
+      return
     }
-  }, [])
+
+    try {
+      const usage = await api.user.usage()
+      setUsage(usage)
+      writeAccountLkgCache(user.id, { usage })
+    } catch {
+      console.debug('[HomeProfileCard] usage refresh failed')
+    }
+  }, [user?.id])
 
   useEffect(() => {
     void refreshUsage()
   }, [refreshUsage])
+
+  useEffect(() => {
+    let disposed = false
+    let timeoutId: number | undefined
+
+    const applyUsageFromCache = () => {
+      if (disposed) return
+      setUsage(readAccountLkgCache(user?.id)?.usage ?? null)
+    }
+
+    if (!user?.id) {
+      timeoutId = window.setTimeout(applyUsageFromCache, 0)
+      return () => {
+        disposed = true
+        if (timeoutId !== undefined) window.clearTimeout(timeoutId)
+      }
+    }
+
+    const refreshUsageFromCache = () => {
+      if (disposed) return
+      setUsage(readAccountLkgCache(user.id)?.usage ?? null)
+    }
+
+    timeoutId = window.setTimeout(refreshUsageFromCache, 0)
+    window.addEventListener(ACCOUNT_LKG_CHANGED_EVENT, refreshUsageFromCache)
+
+    return () => {
+      disposed = true
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId)
+      window.removeEventListener(
+        ACCOUNT_LKG_CHANGED_EVENT,
+        refreshUsageFromCache,
+      )
+    }
+  }, [user?.id])
 
   const onUpdateProfile = useLockFn(async () => {
     if (!current?.uid) return
