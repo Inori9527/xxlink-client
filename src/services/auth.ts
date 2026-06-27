@@ -1,7 +1,10 @@
 /**
- * Auth service. All API calls go through @tauri-apps/plugin-http so the
- * Tauri WebView is not blocked by browser CORS rules.
+ * Auth service. Most API calls go through @tauri-apps/plugin-http so the
+ * Tauri WebView is not blocked by browser CORS rules. Refresh is the exception:
+ * it uses browser fetch with credentials omitted so the plugin cookie jar cannot
+ * turn a desktop body-token refresh into a cookie-CSRF refresh.
  */
+import { fetchRefreshWithBodyToken } from '@/services/auth-refresh-transport'
 import { BASE_URL } from '@/services/config'
 import {
   DEFAULT_AUTH_TIMEOUT_MS,
@@ -56,14 +59,19 @@ async function post<T>(path: string, body: unknown): Promise<T> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     },
-    path === '/auth/refresh' ? DEFAULT_REFRESH_TIMEOUT_MS : DEFAULT_AUTH_TIMEOUT_MS,
+    path === '/auth/refresh'
+      ? DEFAULT_REFRESH_TIMEOUT_MS
+      : DEFAULT_AUTH_TIMEOUT_MS,
   )
 
   let json: ApiResponse<T>
   try {
     json = (await res.json()) as ApiResponse<T>
   } catch {
-    throw new AuthError(`Server returned non-JSON response (${res.status})`, res.status)
+    throw new AuthError(
+      `Server returned non-JSON response (${res.status})`,
+      res.status,
+    )
   }
 
   if (!res.ok || !json.success) {
@@ -102,7 +110,32 @@ export async function apiLogout(refreshToken: string): Promise<void> {
 export async function apiRefreshToken(
   refreshToken: string,
 ): Promise<AuthTokens> {
-  return post<AuthTokens>('/auth/refresh', { refreshToken })
+  const res = await fetchRefreshWithBodyToken(
+    `${BASE_URL}/auth/refresh`,
+    refreshToken,
+    DEFAULT_REFRESH_TIMEOUT_MS,
+  )
+
+  let json: ApiResponse<AuthTokens>
+  try {
+    json = (await res.json()) as ApiResponse<AuthTokens>
+  } catch {
+    throw new AuthError(
+      `Server returned non-JSON response (${res.status})`,
+      res.status,
+    )
+  }
+
+  if (!res.ok || !json.success) {
+    const { message, code } = getEnvelopeError(json.error)
+    throw new AuthError(message, res.status, code)
+  }
+
+  if (json.data === undefined) {
+    throw new AuthError('Server response missing data', res.status)
+  }
+
+  return json.data
 }
 
 export async function apiGoogleOAuthCallback(

@@ -3,6 +3,10 @@ import { asyncRetry } from 'foxts/async-retry'
 import { once } from 'foxts/once'
 
 import { apiRefreshToken, AuthError } from '@/services/auth'
+import {
+  AUTH_REFRESH_TRANSPORT_FORBIDDEN_CODE,
+  isRefreshTransportSessionError,
+} from '@/services/auth-refresh-transport'
 import { isServiceAccessBlockedResponse } from '@/services/auth-session-boundary'
 import { authStore } from '@/services/auth-store'
 import { BASE_URL } from '@/services/config'
@@ -312,6 +316,16 @@ async function request<T>(
             }
           })
           .catch((error) => {
+            if (
+              error instanceof AuthError &&
+              isRefreshTransportSessionError(error)
+            ) {
+              throw new AuthError(
+                '登录刷新通道被 Cookie 安全策略拒绝，请重新登录后再刷新节点',
+                error.status,
+                AUTH_REFRESH_TRANSPORT_FORBIDDEN_CODE,
+              )
+            }
             if (
               error instanceof AuthError &&
               error.status !== undefined &&
