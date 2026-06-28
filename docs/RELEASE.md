@@ -2,6 +2,24 @@
 
 > 本文档记录当前发版流程、版本号规则、以及将来启用"无感自动更新"所需步骤。
 
+## 零、Release governance（2026-06-28）
+
+- Windows 正式 release 的默认模型是 main-first：release commit 必须先合入
+  `origin/main`，再从 main 可达的 commit 创建 `vX.Y.Z` tag。
+- `.github/workflows/release.yml` 只接受 tag 触发，不使用
+  `workflow_dispatch`。workflow 会显式 fetch `origin/main`，并用
+  `git merge-base --is-ancestor` 验证 tag commit 从 main 可达。
+- Release branch / manual verified asset flow 只作为 emergency 模式使用。
+  使用后必须尽快把 release line reconcile 回 main；如需长期支持
+  release-branch tag，必须另走 `CLIENT_RELEASE_TAG_WORKFLOW_GUARD_FIX_GATE`。
+- `PR AI Slop Review` 是辅助审查。`COPILOT_GITHUB_TOKEN` 缺失属于
+  `CLIENT_PR_AI_SLOP_REVIEW_SECRET_CONFIG_GATE` 的 secret/config debt；
+  除非 branch protection 明确要求该 check，它不得单独阻塞普通 PR 或
+  release governance PR。
+- `codex/client-web-login` 不是 Windows release baseline。该分支进入
+  release 前必须从当前 main 重新承载/对齐，或在单独 gate 中明确它采用
+  独立版本策略；不得把其本地脏改或旧版本 metadata 带入 release line。
+
 ## 一、当前发版流程（手动下载）
 
 ### 触发条件
