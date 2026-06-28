@@ -29,14 +29,37 @@ jobs:
           fetch-depth: 0
 
       - name: Check if tag is from main branch
+        shell: bash
         run: |
-          TAG_REF="${GITHUB_REF##*/}"
+          if [[ "${GITHUB_REF_TYPE:-}" != "tag" ]]; then
+            echo "❌ Release workflow must run from a git tag."
+            echo "   GITHUB_REF_TYPE: ${GITHUB_REF_TYPE:-<unset>}"
+            exit 1
+          fi
+
+          TAG_REF="${GITHUB_REF_NAME:-${GITHUB_REF#refs/tags/}}"
+          if [[ -z "$TAG_REF" || "$TAG_REF" == "$GITHUB_REF" ]]; then
+            echo "❌ Could not resolve release tag name from GitHub ref."
+            echo "   GITHUB_REF: ${GITHUB_REF:-<unset>}"
+            echo "   GITHUB_REF_NAME: ${GITHUB_REF_NAME:-<unset>}"
+            exit 1
+          fi
+
+          if [[ ! "$TAG_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
+            echo "❌ Release tag must look like vX.Y.Z or vX.Y.Z-prerelease."
+            echo "   Git tag: $TAG_REF"
+            exit 1
+          fi
+
           echo "Checking if tag $TAG_REF is from main branch..."
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
 
-          TAG_COMMIT=$(git rev-list -n 1 $TAG_REF)
-          MAIN_COMMITS=$(git rev-list origin/main)
+          if ! TAG_COMMIT="$(git rev-list -n 1 "$TAG_REF")"; then
+            echo "❌ Could not resolve commit for tag $TAG_REF"
+            exit 1
+          fi
 
-          if echo "$MAIN_COMMITS" | grep -q "$TAG_COMMIT"; then
+          if git merge-base --is-ancestor "$TAG_COMMIT" "origin/main"; then
             echo "✅ Tag $TAG_REF is from main branch"
           else
             echo "❌ Tag $TAG_REF is not from main branch"
@@ -555,12 +578,7 @@ jobs:
     if: ${{ !contains(github.ref_name, '-rc') }}
     name: Notify Telegram
     runs-on: ubuntu-latest
-    needs:
-      [
-        update_tag,
-        release-update,
-        submit-to-winget,
-      ]
+    needs: [update_tag, release-update, submit-to-winget]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
