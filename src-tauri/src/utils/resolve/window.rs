@@ -1,4 +1,3 @@
-use dark_light::{Mode as SystemTheme, detect as detect_system_theme};
 use tauri::utils::config::Color;
 use tauri::{Theme, WebviewWindow};
 
@@ -36,20 +35,16 @@ pub async fn build_new_window() -> Result<WebviewWindow, String> {
     let initial_theme_mode = match latest.theme_mode.as_deref() {
         Some("dark") => "dark",
         Some("light") => "light",
-        _ => "system",
+        _ => "light",
     };
 
     let resolved_theme = match initial_theme_mode {
         "dark" => Some(Theme::Dark),
         "light" => Some(Theme::Light),
-        _ => None,
+        _ => Some(Theme::Light),
     };
 
-    let prefers_dark_background = match resolved_theme {
-        Some(Theme::Dark) => true,
-        Some(Theme::Light) => false,
-        _ => !matches!(detect_system_theme().ok(), Some(SystemTheme::Light)),
-    };
+    let prefers_dark_background = matches!(resolved_theme, Some(Theme::Dark));
 
     let background_color = if prefers_dark_background {
         DARK_BACKGROUND_COLOR

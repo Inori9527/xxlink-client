@@ -8,14 +8,6 @@ import {
 
 let vergeConfigCache: IVergeConfig | null | undefined
 
-const detectSystemTheme = (): 'light' | 'dark' => {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function')
-    return 'light'
-  return window.matchMedia('(prefers-color-scheme: dark)').matches
-    ? 'dark'
-    : 'light'
-}
-
 const getThemeModeFromWindow = (): IVergeConfig['theme_mode'] | undefined => {
   if (typeof window === 'undefined') return undefined
   const mode = (
@@ -36,7 +28,7 @@ export const resolveThemeMode = (
   if (initialMode === 'dark' || initialMode === 'light') {
     return initialMode
   }
-  return detectSystemTheme()
+  return 'light'
 }
 
 export const setPreloadConfig = (config: IVergeConfig | null) => {

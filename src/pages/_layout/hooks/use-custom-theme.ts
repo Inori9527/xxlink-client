@@ -1,4 +1,4 @@
-import { createTheme, Theme as MuiTheme, Shadows } from '@mui/material'
+import { alpha, createTheme, Theme as MuiTheme, Shadows } from '@mui/material'
 import {
   getCurrentWebviewWindow,
   WebviewWindow,
@@ -23,6 +23,8 @@ export const useCustomTheme = () => {
   useEffect(() => {
     if (theme_mode === 'light' || theme_mode === 'dark') {
       setMode(theme_mode)
+    } else {
+      setMode('light')
     }
   }, [theme_mode, setMode])
 
@@ -31,54 +33,13 @@ export const useCustomTheme = () => {
       return
     }
 
-    let isMounted = true
-
-    const timerId = setTimeout(() => {
-      if (!isMounted) return
-      appWindow
-        .theme()
-        .then((systemTheme) => {
-          if (isMounted && systemTheme) {
-            setMode(systemTheme)
-          }
-        })
-        .catch((err) => {
-          console.error('Failed to get initial system theme:', err)
-        })
-    }, 0)
-
-    const unlistenPromise = appWindow.onThemeChanged(({ payload }) => {
-      if (isMounted) {
-        setMode(payload)
-      }
-    })
-
-    return () => {
-      isMounted = false
-      clearTimeout(timerId)
-      unlistenPromise
-        .then((unlistenFn) => {
-          if (typeof unlistenFn === 'function') {
-            unlistenFn()
-          }
-        })
-        .catch((err) => {
-          console.error('Failed to unlisten from theme changes:', err)
-        })
-    }
+    setMode('light')
   }, [theme_mode, appWindow, setMode])
 
   useEffect(() => {
-    if (theme_mode === undefined) {
-      return
-    }
-
-    if (theme_mode === 'system') {
-      appWindow.setTheme(null).catch((err) => {
-        console.error(
-          'Failed to set window theme to follow system (setTheme(null)):',
-          err,
-        )
+    if (theme_mode === undefined || theme_mode === 'system') {
+      appWindow.setTheme('light' as TauriOsTheme).catch((err) => {
+        console.error('Failed to set window theme to light:', err)
       })
     } else if (mode) {
       appWindow.setTheme(mode as TauriOsTheme).catch((err) => {
@@ -144,10 +105,11 @@ export const useCustomTheme = () => {
 
     const rootEle = document.documentElement
     if (rootEle) {
-      const backgroundColor = '#FFFFFF'
-      const selectColor = '#F5F5F5'
-      const scrollColor = '#8C8C8C'
-      const dividerColor = 'transparent'
+      const backgroundColor = mode === 'light' ? '#F4F7FB' : dt.background_color
+      const selectColor = mode === 'light' ? '#EAF1FF' : '#23242B'
+      const scrollColor = mode === 'light' ? '#A7B2C380' : '#3F414A'
+      const dividerColor =
+        mode === 'light' ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.06)'
       rootEle.style.setProperty('--divider-color', dividerColor)
       rootEle.style.setProperty('--background-color', backgroundColor)
       rootEle.style.setProperty('--selection-color', selectColor)
@@ -155,11 +117,20 @@ export const useCustomTheme = () => {
       rootEle.style.setProperty('--primary-main', muiTheme.palette.primary.main)
       rootEle.style.setProperty(
         '--background-color-alpha',
-        'rgba(17, 17, 17, 0)',
+        alpha(muiTheme.palette.primary.main, 0.1),
       )
-      rootEle.style.setProperty('--window-border-color', 'transparent')
-      rootEle.style.setProperty('--scrollbar-bg', '#FFFFFF')
-      rootEle.style.setProperty('--scrollbar-thumb', '#8C8C8C')
+      rootEle.style.setProperty(
+        '--window-border-color',
+        mode === 'light' ? '#D7DFEA' : '#23242B',
+      )
+      rootEle.style.setProperty(
+        '--scrollbar-bg',
+        mode === 'light' ? '#EEF3FA' : '#0D0E11',
+      )
+      rootEle.style.setProperty(
+        '--scrollbar-thumb',
+        mode === 'light' ? '#B8C3D4' : '#3F414A',
+      )
     }
 
     let styleElement = document.querySelector('style#verge-theme')
@@ -182,7 +153,7 @@ export const useCustomTheme = () => {
           border-radius: 4px;
         }
         ::-webkit-scrollbar-thumb:hover {
-          background-color: #707070;
+          background-color: ${mode === 'light' ? '#94A3B8' : '#555865'};
         }
 
         /* 背景色 */
@@ -197,7 +168,7 @@ export const useCustomTheme = () => {
 
         /* 确保模态框和对话框也使用暗色主题 */
         .MuiDialog-paper {
-          background-color: #ffffff !important;
+          background-color: ${mode === 'light' ? '#ffffff' : '#191A1F'} !important;
         }
 
         /* 移除可能的白色点或线条 */

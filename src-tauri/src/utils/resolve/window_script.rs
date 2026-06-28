@@ -2,7 +2,7 @@ pub fn build_window_initial_script(initial_theme_mode: &str, dark_background: &s
     let theme_mode = match initial_theme_mode {
         "dark" => "dark",
         "light" => "light",
-        _ => "system",
+        _ => "light",
     };
     format!(
         r#"
@@ -49,9 +49,9 @@ pub const WINDOW_INITIAL_SCRIPT: &str = r##"
 
     const initialThemeMode = typeof window.__VERGE_INITIAL_THEME_MODE === "string"
         ? window.__VERGE_INITIAL_THEME_MODE
-        : "system";
+        : "light";
 
-    let initialTheme = prefersDark ? "dark" : "light";
+    let initialTheme = "light";
     if (initialThemeMode === "dark") {
         initialTheme = "dark";
     } else if (initialThemeMode === "light") {

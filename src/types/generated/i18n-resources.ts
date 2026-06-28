@@ -191,6 +191,7 @@ export interface TranslationResources {
             connect: string
             connecting: string
             disconnect: string
+            retry: string
             switchNode: string
           }
           empty: {
@@ -204,8 +205,11 @@ export interface TranslationResources {
             title: string
           }
           feedback: {
+            accountRefreshFailed: string
+            nodeRefreshFailed: string
             refreshed: string
             refreshFailed: string
+            selectedNodeFailed: string
             toggleFailed: string
             trafficExceeded: string
           }
@@ -213,6 +217,8 @@ export interface TranslationResources {
             both: string
             connected: string
             connectedHint: string
+            connecting: string
+            connectionFailed: string
             disconnected: string
             disconnectFirst: string
             download: string
@@ -226,6 +232,7 @@ export interface TranslationResources {
             system: string
             tun: string
             upload: string
+            validating: string
           }
           mode: {
             both: string
@@ -238,6 +245,7 @@ export interface TranslationResources {
             localTraffic: string
             packageTraffic: string
             traffic: string
+            usageUnavailable: string
           }
           startupSyncFailed: string
           title: string
@@ -376,6 +384,8 @@ export interface TranslationResources {
         management: string
       }
       usage: string
+      usageRefreshFailed: string
+      usageUnavailable: string
       userFallback: string
       view: string
     }
@@ -384,6 +394,10 @@ export interface TranslationResources {
         actions: {
           openDashboard: string
           refresh: string
+        }
+        cached: {
+          banner: string
+          partialFailure: string
         }
         card: {
           actions: {
@@ -426,6 +440,7 @@ export interface TranslationResources {
           tooltips: {
             copy: string
           }
+          usageUnavailable: string
         }
         duration: {
           days: string
@@ -433,6 +448,8 @@ export interface TranslationResources {
           months: string
         }
         empty: {
+          loadFailedSubtitle: string
+          loadFailedTitle: string
           subtitle: string
           title: string
         }

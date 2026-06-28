@@ -3,10 +3,14 @@ import { asyncRetry } from 'foxts/async-retry'
 import { once } from 'foxts/once'
 
 import { apiRefreshToken, AuthError } from '@/services/auth'
+import {
+  AUTH_REFRESH_TRANSPORT_FORBIDDEN_CODE,
+  isRefreshTransportSessionError,
+} from '@/services/auth-refresh-transport'
+import { isServiceAccessBlockedResponse } from '@/services/auth-session-boundary'
 import { authStore } from '@/services/auth-store'
 import { BASE_URL } from '@/services/config'
 import { fetchWithTimeout } from '@/services/http'
-import { expireSession } from '@/services/session'
 import { debugLog } from '@/utils/debug'
 
 // ---------------------------------------------------------------------------
@@ -214,22 +218,6 @@ interface BackendResponse<T> {
 let isRefreshing = false
 let refreshPromise: Promise<void> | null = null
 
-const AUTH_FATAL_CODES = new Set([
-  'ACCOUNT_DISABLED',
-  'ACCOUNT_NOT_FOUND',
-  'AUTH_REQUIRED',
-  'INVALID_REFRESH_TOKEN',
-  'INVALID_TOKEN',
-  'REFRESH_TOKEN_INVALID',
-  'SESSION_EXPIRED',
-  'TOKEN_EXPIRED',
-  'TOKEN_INVALID',
-  'UNAUTHENTICATED',
-  'USER_DELETED',
-  'USER_DISABLED',
-  'USER_NOT_FOUND',
-])
-
 const getBackendError = <T>(json: BackendResponse<T> | null | undefined) => {
   const error = json?.error
   if (typeof error === 'string') {
@@ -238,37 +226,41 @@ const getBackendError = <T>(json: BackendResponse<T> | null | undefined) => {
   return { message: error?.message, code: error?.code }
 }
 
-const isAuthFatalResponse = (
+const isServiceBlockedResponseForRequest = (
   status: number,
   code?: string,
   path?: string,
 ): boolean => {
-  if (status === 401) return true
-  if (code && AUTH_FATAL_CODES.has(code)) return true
-
-  const identityPath = path?.startsWith('/user/')
-
-  return identityPath === true && (status === 403 || status === 404)
+  return isServiceAccessBlockedResponse({ status, code, path })
 }
 
 export function isAuthFatalError(error: unknown): boolean {
   return (
-    error instanceof ApiError && isAuthFatalResponse(error.status, error.code)
+    error instanceof ApiError &&
+    isServiceBlockedResponseForRequest(error.status, error.code)
   )
 }
 
-function getAuthFatalMessage(code?: string): string {
+function getServiceBlockedMessage(code?: string, message?: string): string {
   if (
     code === 'USER_NOT_FOUND' ||
     code === 'USER_DELETED' ||
     code === 'ACCOUNT_NOT_FOUND'
   ) {
-    return '账号不存在或已失效，请重新登录'
+    return 'Account is unavailable. Please contact support.'
   }
-  if (code === 'USER_DISABLED' || code === 'ACCOUNT_DISABLED') {
-    return '账号状态不可用，请联系客服'
+  if (
+    code === 'USER_DISABLED' ||
+    code === 'ACCOUNT_DISABLED' ||
+    code === 'ACCOUNT_BLOCKED' ||
+    code === 'ACCOUNT_SUSPENDED'
+  ) {
+    return 'Account access is blocked. Please contact support.'
   }
-  return '登录状态已失效，请重新登录'
+  return (
+    message ||
+    'Service access was rejected by the server. Please check your account status.'
+  )
 }
 
 function handleAuthFatal(
@@ -276,10 +268,8 @@ function handleAuthFatal(
   code?: string,
   message?: string,
 ): never {
-  const friendlyMessage =
-    getAuthFatalMessage(code) || message || '登录状态已失效，请重新登录'
-  expireSession({ message: friendlyMessage, code, status })
-  throw new ApiError(friendlyMessage, status, code || 'SESSION_EXPIRED')
+  const friendlyMessage = getServiceBlockedMessage(code, message)
+  throw new ApiError(friendlyMessage, status, code || 'SERVICE_ACCESS_BLOCKED')
 }
 
 async function request<T>(
@@ -328,12 +318,27 @@ async function request<T>(
           .catch((error) => {
             if (
               error instanceof AuthError &&
+              isRefreshTransportSessionError(error)
+            ) {
+              throw new AuthError(
+                '登录刷新通道被 Cookie 安全策略拒绝，请重新登录后再刷新节点',
+                error.status,
+                AUTH_REFRESH_TRANSPORT_FORBIDDEN_CODE,
+              )
+            }
+            if (
+              error instanceof AuthError &&
               error.status !== undefined &&
-              isAuthFatalResponse(error.status, error.code, '/auth/refresh')
+              isServiceBlockedResponseForRequest(
+                error.status,
+                error.code,
+                '/auth/refresh',
+              )
             ) {
               handleAuthFatal(
                 error.status,
                 error.code || 'REFRESH_TOKEN_INVALID',
+                error.message,
               )
             }
             throw error
@@ -364,7 +369,7 @@ async function request<T>(
   const { message, code } = getBackendError(json)
 
   if (!res.ok || !json.success) {
-    if (isAuthFatalResponse(res.status, code, path)) {
+    if (isServiceBlockedResponseForRequest(res.status, code, path)) {
       handleAuthFatal(res.status, code, message)
     }
     throw new ApiError(

@@ -27,9 +27,9 @@ notifications:
     title: Application Hidden
     body: XXLink is running in the background.
   updateReady:
-    title: XXLink Update
-    body: A new version (v{version}) has been downloaded and is ready to install.
-    installNow: Install Now
+    title: New Version Available
+    body: XXLink {version} is ready. Install and restart now to get the latest fixes.
+    installNow: Install and Restart
     later: Later
 service:
   adminInstallPrompt: Installing the XXLink service requires administrator privileges.

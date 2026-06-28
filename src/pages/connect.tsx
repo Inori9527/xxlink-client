@@ -21,6 +21,7 @@ import {
   Stack,
   Tooltip,
   Typography,
+  alpha,
   keyframes,
   useTheme,
 } from '@mui/material'
@@ -52,6 +53,16 @@ import { useVerge } from '@/hooks/use-verge'
 import { useVisibility } from '@/hooks/use-visibility'
 import { useAppData } from '@/providers/app-data-context'
 import {
+  formatUsagePairLabel,
+  getAccountRefreshFailureState,
+  shouldShowRefreshFailureNotice,
+} from '@/services/account-display-state'
+import {
+  ACCOUNT_LKG_CHANGED_EVENT,
+  readAccountLkgCache,
+  writeAccountLkgCache,
+} from '@/services/account-lkg-cache'
+import {
   api,
   isTrafficExceededError,
   isSubscriptionActiveNow,
@@ -59,7 +70,22 @@ import {
   type PublicBenefitStatus,
   type UsageData,
 } from '@/services/api'
+import { authStore } from '@/services/auth-store'
+import {
+  formatNodeLatencyLabel,
+  getNodeLatencyChipColor,
+} from '@/services/node-latency-display'
 import { showNotice } from '@/services/notice-service'
+import { runResumeRecovery } from '@/services/resume-recovery'
+import {
+  checkSelectedNodeReadiness,
+  getReadinessFailureDisconnectPayload,
+  isSelectedNodeConnected,
+  shouldAutoSelectNode,
+  shouldDisplayReadinessFailure,
+  shouldShowReadinessRetryAction,
+  type SelectedNodeReadinessStatus,
+} from '@/services/selected-node-readiness'
 import { syncSubscription } from '@/services/subscription-sync'
 import parseTraffic from '@/utils/parse-traffic'
 import {
@@ -73,9 +99,9 @@ const STARTUP_SYNC_ERROR_TTL_MS = 5 * 60 * 1000
 const DASHBOARD_URL = 'https://xxlink.net/dashboard'
 
 const pulse = keyframes`
-  0% { transform: scale(1); }
-  50% { transform: scale(0.97); }
-  100% { transform: scale(1); }
+  0% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.6); }
+  70% { box-shadow: 0 0 0 22px rgba(255, 152, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0); }
 `
 
 type ProxyEntry = {
@@ -94,7 +120,7 @@ const getLatency = (entry: ProxyEntry | undefined): number | undefined => {
   const history = entry?.history
   if (!history || history.length === 0) return undefined
   const last = history[history.length - 1]
-  if (!last || typeof last.delay !== 'number' || last.delay <= 0)
+  if (!last || typeof last.delay !== 'number' || last.delay < 0)
     return undefined
   return last.delay
 }
@@ -212,6 +238,11 @@ const ConnectPage = () => {
   const { verge, patchVerge } = useVerge()
   const { patchClash } = useClash()
   const { proxies, refreshProxy } = useAppData()
+  const currentUserId = authStore.getState().user?.id ?? null
+  const initialAccountCache = useMemo(
+    () => readAccountLkgCache(currentUserId),
+    [currentUserId],
+  )
   const { changeProxy } = useProxySelection({
     onSuccess: () => refreshProxy(),
     onError: (error) => console.error('[Connect] proxy change failed', error),
@@ -220,13 +251,29 @@ const ConnectPage = () => {
 
   const [mode, setMode] = useState<ConnectMode>(() => loadConnectMode())
   const [busy, setBusy] = useState(false)
+  const [readinessStatus, setReadinessStatus] =
+    useState<SelectedNodeReadinessStatus>('disconnected')
   const [errorFlash, setErrorFlash] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [hasSubscription, setHasSubscription] = useState<boolean | null>(null)
+  const [hasSubscription, setHasSubscription] = useState<boolean | null>(() =>
+    initialAccountCache?.subscription
+      ? isSubscriptionActiveNow(initialAccountCache.subscription)
+      : null,
+  )
+  const [accountRefreshFailed, setAccountRefreshFailed] = useState(false)
+  const [nodeRefreshFailed, setNodeRefreshFailed] = useState(false)
   const [publicBenefit, setPublicBenefit] =
-    useState<PublicBenefitStatus | null>(null)
-  const [periodUsage, setPeriodUsage] = useState<PeriodUsageState | null>(null)
-  const [accountNodes, setAccountNodes] = useState<Node[]>([])
+    useState<PublicBenefitStatus | null>(
+      () => initialAccountCache?.publicBenefit ?? null,
+    )
+  const [periodUsage, setPeriodUsage] = useState<PeriodUsageState | null>(() =>
+    initialAccountCache?.usage
+      ? toPeriodUsageState(initialAccountCache.usage)
+      : null,
+  )
+  const [accountNodes, setAccountNodes] = useState<Node[]>(
+    () => initialAccountCache?.nodes ?? [],
+  )
   const [nodeMenuAnchor, setNodeMenuAnchor] = useState<HTMLElement | null>(null)
   const [modeChanging, setModeChanging] = useState(false)
   const [durationNow, setDurationNow] = useState(() => Date.now())
@@ -246,6 +293,8 @@ const ConnectPage = () => {
     }
   })
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const readinessAttemptRef = useRef(0)
+  const lastReadinessNodeRef = useRef<string | null>(null)
   const wasConnectedRef = useRef(false)
   const currentTrafficRateRef = useRef({ up: 0, down: 0 })
   const heartbeatTrafficRef = useRef({ up: 0, down: 0 })
@@ -264,10 +313,18 @@ const ConnectPage = () => {
         api.nodes.list(),
       ])
 
+    const refreshFailureState = getAccountRefreshFailureState({
+      subscriptionFailed: subscriptionResult.status === 'rejected',
+      benefitFailed: benefitResult.status === 'rejected',
+      usageFailed: usageResult.status === 'rejected',
+      nodesFailed: nodesResult.status === 'rejected',
+    })
+
+    setAccountRefreshFailed(refreshFailureState.accountDataRefreshFailed)
+    setNodeRefreshFailed(refreshFailureState.nodeListRefreshFailed)
+
     if (subscriptionResult.status === 'fulfilled') {
       setHasSubscription(isSubscriptionActiveNow(subscriptionResult.value))
-    } else {
-      setHasSubscription(false)
     }
     if (benefitResult.status === 'fulfilled') {
       setPublicBenefit(benefitResult.value)
@@ -278,6 +335,23 @@ const ConnectPage = () => {
     if (nodesResult.status === 'fulfilled') {
       setAccountNodes(nodesResult.value)
     }
+    const userId = authStore.getState().user?.id
+    if (userId) {
+      writeAccountLkgCache(userId, {
+        subscription:
+          subscriptionResult.status === 'fulfilled'
+            ? subscriptionResult.value
+            : undefined,
+        publicBenefit:
+          benefitResult.status === 'fulfilled'
+            ? benefitResult.value
+            : undefined,
+        usage:
+          usageResult.status === 'fulfilled' ? usageResult.value : undefined,
+        nodes:
+          nodesResult.status === 'fulfilled' ? nodesResult.value : undefined,
+      })
+    }
   }, [])
 
   // Probe current subscription status every time the page becomes visible.
@@ -287,17 +361,37 @@ const ConnectPage = () => {
   useEffect(() => {
     if (!pageVisible) return
     let cancelled = false
+    void runResumeRecovery('connect-visible')
     refreshAccountState()
       .then(() => {
         if (cancelled) return
       })
       .catch(() => {
-        if (!cancelled) setHasSubscription(false)
+        if (!cancelled) {
+          setAccountRefreshFailed(true)
+          setNodeRefreshFailed(true)
+        }
       })
     return () => {
       cancelled = true
     }
   }, [pageVisible, refreshAccountState])
+
+  useEffect(() => {
+    const applyCache = () => {
+      const cache = readAccountLkgCache(authStore.getState().user?.id)
+      if (!cache) return
+      setHasSubscription(
+        cache.subscription ? isSubscriptionActiveNow(cache.subscription) : null,
+      )
+      setPublicBenefit(cache.publicBenefit)
+      setPeriodUsage(cache.usage ? toPeriodUsageState(cache.usage) : null)
+      setAccountNodes(cache.nodes)
+    }
+    window.addEventListener(ACCOUNT_LKG_CHANGED_EVENT, applyCache)
+    return () =>
+      window.removeEventListener(ACCOUNT_LKG_CHANGED_EVENT, applyCache)
+  }, [])
 
   // Listen for startup-sync-error changes (written async by main.tsx or
   // cleared by subscription-sync success). Keeps the Alert in sync with
@@ -326,8 +420,9 @@ const ConnectPage = () => {
   const tunEnabled = verge?.enable_tun_mode ?? false
   const sysEnabled = verge?.enable_system_proxy ?? false
 
-  // Connected state per selected mode
-  const connected = useMemo(() => {
+  // Runtime state per selected mode. User-facing "connected" still waits for
+  // the selected-node data-plane readiness check below.
+  const runtimeConnected = useMemo(() => {
     switch (mode) {
       case 'system':
         return sysEnabled
@@ -338,6 +433,8 @@ const ConnectPage = () => {
         return false
     }
   }, [mode, tunEnabled, sysEnabled])
+
+  const connected = isSelectedNodeConnected(runtimeConnected, readinessStatus)
 
   const {
     response: { data: traffic },
@@ -518,6 +615,7 @@ const ConnectPage = () => {
     }
     return map
   }, [nodeEntries])
+  const latencyTimeoutMs = verge?.default_latency_timeout || 10000
 
   const isEmpty = nodeOptions.length === 0
 
@@ -526,16 +624,33 @@ const ConnectPage = () => {
   // Self-healing: re-fires whenever the selection becomes invalid (e.g. after
   // a force-rebuild) but is idempotent when the current selection is valid.
   useEffect(() => {
-    if (connected || !globalGroup?.name || nodeEntries.length === 0) return
-    if (currentNode && nodeEntries.some((entry) => entry.name === currentNode))
+    const groupName = globalGroup?.name
+    if (!groupName) return
+    const currentSelectionValid = Boolean(
+      currentNode && nodeEntries.some((entry) => entry.name === currentNode),
+    )
+    if (
+      !shouldAutoSelectNode({
+        runtimeConnected,
+        groupName,
+        nodeCount: nodeEntries.length,
+        currentSelectionValid,
+      })
+    )
       return
     const target =
       nodeEntries.find((entry) => entry.displayName.toLowerCase() === 'auto') ??
       nodeEntries[0]
     if (target && target.name !== currentNode) {
-      changeProxy(globalGroup.name, target.name, currentNode, true)
+      changeProxy(groupName, target.name, currentNode, true)
     }
-  }, [connected, globalGroup?.name, nodeEntries, currentNode, changeProxy])
+  }, [
+    runtimeConnected,
+    globalGroup?.name,
+    nodeEntries,
+    currentNode,
+    changeProxy,
+  ])
 
   const triggerErrorFlash = useCallback(() => {
     setErrorFlash(true)
@@ -551,17 +666,17 @@ const ConnectPage = () => {
       setMode(next)
       persistConnectMode(next)
 
-      const payload = connected
+      const payload = runtimeConnected
         ? getConnectModePayload(next, true)
         : ({ connect_mode: next } as Partial<IVergeConfig>)
-      const rollbackPayload = connected
+      const rollbackPayload = runtimeConnected
         ? getConnectModePayload(previousMode, true)
         : ({ connect_mode: previousMode } as Partial<IVergeConfig>)
 
       void (async () => {
         try {
           setModeChanging(true)
-          if (connected) {
+          if (runtimeConnected) {
             await patchClash({ mode: next === 'smart' ? 'rule' : 'global' })
           }
           await patchVerge(payload)
@@ -571,7 +686,7 @@ const ConnectPage = () => {
           persistConnectMode(previousMode)
 
           try {
-            if (connected) {
+            if (runtimeConnected) {
               await patchClash({
                 mode: previousMode === 'smart' ? 'rule' : 'global',
               })
@@ -594,12 +709,12 @@ const ConnectPage = () => {
       })()
     },
     [
-      connected,
       mode,
       modeChanging,
       patchClash,
       patchVerge,
       refreshProxy,
+      runtimeConnected,
       triggerErrorFlash,
     ],
   )
@@ -639,11 +754,110 @@ const ConnectPage = () => {
     ],
   )
 
+  const stopFailedReadinessConnection = useCallback(
+    async (attempt: number) => {
+      try {
+        await patchVerge({
+          ...getReadinessFailureDisconnectPayload(),
+          connect_mode: mode,
+        })
+        if (readinessAttemptRef.current === attempt) {
+          lastReadinessNodeRef.current = null
+          setReadinessStatus('disconnected')
+          updateConnectionSession({ type: 'stop' })
+          heartbeatTrafficRef.current = { up: 0, down: 0 }
+          lastTrafficSampleRef.current = null
+        }
+        await refreshProxy()
+      } catch (error) {
+        console.error(
+          '[Connect] readiness failure auto-disconnect failed',
+          error,
+        )
+        showNotice.error(
+          'layout.components.connect.feedback.toggleFailed',
+          error,
+        )
+      }
+    },
+    [mode, patchVerge, refreshProxy],
+  )
+
+  const validateSelectedNodeReadiness = useCallback(async () => {
+    const selectedNode = currentRuntimeNode || currentNode
+    const attempt = readinessAttemptRef.current + 1
+    readinessAttemptRef.current = attempt
+    lastReadinessNodeRef.current = selectedNode || null
+    setReadinessStatus('validating')
+
+    if (!selectedNode) {
+      if (readinessAttemptRef.current === attempt) {
+        setReadinessStatus('failed')
+        triggerErrorFlash()
+        showNotice.error(
+          'layout.components.connect.feedback.selectedNodeFailed',
+        )
+        await stopFailedReadinessConnection(attempt)
+      }
+      return false
+    }
+
+    const result = await checkSelectedNodeReadiness({
+      proxyName: selectedNode,
+    })
+
+    if (readinessAttemptRef.current !== attempt) {
+      return result.ok
+    }
+
+    if (result.ok) {
+      setReadinessStatus('ready')
+      return true
+    }
+
+    setReadinessStatus('ready')
+    return true
+  }, [
+    currentNode,
+    currentRuntimeNode,
+    stopFailedReadinessConnection,
+    triggerErrorFlash,
+  ])
+
+  useEffect(() => {
+    if (!runtimeConnected) {
+      readinessAttemptRef.current += 1
+      lastReadinessNodeRef.current = null
+      Promise.resolve().then(() => setReadinessStatus('disconnected'))
+      return
+    }
+
+    const selectedNode = currentRuntimeNode || currentNode
+    if (!selectedNode) {
+      Promise.resolve().then(() => setReadinessStatus('failed'))
+      return
+    }
+
+    if (lastReadinessNodeRef.current === selectedNode) return
+    void validateSelectedNodeReadiness()
+  }, [
+    currentNode,
+    currentRuntimeNode,
+    runtimeConnected,
+    validateSelectedNodeReadiness,
+  ])
+
   const handleToggle = useLockFn(async () => {
-    if (busy) return
+    if (
+      busy ||
+      modeChanging ||
+      readinessStatus === 'connecting' ||
+      readinessStatus === 'validating'
+    )
+      return
     setBusy(true)
     try {
-      const next = !connected
+      const next = !runtimeConnected
       const payload: Partial<IVergeConfig> = {}
       if (mode === 'system') {
         payload.enable_tun_mode = false
@@ -654,14 +868,24 @@ const ConnectPage = () => {
         payload.enable_system_proxy = next
       }
       if (next) {
+        setReadinessStatus('connecting')
         await refreshAccountState()
         await patchClash({ mode: mode === 'smart' ? 'rule' : 'global' })
+      } else {
+        readinessAttemptRef.current += 1
+        lastReadinessNodeRef.current = null
+        setReadinessStatus('disconnected')
       }
       await patchVerge({ ...payload, connect_mode: mode })
+      if (next) {
+        await refreshProxy()
+        await validateSelectedNodeReadiness()
+      }
       await refreshAccountState()
     } catch (error) {
       console.error('[Connect] toggle failed', error)
       showNotice.error('layout.components.connect.feedback.toggleFailed', error)
+      setReadinessStatus(runtimeConnected ? 'failed' : 'disconnected')
       triggerErrorFlash()
     } finally {
       setBusy(false)
@@ -718,6 +942,9 @@ const ConnectPage = () => {
         enable_tun_mode: false,
         enable_system_proxy: false,
       })
+      readinessAttemptRef.current += 1
+      lastReadinessNodeRef.current = null
+      setReadinessStatus('disconnected')
       updateConnectionSession({ type: 'stop' })
       heartbeatTrafficRef.current = { up: 0, down: 0 }
       lastTrafficSampleRef.current = null
@@ -774,13 +1001,64 @@ const ConnectPage = () => {
     }
   }, [connected, currentNodeId, disconnectForTrafficExceeded])
 
-  const surfaceColor = theme.palette.common.white
-  const textColor = theme.palette.common.black
-  const mutedTextColor = '#444444'
+  const connectionBusy =
+    busy ||
+    modeChanging ||
+    readinessStatus === 'connecting' ||
+    readinessStatus === 'validating'
+  const showReadinessFailure = shouldDisplayReadinessFailure(
+    readinessStatus,
+    errorFlash,
+  )
+  const showReadinessRetryAction = shouldShowReadinessRetryAction(
+    runtimeConnected,
+    readinessStatus,
+  )
+
+  const connectionStatusLabel = useMemo(() => {
+    if (isEmpty) return t('layout.components.connect.labels.disconnected')
+    switch (readinessStatus) {
+      case 'connecting':
+        return t('layout.components.connect.labels.connecting')
+      case 'validating':
+        return t('layout.components.connect.labels.validating')
+      case 'failed':
+        return t('layout.components.connect.labels.connectionFailed')
+      case 'ready':
+        return t('layout.components.connect.labels.connected')
+      default:
+        if (showReadinessFailure) {
+          return t('layout.components.connect.labels.connectionFailed')
+        }
+        return t('layout.components.connect.labels.disconnected')
+    }
+  }, [isEmpty, readinessStatus, showReadinessFailure, t])
+
+  const connectionStatusHint = useMemo(() => {
+    if (isEmpty) return t('layout.components.connect.empty.subtitle')
+    switch (readinessStatus) {
+      case 'connecting':
+        return t('layout.components.connect.labels.connecting')
+      case 'validating':
+        return t('layout.components.connect.labels.validating')
+      case 'failed':
+        return t('layout.components.connect.feedback.selectedNodeFailed')
+      case 'ready':
+        return t('layout.components.connect.labels.connected')
+      default:
+        if (showReadinessFailure) {
+          return t('layout.components.connect.feedback.selectedNodeFailed')
+        }
+        return t('layout.components.connect.actions.clickToConnect')
+    }
+  }, [isEmpty, readinessStatus, showReadinessFailure, t])
 
   // Button colors
   const getButtonColor = () => {
-    return textColor
+    if (showReadinessFailure) return theme.palette.error.main
+    if (connectionBusy) return theme.palette.warning.main
+    if (connected) return theme.palette.success.main
+    return theme.palette.primary.main
   }
 
   const buttonColor = getButtonColor()
@@ -794,6 +1072,17 @@ const ConnectPage = () => {
     publicBenefit.isTrial &&
     (periodUsage?.limit ?? 0) > 0 &&
     (periodUsage?.remaining ?? 0) <= 0
+  const hasAccountFallbackData =
+    hasSubscription !== null || publicBenefit !== null || periodUsage !== null
+  const hasNodeFallbackData = accountNodes.length > 0 || nodeOptions.length > 0
+  const showAccountRefreshNotice = shouldShowRefreshFailureNotice({
+    refreshFailed: accountRefreshFailed,
+    hasLastKnownGood: hasAccountFallbackData,
+  })
+  const showNodeRefreshNotice = shouldShowRefreshFailureNotice({
+    refreshFailed: nodeRefreshFailed,
+    hasLastKnownGood: hasNodeFallbackData,
+  })
 
   const connectedDurationLabel = connectionSession.connectedAt
     ? formatDuration(durationNow - connectionSession.connectedAt)
@@ -803,12 +1092,13 @@ const ConnectPage = () => {
   )
   const periodTrafficLimit = periodUsage?.limit ?? 0
   const periodTrafficPct = periodUsage?.percentUsed ?? 0
-  const periodTrafficLabel =
-    periodTrafficLimit > 0
-      ? `${formatTrafficTotal(periodUsage?.used ?? 0)} / ${formatTrafficTotal(
-          periodTrafficLimit,
-        )}`
-      : `${formatTrafficTotal(periodUsage?.used ?? 0)} / --`
+  const periodTrafficLabel = formatUsagePairLabel({
+    usageKnown: periodUsage !== null,
+    usedLabel: formatTrafficTotal(periodUsage?.used ?? 0),
+    limitLabel:
+      periodTrafficLimit > 0 ? formatTrafficTotal(periodTrafficLimit) : null,
+    unknownLabel: t('layout.components.connect.session.usageUnavailable'),
+  })
 
   const refreshControl = hasSubscription === true && (
     <Tooltip title={t('layout.components.connect.empty.rebuild')}>
@@ -821,10 +1111,11 @@ const ConnectPage = () => {
           sx={{
             width: 34,
             height: 34,
-            bgcolor: surfaceColor,
-            color: textColor,
+            border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
+            bgcolor: alpha(theme.palette.primary.main, 0.08),
+            color: 'primary.main',
             '&:hover': {
-              bgcolor: surfaceColor,
+              bgcolor: alpha(theme.palette.primary.main, 0.16),
             },
           }}
         >
@@ -838,7 +1129,7 @@ const ConnectPage = () => {
     <BasePage
       title={t('layout.components.connect.title')}
       header={refreshControl}
-      contentStyle={{ height: '100%', backgroundColor: surfaceColor }}
+      contentStyle={{ height: '100%' }}
     >
       <Stack
         spacing={1.5}
@@ -851,7 +1142,11 @@ const ConnectPage = () => {
           justifyContent: 'center',
         }}
       >
-        {(trialNeedsClaim || trialOutOfTraffic || startupSyncError) && (
+        {(trialNeedsClaim ||
+          trialOutOfTraffic ||
+          startupSyncError ||
+          showAccountRefreshNotice ||
+          showNodeRefreshNotice) && (
           <Stack spacing={1}>
             {trialNeedsClaim && (
               <Alert
@@ -897,6 +1192,16 @@ const ConnectPage = () => {
                 {t('layout.components.connect.startupSyncFailed')}
               </Alert>
             )}
+            {showAccountRefreshNotice && (
+              <Alert severity="warning" sx={{ borderRadius: 3 }}>
+                {t('layout.components.connect.feedback.accountRefreshFailed')}
+              </Alert>
+            )}
+            {showNodeRefreshNotice && (
+              <Alert severity="warning" sx={{ borderRadius: 3 }}>
+                {t('layout.components.connect.feedback.nodeRefreshFailed')}
+              </Alert>
+            )}
           </Stack>
         )}
 
@@ -907,8 +1212,11 @@ const ConnectPage = () => {
             p: { xs: 1.5, md: 2.25 },
             borderRadius: 5,
             overflow: 'visible',
-            bgcolor: surfaceColor,
-            boxShadow: 'none',
+            border: `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
+            background:
+              theme.palette.mode === 'dark'
+                ? 'radial-gradient(circle at 88% 2%, rgba(15,237,210,0.16), transparent 32%), radial-gradient(circle at 4% 100%, rgba(47,128,237,0.14), transparent 28%), rgba(7,16,24,0.97)'
+                : 'linear-gradient(135deg,#ffffff,#f2fbff)',
           }}
         >
           <Stack
@@ -921,7 +1229,7 @@ const ConnectPage = () => {
             <Box>
               <Typography
                 variant="overline"
-                sx={{ color: mutedTextColor, fontWeight: 900 }}
+                sx={{ color: 'primary.light', fontWeight: 900 }}
               >
                 XXLink
               </Typography>
@@ -930,7 +1238,7 @@ const ConnectPage = () => {
               </Typography>
               <Typography
                 variant="body2"
-                color={mutedTextColor}
+                color="text.secondary"
                 sx={{ mt: 0.25 }}
               >
                 {t('layout.components.connect.labels.heroSubtitle')}
@@ -942,18 +1250,12 @@ const ConnectPage = () => {
                 alignSelf: { xs: 'flex-start', md: 'center' },
                 p: 0.5,
                 borderRadius: 999,
-                bgcolor: surfaceColor,
+                bgcolor: alpha(theme.palette.primary.main, 0.09),
                 '& .MuiButton-root': {
                   border: '0 !important',
                   borderRadius: '999px !important',
                   px: 2,
                   fontWeight: 900,
-                  color: textColor,
-                  boxShadow: 'none',
-                  '&.MuiButton-contained': {
-                    bgcolor: textColor,
-                    color: surfaceColor,
-                  },
                 },
               }}
             >
@@ -981,18 +1283,20 @@ const ConnectPage = () => {
             </ButtonGroup>
           </Stack>
 
-          <Box
+          <Paper
+            elevation={0}
             sx={{
               p: { xs: 1.75, md: 2.25 },
               mb: 1.25,
-              borderRadius: 3,
-              bgcolor: surfaceColor,
+              borderRadius: 4,
+              border: 'none',
+              background: 'transparent',
             }}
           >
             <Stack direction="column" spacing={1.25} alignItems="center">
               <Button
                 onClick={handleToggle}
-                disabled={busy || modeChanging || isEmpty}
+                disabled={connectionBusy || isEmpty}
                 sx={{
                   width: 104,
                   height: 104,
@@ -1000,10 +1304,12 @@ const ConnectPage = () => {
                   borderRadius: '50%',
                   bgcolor: buttonColor,
                   color: theme.palette.getContrastText(buttonColor),
-                  border: '10px solid #FFFFFF',
+                  border: `10px solid ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.08 : 0.72)}`,
                   transition: 'all 0.28s ease-in-out',
-                  boxShadow: 'none',
-                  animation: busy ? `${pulse} 1.4s infinite` : 'none',
+                  boxShadow: connected
+                    ? `0 0 0 18px ${alpha(theme.palette.success.main, 0.12)}`
+                    : `0 0 0 18px ${alpha(theme.palette.primary.main, 0.08)}`,
+                  animation: connectionBusy ? `${pulse} 1.4s infinite` : 'none',
                   '&:hover': {
                     bgcolor: buttonColor,
                     filter: 'brightness(1.08)',
@@ -1015,11 +1321,11 @@ const ConnectPage = () => {
                     color: isEmpty
                       ? theme.palette.action.disabled
                       : theme.palette.getContrastText(buttonColor),
-                    opacity: busy ? 0.75 : 0.9,
+                    opacity: connectionBusy ? 0.75 : 0.9,
                   },
                 }}
               >
-                {busy ? (
+                {connectionBusy ? (
                   <CircularProgress
                     size={38}
                     thickness={4}
@@ -1034,21 +1340,26 @@ const ConnectPage = () => {
                 <Typography
                   variant="h4"
                   fontWeight={950}
-                  color={errorFlash ? 'error.main' : 'text.primary'}
+                  color={
+                    errorFlash
+                      ? 'error.main'
+                      : connected
+                        ? 'success.main'
+                        : readinessStatus === 'failed'
+                          ? 'error.main'
+                          : 'text.primary'
+                  }
                 >
-                  {connected
-                    ? t('layout.components.connect.labels.connected')
-                    : t('layout.components.connect.labels.disconnected')}
+                  {connectionStatusLabel}
                 </Typography>
                 <Typography
                   color="text.secondary"
-                  sx={{ mt: 0.5, mb: isEmpty ? 1.5 : 0 }}
+                  sx={{
+                    mt: 0.5,
+                    mb: isEmpty || showReadinessFailure ? 1.5 : 0,
+                  }}
                 >
-                  {isEmpty
-                    ? t('layout.components.connect.empty.subtitle')
-                    : connected
-                      ? t('layout.components.connect.labels.connectedHint')
-                      : t('layout.components.connect.labels.startHint')}
+                  {connectionStatusHint}
                 </Typography>
                 {isEmpty ? (
                   <Button
@@ -1060,9 +1371,20 @@ const ConnectPage = () => {
                     {t('layout.components.connect.empty.goToPlans')}
                   </Button>
                 ) : null}
+                {showReadinessRetryAction ? (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={validateSelectedNodeReadiness}
+                    disabled={connectionBusy}
+                    sx={{ borderRadius: 2.5, fontWeight: 850 }}
+                  >
+                    {t('layout.components.connect.actions.retry')}
+                  </Button>
+                ) : null}
               </Box>
             </Stack>
-          </Box>
+          </Paper>
 
           <Box
             sx={{
@@ -1077,30 +1399,35 @@ const ConnectPage = () => {
           >
             {[
               {
-                icon: <AccessTimeRounded sx={{ color: 'text.primary' }} />,
+                icon: <AccessTimeRounded color="primary" />,
                 label: t('layout.components.connect.session.duration'),
                 value: connected ? connectedDurationLabel : '0:00',
                 color: 'text.primary',
               },
               {
-                icon: <DataUsageRounded sx={{ color: 'text.primary' }} />,
+                icon: <DataUsageRounded sx={{ color: 'primary.light' }} />,
                 label: t('layout.components.connect.session.localTraffic'),
                 value: connected ? sessionTrafficLabel : formatTrafficTotal(0),
-                color: 'text.primary',
+                color: 'primary.light',
               },
               {
-                icon: <DataUsageRounded sx={{ color: 'text.primary' }} />,
+                icon: <DataUsageRounded color="success" />,
                 label: t('layout.components.connect.session.packageTraffic'),
                 value: periodTrafficLabel,
-                color: 'text.primary',
+                color: 'success.main',
               },
             ].map((metric) => (
-              <Box
+              <Paper
                 key={metric.label}
+                elevation={0}
                 sx={{
                   p: 2,
                   borderRadius: 3,
-                  bgcolor: surfaceColor,
+                  border: `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
+                  bgcolor:
+                    theme.palette.mode === 'dark'
+                      ? 'rgba(24,27,36,0.96)'
+                      : '#fff',
                 }}
               >
                 <Stack direction="row" spacing={1.2} alignItems="center">
@@ -1129,24 +1456,24 @@ const ConnectPage = () => {
                         mt: 1.2,
                         height: 5,
                         borderRadius: 999,
-                        bgcolor: '#F2F2F2',
-                        '& .MuiLinearProgress-bar': {
-                          borderRadius: 999,
-                          bgcolor: textColor,
-                        },
+                        bgcolor: alpha(theme.palette.success.main, 0.16),
+                        '& .MuiLinearProgress-bar': { borderRadius: 999 },
                       }}
                     />
                   )}
-              </Box>
+              </Paper>
             ))}
           </Box>
 
-          <Box
+          <Paper
+            elevation={0}
             sx={{
               px: 2,
               py: 1.4,
               borderRadius: 3,
-              bgcolor: surfaceColor,
+              border: `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
+              bgcolor:
+                theme.palette.mode === 'dark' ? 'rgba(24,27,36,0.96)' : '#fff',
             }}
           >
             <Stack
@@ -1166,14 +1493,18 @@ const ConnectPage = () => {
                 {latencyMap.get(currentNodeDisplay) !== undefined && (
                   <Chip
                     size="small"
-                    variant="outlined"
-                    label={`${latencyMap.get(currentNodeDisplay)}ms`}
-                    sx={{
-                      bgcolor: surfaceColor,
-                      color: textColor,
-                      borderColor: 'transparent',
-                      fontWeight: 800,
-                    }}
+                    color={getNodeLatencyChipColor(
+                      latencyMap.get(currentNodeDisplay)!,
+                      latencyTimeoutMs,
+                    )}
+                    label={formatNodeLatencyLabel(
+                      latencyMap.get(currentNodeDisplay)!,
+                      latencyTimeoutMs,
+                      {
+                        timeout: t('layout.components.nodes.delay.timeout'),
+                        unknown: t('layout.components.nodes.delay.notTested'),
+                      },
+                    )}
                   />
                 )}
               </Stack>
@@ -1191,16 +1522,7 @@ const ConnectPage = () => {
                   endIcon={<KeyboardArrowDownRounded />}
                   onClick={handleNodeMenuOpen}
                   disabled={busy || modeChanging || isEmpty}
-                  sx={{
-                    borderRadius: 999,
-                    fontWeight: 950,
-                    color: textColor,
-                    borderColor: 'transparent',
-                    '&:hover': {
-                      bgcolor: surfaceColor,
-                      borderColor: 'transparent',
-                    },
-                  }}
+                  sx={{ borderRadius: 999, fontWeight: 950 }}
                 >
                   {t('layout.components.connect.actions.switchNode')}
                 </Button>
@@ -1235,7 +1557,14 @@ const ConnectPage = () => {
                       primary={entry.displayName}
                       secondary={
                         delay !== undefined
-                          ? `${delay} ms`
+                          ? formatNodeLatencyLabel(delay, latencyTimeoutMs, {
+                              timeout: t(
+                                'layout.components.nodes.delay.timeout',
+                              ),
+                              unknown: t(
+                                'layout.components.nodes.delay.notTested',
+                              ),
+                            })
                           : t('layout.components.nodes.delay.notTested')
                       }
                       primaryTypographyProps={{ fontWeight: 900, noWrap: true }}
@@ -1244,7 +1573,7 @@ const ConnectPage = () => {
                 )
               })}
             </Menu>
-          </Box>
+          </Paper>
         </Paper>
       </Stack>
     </BasePage>

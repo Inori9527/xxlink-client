@@ -36,6 +36,15 @@ import { useNavigate } from 'react-router'
 import { BasePage, type DialogRef } from '@/components/base'
 import { UpdateViewer } from '@/components/setting/mods/update-viewer'
 import { useUpdate } from '@/hooks/use-update'
+import {
+  formatUsagePairLabel,
+  shouldShowRefreshFailureNotice,
+} from '@/services/account-display-state'
+import {
+  ACCOUNT_LKG_CHANGED_EVENT,
+  readAccountLkgCache,
+  writeAccountLkgCache,
+} from '@/services/account-lkg-cache'
 import { api, type Announcement, type UsageData } from '@/services/api'
 import { apiLogout } from '@/services/auth'
 import { useAuth } from '@/services/auth-store'
@@ -165,7 +174,10 @@ const MinePage = () => {
   const updateViewerRef = useRef<DialogRef>(null)
   const { updateInfo, checkUpdate, loading: checkingUpdate } = useUpdate(false)
   const [logoutOpen, setLogoutOpen] = useState(false)
-  const [usage, setUsage] = useState<UsageData | null>(null)
+  const [usage, setUsage] = useState<UsageData | null>(
+    () => readAccountLkgCache(user?.id)?.usage ?? null,
+  )
+  const [usageRefreshFailed, setUsageRefreshFailed] = useState(false)
   const [announcement, setAnnouncement] = useState<Announcement | null>(null)
   const text = {
     pageTitle: t('mine.pageTitle'),
@@ -194,19 +206,73 @@ const MinePage = () => {
     logoutTitle: t('mine.rows.logout.confirmTitle'),
     logoutBody: t('mine.rows.logout.confirmBody'),
     cancel: t('mine.cancel'),
+    currentAccount: t('mine.currentAccount'),
+    usageUnavailable: t('mine.usageUnavailable'),
+    usageRefreshFailed: t('mine.usageRefreshFailed'),
   }
 
   useEffect(() => {
+    let disposed = false
+    let timeoutId: number | undefined
+
+    const applyUsageFromCache = () => {
+      if (disposed) return
+      setUsage(readAccountLkgCache(user?.id)?.usage ?? null)
+      setUsageRefreshFailed(false)
+    }
+
+    if (!user?.id) {
+      timeoutId = window.setTimeout(applyUsageFromCache, 0)
+      return () => {
+        disposed = true
+        if (timeoutId !== undefined) window.clearTimeout(timeoutId)
+      }
+    }
+
+    const refreshUsageFromCache = () => {
+      if (disposed) return
+      setUsage(readAccountLkgCache(user.id)?.usage ?? null)
+    }
+
+    timeoutId = window.setTimeout(refreshUsageFromCache, 0)
+    window.addEventListener(ACCOUNT_LKG_CHANGED_EVENT, refreshUsageFromCache)
+
+    return () => {
+      disposed = true
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId)
+      window.removeEventListener(
+        ACCOUNT_LKG_CHANGED_EVENT,
+        refreshUsageFromCache,
+      )
+    }
+  }, [user?.id])
+
+  useEffect(() => {
+    if (!user?.id) {
+      return
+    }
+
     let cancelled = false
 
     api.user
       .usage()
       .then((value) => {
-        if (!cancelled) setUsage(value)
+        if (cancelled) return
+        setUsage(value)
+        setUsageRefreshFailed(false)
+        writeAccountLkgCache(user.id, { usage: value })
       })
       .catch(() => {
-        if (!cancelled) setUsage(null)
+        if (!cancelled) setUsageRefreshFailed(true)
       })
+
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
+
+  useEffect(() => {
+    let cancelled = false
 
     api.announcements
       .listUpdates(1)
@@ -243,15 +309,26 @@ const MinePage = () => {
     showNotice.success(text.alreadyLatest)
   }
 
-  const used = getNumericBytes(usage?.trafficUsed)
-  const limit = getNumericBytes(usage?.trafficLimit)
-  const remaining = getNumericBytes(usage?.trafficRemaining)
+  const used = usage ? getNumericBytes(usage.trafficUsed) : 0
+  const limit = usage ? getNumericBytes(usage.trafficLimit) : 0
+  const remaining = usage ? getNumericBytes(usage.trafficRemaining) : 0
   const percent =
     typeof usage?.percentUsed === 'number'
       ? Math.min(Math.max(usage.percentUsed, 0), 100)
       : limit > 0
         ? Math.min((used / limit) * 100, 100)
         : 0
+  const usageLabel = formatUsagePairLabel({
+    usageKnown: usage !== null,
+    usedLabel: formatBytes(used),
+    limitLabel: limit > 0 ? formatBytes(limit) : null,
+    unknownLabel: text.usageUnavailable,
+  })
+  const remainingLabel = usage ? formatBytes(remaining) : text.usageUnavailable
+  const showUsageRefreshNotice = shouldShowRefreshFailureNotice({
+    refreshFailed: usageRefreshFailed,
+    hasLastKnownGood: usage !== null,
+  })
 
   return (
     <BasePage title={text.pageTitle} contentStyle={{ height: '100%' }}>
@@ -305,12 +382,15 @@ const MinePage = () => {
                 <Stack direction="row" spacing={1} sx={{ mt: 0.8 }}>
                   <Chip
                     size="small"
-                    label={usage?.plan?.name ?? t('mine.currentAccount')}
+                    label={
+                      usage?.plan?.name ??
+                      (usage ? text.currentAccount : text.usageUnavailable)
+                    }
                   />
                   <Chip
                     size="small"
-                    color="success"
-                    label={`${text.remaining} ${formatBytes(remaining)}`}
+                    color={usage ? 'success' : 'default'}
+                    label={`${text.remaining} ${remainingLabel}`}
                   />
                 </Stack>
               </Box>
@@ -321,11 +401,11 @@ const MinePage = () => {
                   {text.usage}
                 </Typography>
                 <Typography variant="body2" fontWeight={900}>
-                  {formatBytes(used)} / {limit > 0 ? formatBytes(limit) : '--'}
+                  {usageLabel}
                 </Typography>
               </Stack>
               <LinearProgress
-                variant="determinate"
+                variant={usage ? 'determinate' : 'indeterminate'}
                 value={percent}
                 sx={{
                   mt: 1,
@@ -353,6 +433,12 @@ const MinePage = () => {
             </Box>
           </Stack>
         </Paper>
+
+        {showUsageRefreshNotice && (
+          <Alert severity="warning" sx={{ borderRadius: 3 }}>
+            {text.usageRefreshFailed}
+          </Alert>
+        )}
 
         {announcement?.id && (
           <Alert
