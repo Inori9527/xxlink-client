@@ -2,6 +2,9 @@ name: Frontend Check
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 env:
@@ -12,6 +15,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve CI range
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "CI_BASE_SHA=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_ENV"
+            echo "CI_HEAD_SHA=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_ENV"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            if [ -z "${{ github.event.before }}" ] || [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+              echo "Unable to determine push base SHA." >&2
+              exit 1
+            fi
+            echo "CI_BASE_SHA=${{ github.event.before }}" >> "$GITHUB_ENV"
+            echo "CI_HEAD_SHA=${{ github.sha }}" >> "$GITHUB_ENV"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            git fetch origin main
+            echo "CI_BASE_SHA=origin/main" >> "$GITHUB_ENV"
+            echo "CI_HEAD_SHA=HEAD" >> "$GITHUB_ENV"
+          else
+            echo "Unsupported event: ${{ github.event_name }}" >&2
+            exit 1
+          fi
 
       - name: Check frontend changes
         id: check_frontend
@@ -20,13 +47,20 @@ jobs:
           filters: |
             frontend:
               - 'src/**'
+              - '**/*.cjs'
+              - '**/*.html'
               - '**/*.js'
+              - '**/*.jsx'
+              - '**/*.mjs'
               - '**/*.ts'
               - '**/*.tsx'
               - '**/*.css'
               - '**/*.scss'
               - '**/*.json'
               - '**/*.md'
+              - '**/*.toml'
+              - '**/*.yaml'
+              - '**/*.yml'
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
@@ -35,23 +69,23 @@ jobs:
               - 'vite.config.*'
 
       - name: Skip if no frontend changes
-        if: steps.check_frontend.outputs.frontend != 'true'
+        if: steps.check_frontend.outputs.frontend != 'true' && github.event_name != 'workflow_dispatch'
         run: echo "No frontend changes, skipping frontend checks."
 
       - name: Install pnpm
-        if: steps.check_frontend.outputs.frontend == 'true'
+        if: steps.check_frontend.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         uses: pnpm/action-setup@v5
         with:
           run_install: false
 
       - uses: actions/setup-node@v6
-        if: steps.check_frontend.outputs.frontend == 'true'
+        if: steps.check_frontend.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         with:
           node-version: '24.14.1'
           cache: 'pnpm'
 
       - name: Restore pnpm cache
-        if: steps.check_frontend.outputs.frontend == 'true'
+        if: steps.check_frontend.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         uses: actions/cache@v5
         with:
           path: ~/.pnpm-store
@@ -60,16 +94,16 @@ jobs:
             pnpm-shared-stable-${{ runner.os }}-
 
       - run: pnpm install --frozen-lockfile
-        if: steps.check_frontend.outputs.frontend == 'true'
+        if: steps.check_frontend.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
 
       - name: Run Prettier check
-        if: steps.check_frontend.outputs.frontend == 'true'
-        run: pnpm format:check
+        if: steps.check_frontend.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
+        run: node scripts/ci/check-scope.mjs prettier
 
       - name: Run ESLint
-        if: steps.check_frontend.outputs.frontend == 'true'
+        if: steps.check_frontend.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         run: pnpm lint
 
       - name: Run TypeScript typecheck
-        if: steps.check_frontend.outputs.frontend == 'true'
+        if: steps.check_frontend.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         run: pnpm typecheck

@@ -6,6 +6,9 @@ name: Check Formatting
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
 
 env:
   HUSKY: 0
@@ -15,29 +18,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      - name: Check Rust changes
-        id: check_rust
-        uses: dorny/paths-filter@v4
         with:
-          filters: |
-            rust:
-              - 'src-tauri/**'
-              - '**/*.rs'
+          fetch-depth: 0
 
-      - name: Skip if no Rust changes
-        if: steps.check_rust.outputs.rust != 'true'
-        run: echo "No Rust changes, skipping rustfmt."
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.14.1'
+
+      - name: Resolve CI range
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "CI_BASE_SHA=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_ENV"
+            echo "CI_HEAD_SHA=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_ENV"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            if [ -z "${{ github.event.before }}" ] || [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+              echo "Unable to determine push base SHA." >&2
+              exit 1
+            fi
+            echo "CI_BASE_SHA=${{ github.event.before }}" >> "$GITHUB_ENV"
+            echo "CI_HEAD_SHA=${{ github.sha }}" >> "$GITHUB_ENV"
+          else
+            echo "Unsupported event: ${{ github.event_name }}" >&2
+            exit 1
+          fi
 
       - name: install Rust stable and rustfmt
-        if: steps.check_rust.outputs.rust == 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
 
-      - name: run cargo fmt
-        if: steps.check_rust.outputs.rust == 'true'
-        run: cargo fmt --manifest-path ./src-tauri/Cargo.toml --all -- --check
+      - name: Run scoped rustfmt check
+        run: node scripts/ci/check-scope.mjs rustfmt
 
   # taplo:
   #   name: taplo (.toml files)
