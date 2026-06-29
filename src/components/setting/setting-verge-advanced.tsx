@@ -7,12 +7,12 @@ import { DialogRef, TooltipIcon } from '@/components/base'
 import { updateLastCheckTime } from '@/hooks/use-update'
 import {
   exitApp,
-  exportDiagnosticInfo,
   openAppDir,
   openCoreDir,
   openDevTools,
   openLogsDir,
 } from '@/services/cmds'
+import { copyDiagnosticsBundleToClipboard } from '@/services/diagnostics-bundle'
 import { showNotice } from '@/services/notice-service'
 import { checkUpdateSafe as checkUpdate } from '@/services/update'
 import { version } from '@root/package.json'
@@ -52,7 +52,7 @@ const SettingVergeAdvanced = ({ onError: _ }: Props) => {
   }
 
   const onExportDiagnosticInfo = useCallback(async () => {
-    await exportDiagnosticInfo()
+    await copyDiagnosticsBundleToClipboard()
     showNotice.success('shared.feedback.notifications.common.copySuccess', 1000)
   }, [])
 
