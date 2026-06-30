@@ -1,13 +1,11 @@
 ---
 description: |
-  Reviews incoming pull requests for missing issue linkage and high-confidence
-  signs of one-shot AI-generated changes, then posts a maintainer-focused
-  comment when the risk is high enough to warrant follow-up.
+  Optional manual advisory review for missing issue linkage and high-confidence
+  signs of one-shot AI-generated changes. This workflow requires
+  COPILOT_GITHUB_TOKEN and is intentionally not triggered automatically on pull
+  requests.
 
 on:
-  roles: all
-  pull_request_target:
-    types: [opened, reopened, synchronize]
   workflow_dispatch:
 
 permissions:
@@ -37,7 +35,9 @@ safe-outputs:
 
 # PR AI Slop Review
 
-Assess the triggering pull request for AI slop risk, keep the AI-slop labels in sync with that assessment, and always leave one comment with the result.
+Assess the selected pull request for AI slop risk, keep the AI-slop labels in sync with that assessment, and always leave one comment with the result.
+
+This is an optional manual advisory workflow. It requires `COPILOT_GITHUB_TOKEN` to be configured before use and must not be treated as a required technical CI check.
 
 This workflow is not a technical code reviewer. Do not judge correctness, architecture quality, or whether the patch should merge on technical grounds. Your only job is to estimate the AI slop factor: whether the PR looks like a low-accountability, one-shot AI submission rather than a human-owned change.
 

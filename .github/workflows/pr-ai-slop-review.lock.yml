@@ -20,27 +20,21 @@
 #
 # For more information: https://github.github.com/gh-aw/introduction/overview/
 #
-# Reviews incoming pull requests for missing issue linkage and high-confidence
-# signs of one-shot AI-generated changes, then posts a maintainer-focused
-# comment when the risk is high enough to warrant follow-up.
+# Optional manual advisory review for missing issue linkage and high-confidence
+# signs of one-shot AI-generated changes. This workflow requires
+# COPILOT_GITHUB_TOKEN and is intentionally not triggered automatically on pull
+# requests.
 #
-# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"90464e2f3880b176a101872f067e5873c3c3f92ac7ab6821861dad3d11f835df","compiler_version":"v0.62.5","strict":true,"agent_id":"copilot"}
+# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"448e533c8489a60336d18c14e08a2ec14b5c0c9a0bb2656451a02f3bbcb7299c","compiler_version":"v0.62.5","strict":true,"agent_id":"copilot"}
 
 name: "PR AI Slop Review"
 "on":
-  pull_request_target:
-    types:
-    - opened
-    - reopened
-    - synchronize
-  # roles: all # Roles processed as role check in pre-activation job
   workflow_dispatch:
 
 permissions: {}
 
 concurrency:
-  group: "gh-aw-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref || github.run_id }}"
-  cancel-in-progress: true
+  group: "gh-aw-${{ github.workflow }}"
 
 run-name: "PR AI Slop Review"
 
@@ -50,17 +44,14 @@ jobs:
     permissions:
       contents: read
     outputs:
-      body: ${{ steps.sanitized.outputs.body }}
       comment_id: ""
       comment_repo: ""
       lockdown_check_failed: ${{ steps.generate_aw_info.outputs.lockdown_check_failed == 'true' }}
       model: ${{ steps.generate_aw_info.outputs.model }}
       secret_verification_result: ${{ steps.validate-secret.outputs.verification_result }}
-      text: ${{ steps.sanitized.outputs.text }}
-      title: ${{ steps.sanitized.outputs.title }}
     steps:
       - name: Setup Scripts
-        uses: github/gh-aw-actions/setup@742ca9c12baa13667ac53db8eb95f48414f60792 # v0.65.7
+        uses: github/gh-aw-actions/setup@dc50be57c94373431b49d3d0927f318ac2bb5c4c # v0.62.5
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
       - name: Generate agentic run info
@@ -112,15 +103,6 @@ jobs:
             const { setupGlobals } = require('${{ runner.temp }}/gh-aw/actions/setup_globals.cjs');
             setupGlobals(core, github, context, exec, io);
             const { main } = require('${{ runner.temp }}/gh-aw/actions/check_workflow_timestamp_api.cjs');
-            await main();
-      - name: Compute current body text
-        id: sanitized
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
-        with:
-          script: |
-            const { setupGlobals } = require('${{ runner.temp }}/gh-aw/actions/setup_globals.cjs');
-            setupGlobals(core, github, context, exec, io);
-            const { main } = require('${{ runner.temp }}/gh-aw/actions/compute_text.cjs');
             await main();
       - name: Create prompt with built-in context
         env:
@@ -271,7 +253,7 @@ jobs:
       output_types: ${{ steps.collect_output.outputs.output_types }}
     steps:
       - name: Setup Scripts
-        uses: github/gh-aw-actions/setup@742ca9c12baa13667ac53db8eb95f48414f60792 # v0.65.7
+        uses: github/gh-aw-actions/setup@dc50be57c94373431b49d3d0927f318ac2bb5c4c # v0.62.5
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
       - name: Set runtime paths
@@ -779,7 +761,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           WORKFLOW_NAME: "PR AI Slop Review"
-          WORKFLOW_DESCRIPTION: "Reviews incoming pull requests for missing issue linkage and high-confidence\nsigns of one-shot AI-generated changes, then posts a maintainer-focused\ncomment when the risk is high enough to warrant follow-up."
+          WORKFLOW_DESCRIPTION: "Optional manual advisory review for missing issue linkage and high-confidence\nsigns of one-shot AI-generated changes. This workflow requires\nCOPILOT_GITHUB_TOKEN and is intentionally not triggered automatically on pull\nrequests."
           HAS_PATCH: ${{ steps.collect_output.outputs.has_patch }}
         with:
           script: |
@@ -888,7 +870,7 @@ jobs:
       total_count: ${{ steps.missing_tool.outputs.total_count }}
     steps:
       - name: Setup Scripts
-        uses: github/gh-aw-actions/setup@742ca9c12baa13667ac53db8eb95f48414f60792 # v0.65.7
+        uses: github/gh-aw-actions/setup@dc50be57c94373431b49d3d0927f318ac2bb5c4c # v0.62.5
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
       - name: Download agent output artifact
@@ -999,7 +981,7 @@ jobs:
       process_safe_outputs_temporary_id_map: ${{ steps.process_safe_outputs.outputs.temporary_id_map }}
     steps:
       - name: Setup Scripts
-        uses: github/gh-aw-actions/setup@742ca9c12baa13667ac53db8eb95f48414f60792 # v0.65.7
+        uses: github/gh-aw-actions/setup@dc50be57c94373431b49d3d0927f318ac2bb5c4c # v0.62.5
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
       - name: Download agent output artifact
