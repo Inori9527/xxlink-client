@@ -3,6 +3,7 @@ use xxlink_limiter::Limiter;
 use xxlink_logging::{Type, logging};
 use once_cell::sync::Lazy;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tauri::{Manager as _, WebviewWindow, Wry};
 
@@ -13,6 +14,8 @@ pub enum WindowOperationResult {
     Shown,
     /// 窗口已隐藏
     Hidden,
+    /// Window minimized as a close-request fallback.
+    Minimized,
     /// 创建了新窗口
     Created,
     /// 摧毁了窗口
@@ -47,6 +50,38 @@ static WINDOW_OPERATION_LIMITER: Lazy<Limiter> = Lazy::new(|| {
     )
 });
 
+const CLOSE_LIFECYCLE_LOG_INTERVAL_MS: u64 = 2000;
+static CLOSE_LIFECYCLE_LOG_LIMITER: Lazy<Limiter> = Lazy::new(|| {
+    Limiter::new(
+        Duration::from_millis(CLOSE_LIFECYCLE_LOG_INTERVAL_MS),
+        xxlink_limiter::SystemClock,
+    )
+});
+static CLOSE_WARNING_LOG_LIMITER: Lazy<Limiter> = Lazy::new(|| {
+    Limiter::new(
+        Duration::from_millis(CLOSE_LIFECYCLE_LOG_INTERVAL_MS),
+        xxlink_limiter::SystemClock,
+    )
+});
+static CLOSE_REQUEST_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
+
+struct CloseRequestGuard;
+
+impl CloseRequestGuard {
+    fn try_acquire() -> Option<Self> {
+        CLOSE_REQUEST_IN_FLIGHT
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .ok()
+            .map(|_| Self)
+    }
+}
+
+impl Drop for CloseRequestGuard {
+    fn drop(&mut self) {
+        CLOSE_REQUEST_IN_FLIGHT.store(false, Ordering::Release);
+    }
+}
+
 fn should_handle_window_operation() -> bool {
     let allow = WINDOW_OPERATION_LIMITER.check();
     if !allow {
@@ -55,7 +90,15 @@ fn should_handle_window_operation() -> bool {
     allow
 }
 
-/// 统一的窗口管理器
+fn should_log_close_lifecycle() -> bool {
+    CLOSE_LIFECYCLE_LOG_LIMITER.check()
+}
+
+fn should_log_close_warning() -> bool {
+    CLOSE_WARNING_LOG_LIMITER.check()
+}
+
+/// Unified window manager.
 pub struct WindowManager;
 
 impl WindowManager {
@@ -110,6 +153,94 @@ impl WindowManager {
     pub fn get_main_window() -> Option<WebviewWindow<Wry>> {
         let app_handle = handle::Handle::app_handle();
         app_handle.get_webview_window("main")
+    }
+
+    fn is_main_tray_available() -> bool {
+        let app_handle = handle::Handle::app_handle();
+        app_handle.tray_by_id("main").is_some()
+    }
+
+    pub fn handle_close_requested() -> WindowOperationResult {
+        let Some(_guard) = CloseRequestGuard::try_acquire() else {
+            if should_log_close_lifecycle() {
+                logging!(
+                    debug,
+                    Type::Window,
+                    "main window close request ignored while previous close handling is active"
+                );
+            }
+            return WindowOperationResult::NoAction;
+        };
+
+        if should_log_close_lifecycle() {
+            logging!(debug, Type::Window, "main window close requested");
+        }
+
+        let Some(window) = Self::get_main_window() else {
+            if should_log_close_warning() {
+                logging!(
+                    warn,
+                    Type::Window,
+                    "main window close requested but main window was not found"
+                );
+            }
+            return WindowOperationResult::Failed;
+        };
+
+        if !Self::is_main_tray_available() {
+            let should_log_warning = should_log_close_warning();
+            if should_log_warning {
+                logging!(
+                    warn,
+                    Type::Window,
+                    "main tray unavailable; minimizing main window instead of hiding to tray"
+                );
+            }
+            return Self::minimize_window_for_close(&window, should_log_warning);
+        }
+
+        match window.hide() {
+            Ok(()) => {
+                if should_log_close_lifecycle() {
+                    logging!(debug, Type::Window, "main window hidden to tray");
+                }
+                WindowOperationResult::Hidden
+            }
+            Err(err) => {
+                let should_log_warning = should_log_close_warning();
+                if should_log_warning {
+                    logging!(
+                        warn,
+                        Type::Window,
+                        "hide to tray failed; minimizing main window instead: {}",
+                        err
+                    );
+                }
+                Self::minimize_window_for_close(&window, should_log_warning)
+            }
+        }
+    }
+
+    fn minimize_window_for_close(window: &WebviewWindow<Wry>, should_log_warning: bool) -> WindowOperationResult {
+        match window.minimize() {
+            Ok(()) => {
+                if should_log_close_lifecycle() {
+                    logging!(debug, Type::Window, "main window minimized after close request");
+                }
+                WindowOperationResult::Minimized
+            }
+            Err(err) => {
+                if should_log_warning {
+                    logging!(
+                        warn,
+                        Type::Window,
+                        "failed to minimize main window after close request; leaving it visible: {}",
+                        err
+                    );
+                }
+                WindowOperationResult::Failed
+            }
+        }
     }
 
     /// 智能显示主窗口
