@@ -6,7 +6,6 @@ import {
   OpenInNewRounded,
   PersonRounded,
   RefreshRounded,
-  SettingsRounded,
   SystemUpdateAltRounded,
 } from '@mui/icons-material'
 import {
@@ -187,7 +186,6 @@ const MinePage = () => {
     openDashboard: t('mine.openDashboard'),
     view: t('mine.view'),
     common: t('mine.sections.common'),
-    management: t('mine.sections.management'),
     account: t('mine.sections.account'),
     announcements: t('mine.rows.announcements.title'),
     announcementsDesc: t('mine.rows.announcements.description'),
@@ -199,8 +197,6 @@ const MinePage = () => {
     checking: t('mine.rows.update.checking'),
     check: t('mine.rows.update.check'),
     alreadyLatest: t('mine.rows.update.latest'),
-    settings: t('mine.rows.settings.title'),
-    settingsDesc: t('mine.rows.settings.description'),
     logout: t('mine.rows.logout.title'),
     logoutDesc: t('mine.rows.logout.description'),
     logoutTitle: t('mine.rows.logout.confirmTitle'),
@@ -495,15 +491,6 @@ const MinePage = () => {
               </Button>
             }
             onClick={() => void handleCheckUpdate()}
-          />
-        </MineSection>
-
-        <MineSection title={text.management}>
-          <MineRow
-            icon={<SettingsRounded />}
-            title={text.settings}
-            description={text.settingsDesc}
-            onClick={() => navigate('/settings')}
           />
         </MineSection>
 
