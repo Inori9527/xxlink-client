@@ -1,58 +1,21 @@
 {
   "actions": {
     "cancel": "取消",
-    "close": "关闭",
-    "confirm": "确认",
     "save": "保存",
-    "delete": "删除",
-    "edit": "编辑",
     "new": "新建",
-    "enable": "启用",
-    "upgrade": "升级内核",
-    "restart": "重启内核",
     "resetToDefault": "重置为默认值",
-    "refresh": "刷新",
     "retry": "重试",
     "refreshPage": "刷新页面",
     "showDetails": "显示详情",
-    "hideDetails": "隐藏详情",
-    "listView": "列表视图",
-    "tableView": "表格视图",
-    "pause": "暂停",
-    "resume": "继续",
-    "closeAll": "关闭全部",
-    "clear": "清除",
-    "previous": "上一页",
-    "next": "下一页"
+    "hideDetails": "隐藏详情"
   },
   "labels": {
-    "updateAt": "更新于",
-    "timeout": "超时",
-    "icon": "图标",
-    "name": "名称",
-    "readOnly": "只读",
-    "expireTime": "到期时间",
-    "updateTime": "更新时间",
-    "usedTotal": "已使用 / 总量",
-    "from": "来自",
-    "password": "密码",
-    "retryAttempts": "重试次数",
-    "downloaded": "下载量",
-    "uploaded": "上传量"
+    "retryAttempts": "重试次数"
   },
   "statuses": {
     "enabled": "已启用",
     "disabled": "未启用",
-    "saving": "保存中...",
     "empty": "空空如也"
-  },
-  "units": {
-    "milliseconds": "毫秒",
-    "seconds": "秒",
-    "minutes": "分钟",
-    "hours": "小时",
-    "kilobytes": "KB",
-    "files": "文件"
   },
   "placeholders": {
     "resetInput": "清空输入框",
@@ -63,10 +26,6 @@
   },
   "validation": {
     "invalidRegex": "无效的正则表达式"
-  },
-  "window": {
-    "maximize": "最大化",
-    "minimize": "最小化"
   },
   "editorModes": {
     "visualization": "可视化",
@@ -88,15 +47,9 @@
       "prefixedRaw": "{{prefix}} {{message}}"
     },
     "notifications": {
-      "importSuccess": "导入订阅成功",
       "importSubscriptionSuccess": "导入订阅成功",
-      "importWithClashProxy": "已通过当前连接导入节点配置",
-      "updateAvailable": "有可用更新",
-      "saved": "保存成功",
       "common": {
         "copySuccess": "复制成功",
-        "saveSuccess": "配置保存成功",
-        "saveFailed": "配置保存失败",
         "refreshFailed": "刷新失败"
       }
     },
@@ -129,69 +82,11 @@
       }
     }
   },
-  "filters": {
-    "logLevels": {
-      "all": "ALL",
-      "debug": "DEBUG",
-      "info": "INFO",
-      "warn": "WARN",
-      "error": "ERROR"
-    }
-  },
   "errorBoundary": {
     "title": "应用发生错误",
     "description": "很抱歉，应用遇到了一个错误。您可以尝试重新加载，或导出日志以便反馈问题。",
     "reload": "重新加载",
     "exportLog": "导出日志",
     "detailsSummary": "错误详情"
-  },
-  "auth": {
-    "forgotPassword": "忘记密码？",
-    "registeredSuccess": "注册成功，请登录",
-    "cancelGoogleLogin": "取消 Google 登录",
-    "brand": "XXLink",
-    "login": {
-      "subtitle": "登录以继续使用",
-      "submit": "登录",
-      "dividerText": "或使用以下方式登录",
-      "noAccount": "还没有账号？",
-      "goRegister": "立即注册"
-    },
-    "register": {
-      "subtitle": "创建新账号",
-      "submit": "创建账号",
-      "hasAccount": "已有账号？",
-      "goLogin": "立即登录",
-      "passwordPlaceholder": "至少 8 位字符"
-    },
-    "form": {
-      "email": "邮箱",
-      "password": "密码",
-      "confirmPassword": "确认密码",
-      "showPassword": "显示密码",
-      "hidePassword": "隐藏密码"
-    },
-    "validation": {
-      "passwordMismatch": "两次输入的密码不一致",
-      "passwordTooShort": "密码至少需要 8 位字符"
-    },
-    "google": {
-      "signIn": "使用 Google 登录",
-      "waiting": "正在等待 Google 登录...",
-      "notConfigured": "Google 登录未配置，请联系管理员",
-      "accessDenied": "您取消了授权，请重试",
-      "authFailed": "Google 授权失败: {{error}}",
-      "missingCode": "Google 授权失败：未收到授权码",
-      "loginFailed": "Google 登录失败: {{error}}"
-    },
-    "errors": {
-      "openBrowser": "无法打开浏览器: {{error}}",
-      "loginFailed": "登录失败: {{error}}",
-      "registerFailed": "注册失败: {{error}}"
-    }
-  },
-  "legal": {
-    "terms": "服务条款",
-    "privacy": "隐私政策"
   }
 }
