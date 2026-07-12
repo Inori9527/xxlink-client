@@ -1,11 +1,11 @@
 use crate::{core::handle, utils::resolve::window::build_new_window};
-use xxlink_limiter::Limiter;
-use xxlink_logging::{Type, logging};
 use once_cell::sync::Lazy;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tauri::{Manager as _, WebviewWindow, Wry};
+use xxlink_limiter::Limiter;
+use xxlink_logging::{Type, logging};
 
 /// 窗口操作结果
 #[derive(Debug, Clone, Copy, PartialEq)]
