@@ -1,8 +1,6 @@
-import { EditRounded } from '@mui/icons-material'
 import {
   Autocomplete,
   Box,
-  Button,
   Chip,
   InputAdornment,
   List,
@@ -31,7 +29,6 @@ import {
   Switch,
   TooltipIcon,
 } from '@/components/base'
-import { EditorViewer } from '@/components/profile/editor-viewer'
 import { useSystemProxyState } from '@/hooks/use-system-proxy-state'
 import { useVerge } from '@/hooks/use-verge'
 import { useAppData } from '@/providers/app-data-context'
@@ -43,6 +40,11 @@ import {
   patchVergeConfig,
 } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
+import {
+  classifyClientError,
+  reportSafeClientFailure,
+  toSafeClientErrorMessage,
+} from '@/services/safe-client-error'
 import { debugLog } from '@/utils/debug'
 import getSystem from '@/utils/get-system'
 
@@ -101,9 +103,6 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
   const validReg = useMemo(() => getValidReg(isWindows), [isWindows])
 
   const [open, setOpen] = useState(false)
-  const [editorOpen, setEditorOpen] = useState(false)
-  const [pacEditorValue, setPacEditorValue] = useState(DEFAULT_PAC)
-  const [pacEditorSavedValue, setPacEditorSavedValue] = useState(DEFAULT_PAC)
   const [saving, setSaving] = useState(false)
   const { verge, patchVerge, mutateVerge } = useVerge()
   const [hostOptions, setHostOptions] = useState<string[]>([])
@@ -169,12 +168,15 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
           await invalidateProxyState()
         }
       } catch (err) {
-        showNotice.error(err)
+        reportSafeClientFailure('sysproxy-port-refresh', err)
+        showNotice.error(
+          toSafeClientErrorMessage(classifyClientError(err).kind, t),
+        )
       }
     }
 
     updateProxy()
-  }, [clashConfig?.mixedPort, value.pac, invalidateProxyState])
+  }, [clashConfig?.mixedPort, value.pac, invalidateProxyState, t])
 
   const { systemProxyAddress } = useAppData()
 
@@ -212,21 +214,6 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
     value.bypass
       ? !validReg.test(value.bypass)
       : false
-
-  const openPacEditor = () => {
-    const nextPac = value.pac_content ?? DEFAULT_PAC
-    setPacEditorValue(nextPac)
-    setPacEditorSavedValue(nextPac)
-    setEditorOpen(true)
-  }
-
-  const handleSavePac = useLockFn(async () => {
-    const nextPac =
-      pacEditorValue.trim().length > 0 ? pacEditorValue : DEFAULT_PAC
-
-    setValue((current) => ({ ...current, pac_content: nextPac }))
-    setPacEditorSavedValue(nextPac)
-  })
 
   useImperativeHandle(ref, () => ({
     open: () => {
@@ -271,7 +258,7 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
         hostname = await getSystemHostname()
         debugLog('获取到主机名:', hostname)
       } catch (err) {
-        console.error('获取主机名失败:', err)
+        reportSafeClientFailure('sysproxy-hostname', err)
       }
 
       // 构建选项列表
@@ -299,7 +286,7 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
       debugLog('最终选项列表:', uniqueOptions)
       setHostOptions(uniqueOptions)
     } catch (error) {
-      console.error('获取网络接口失败:', error)
+      reportSafeClientFailure('sysproxy-network-interfaces', error)
       // 失败时至少提供基本选项
       setHostOptions(['127.0.0.1', 'localhost'])
     }
@@ -428,13 +415,15 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
               }
             }
           } catch (err) {
-            console.warn('代理状态更新失败:', err)
+            reportSafeClientFailure('sysproxy-state-refresh', err)
           }
         }, 50)
       } catch (err) {
-        console.error('配置保存失败:', err)
+        reportSafeClientFailure('sysproxy-save', err)
         mutateVerge()
-        showNotice.error(err)
+        showNotice.error(
+          toSafeClientErrorMessage(classifyClientError(err).kind, t),
+        )
         // setOpen(true);
       }
     })
@@ -652,35 +641,6 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
               </Box>
             </Box>
           </>
-        )}
-
-        {value.pac && (
-          <ListItem sx={{ padding: '5px 2px', alignItems: 'start' }}>
-            <ListItemText
-              primary={t('settings.modals.sysproxy.fields.pacScriptContent')}
-              sx={{ padding: '3px 0' }}
-            />
-            <Button
-              startIcon={<EditRounded />}
-              variant="outlined"
-              onClick={openPacEditor}
-            >
-              {t('settings.modals.sysproxy.actions.editPac')}
-            </Button>
-            {editorOpen && (
-              <EditorViewer
-                open={true}
-                title={t('settings.modals.sysproxy.actions.editPac')}
-                value={pacEditorValue}
-                language="javascript"
-                path="sysproxy-pac.js"
-                dirty={pacEditorValue !== pacEditorSavedValue}
-                onChange={setPacEditorValue}
-                onSave={handleSavePac}
-                onClose={() => setEditorOpen(false)}
-              />
-            )}
-          </ListItem>
         )}
       </List>
     </BaseDialog>

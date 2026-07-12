@@ -40,6 +40,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 
 import { BasePage } from '@/components/base'
+import ProxyControlSwitches from '@/components/shared/proxy-control-switches'
 import { useClash } from '@/hooks/use-clash'
 import {
   getConnectModePayload,
@@ -77,7 +78,11 @@ import {
 } from '@/services/node-latency-display'
 import { showNotice } from '@/services/notice-service'
 import { runResumeRecovery } from '@/services/resume-recovery'
-import { reportSafeClientFailure } from '@/services/safe-client-error'
+import {
+  classifyClientError,
+  reportSafeClientFailure,
+  toSafeClientErrorMessage,
+} from '@/services/safe-client-error'
 import {
   checkSelectedNodeReadiness,
   getReadinessFailureDisconnectPayload,
@@ -250,6 +255,15 @@ const ConnectPage = () => {
       reportSafeClientFailure('connect-proxy-selection', error),
     forceConnectionCleanup: true,
   })
+  const handleProxyControlError = useCallback(
+    (error: unknown) => {
+      reportSafeClientFailure('connect-proxy-control', error)
+      showNotice.error(
+        toSafeClientErrorMessage(classifyClientError(error).kind, t),
+      )
+    },
+    [t],
+  )
 
   const [mode, setMode] = useState<ConnectMode>(() => loadConnectMode())
   const [busy, setBusy] = useState(false)
@@ -1383,6 +1397,29 @@ const ConnectPage = () => {
                     {t('layout.components.connect.actions.retry')}
                   </Button>
                 ) : null}
+              </Box>
+
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: {
+                    xs: '1fr',
+                    sm: 'repeat(2, minmax(0, 1fr))',
+                  },
+                  gap: 0.5,
+                  width: '100%',
+                  maxWidth: 560,
+                  mt: 0.25,
+                }}
+              >
+                <ProxyControlSwitches
+                  kind="systemProxy"
+                  onError={handleProxyControlError}
+                />
+                <ProxyControlSwitches
+                  kind="tun"
+                  onError={handleProxyControlError}
+                />
               </Box>
             </Stack>
           </Paper>
