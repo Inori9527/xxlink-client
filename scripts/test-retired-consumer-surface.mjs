@@ -309,6 +309,26 @@ test('Plans sends purchases to dashboard recharge rather than direct checkout', 
   assert.match(plansSource, /https:\/\/xxlink\.net\/dashboard\/recharge/)
   assert.equal(plansSource.includes('/payment/subscription/checkout'), false)
   assert.doesNotMatch(plansSource, /createCheckout|checkoutUrl/)
+  assert.match(
+    plansSource,
+    /reportSafeClientFailure\('plans-claim-public-benefit'/,
+  )
+  assert.doesNotMatch(plansSource, /claimError\.message/)
+})
+
+test('active consumer pages do not expose raw operation errors', () => {
+  const connectSource = readFileSync(
+    resolve(repoRoot, 'src/pages/connect.tsx'),
+    'utf8',
+  )
+
+  assert.doesNotMatch(connectSource, /console\.(?:error|warn)\(/)
+  assert.doesNotMatch(
+    connectSource,
+    /showNotice\.error\([^)]*,\s*(?:error|rollbackError)\b/,
+  )
+  assert.match(connectSource, /reportSafeClientFailure\('connect-toggle'/)
+  assert.match(connectSource, /reportSafeClientFailure\('connect-refresh'/)
 })
 
 test('manual node selection persists while automatic recovery remains transient', () => {
