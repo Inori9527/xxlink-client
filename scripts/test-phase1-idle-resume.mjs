@@ -480,27 +480,9 @@ test('mine page uses LKG usage and does not render transient failures as false z
   assert.match(mineSource, /shouldShowRefreshFailureNotice\(/)
 })
 
-test('home profile card uses LKG usage and avoids raw refresh error logging', () => {
-  const homeProfileSource = readFileSync(
-    resolve(repoRoot, 'src/components/home/home-profile-card.tsx'),
-    'utf8',
-  )
-
-  assert.match(homeProfileSource, /readAccountLkgCache/)
-  assert.match(homeProfileSource, /writeAccountLkgCache/)
-  assert.match(homeProfileSource, /ACCOUNT_LKG_CHANGED_EVENT/)
-  assert.match(
-    homeProfileSource,
-    /writeAccountLkgCache\(user\.id, \{ usage \}\)/,
-  )
+test('legacy Home profile card is removed while Mine retains LKG coverage', () => {
   assert.equal(
-    homeProfileSource.includes(
-      "console.debug('[HomeProfileCard] usage refresh failed', error)",
-    ),
+    existsSync(resolve(repoRoot, 'src/components/home/home-profile-card.tsx')),
     false,
-  )
-  assert.match(
-    homeProfileSource,
-    /console\.debug\('\[HomeProfileCard\] usage refresh failed'\)/,
   )
 })
