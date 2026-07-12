@@ -7,9 +7,8 @@ skip_crate_env_info = true
 # --- Backend ---
 
 [tasks.rust-format]
-install_crate = "rustfmt"
-command = "cargo"
-args = ["fmt", "--", "--emit=files"]
+command = "node"
+args = ["scripts/check-staged-rust-format.mjs"]
 
 [tasks.rust-clippy]
 description = "Run cargo clippy to lint the code"
