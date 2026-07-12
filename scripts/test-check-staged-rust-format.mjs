@@ -47,7 +47,14 @@ test('filters non-Rust paths from the staged file list', () => {
 
   assert.deepEqual(calls.at(-1), {
     command: 'rustfmt',
-    args: ['--edition', '2024', '--check', 'src/main.rs'],
+    args: [
+      '--edition',
+      '2024',
+      '--config',
+      'skip_children=true',
+      '--check',
+      'src/main.rs',
+    ],
   })
 })
 
@@ -75,6 +82,8 @@ test('runs rustfmt with the exact staged Rust paths', () => {
     args: [
       '--edition',
       '2024',
+      '--config',
+      'skip_children=true',
       '--check',
       'src/main.rs',
       'crates/core/src/lib.rs',

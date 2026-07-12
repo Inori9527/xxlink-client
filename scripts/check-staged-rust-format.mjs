@@ -63,7 +63,14 @@ export function main({ runCommand = defaultRunCommand } = {}) {
   }
 
   if (rustPaths.length > 0) {
-    const args = ['--edition', '2024', '--check', ...rustPaths]
+    const args = [
+      '--edition',
+      '2024',
+      '--config',
+      'skip_children=true',
+      '--check',
+      ...rustPaths,
+    ]
     const result = runCommand('rustfmt', args)
     assertCommandSucceeded(result, 'rustfmt', args)
   }
