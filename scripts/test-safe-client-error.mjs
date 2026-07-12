@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import test from 'node:test'
 import vm from 'node:vm'
@@ -155,11 +155,11 @@ test('safe messages and reports contain only localized copy and classification',
   assert.equal(JSON.stringify(calls[0]).includes(rawFixture), false)
 })
 
-test('subscription and promo paths do not send caught errors to console or notices', () => {
+test('subscription and active promo paths do not send caught errors to console or notices', () => {
   const sourcePaths = [
     'src/services/subscription-sync.ts',
     'src/services/subscription-auto-sync.ts',
-    'src/pages/promo-code.tsx',
+    'src/components/mine/promo-redeem-panel.tsx',
   ]
   const sources = sourcePaths.map((relativePath) => [
     relativePath,
@@ -186,6 +186,18 @@ test('subscription and promo paths do not send caught errors to console or notic
       `${relativePath} retains a raw fire-and-forget error logger`,
     )
   }
+
+  const promoPanelSource = readFileSync(
+    resolve(repoRoot, 'src/components/mine/promo-redeem-panel.tsx'),
+    'utf8',
+  )
+  assert.match(promoPanelSource, /reportSafeClientFailure/)
+  assert.match(promoPanelSource, /toSafeClientErrorMessage/)
+  assert.equal(
+    existsSync(resolve(repoRoot, 'src/pages/promo-code.tsx')),
+    false,
+    'retired promo page must not be reintroduced',
+  )
 })
 
 test('deep-link scheme keeps its existing redaction and masking guards', () => {

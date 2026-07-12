@@ -347,21 +347,41 @@ export interface TranslationResources {
     mine: {
       cancel: string
       currentAccount: string
+      diagnostics: {
+        copied: string
+      }
       openDashboard: string
       pageTitle: string
+      promo: {
+        chips: {
+          autoSync: string
+          trafficCode: string
+        }
+        errors: {
+          empty: string
+        }
+        heading: string
+        placeholder: string
+        redeem: string
+        redeeming: string
+        result: {
+          success: string
+          traffic: string
+        }
+        retrySync: string
+        subtitle: string
+        syncing: string
+        syncWarning: string
+      }
       remaining: string
       rows: {
-        announcements: {
+        diagnostics: {
           description: string
           title: string
         }
         logout: {
           confirmBody: string
           confirmTitle: string
-          description: string
-          title: string
-        }
-        promo: {
           description: string
           title: string
         }
@@ -381,13 +401,11 @@ export interface TranslationResources {
       sections: {
         account: string
         common: string
-        management: string
       }
       usage: string
       usageRefreshFailed: string
       usageUnavailable: string
       userFallback: string
-      view: string
     }
     plans: {
       page: {

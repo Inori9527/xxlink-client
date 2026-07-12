@@ -18,7 +18,7 @@ const plansSource = readSource('src/pages/plans.tsx')
 const expectedNavPaths = ['/connect', '/nodes', '/plans', '/mine']
 const navItemsSource = routerSource
   .split('export const navItems = [', 2)[1]
-  .split('const temporaryRoutes', 2)[0]
+  .split('const redirectRoutes', 2)[0]
 const navPathMatches = [...navItemsSource.matchAll(/path:\s*'([^']+)'/g)].map(
   ([, path]) => path,
 )
@@ -35,6 +35,8 @@ const expectedRedirects = new Map([
   ['/settings', '/mine'],
   ['/logs', '/mine'],
   ['/api-keys', '/mine'],
+  ['/promo-code', '/mine'],
+  ['/announcements', '/mine'],
 ])
 
 const retiredRouteModules = new Map([
@@ -64,21 +66,13 @@ for (const [path, modulePath] of retiredRouteModules) {
   )
 }
 
-for (const path of ['/promo-code', '/announcements']) {
-  assert.match(
-    routerSource,
-    new RegExp(`path:\\s*'${path}'.{0,180}import\\(`, 's'),
-    `temporary route must remain active: ${path}`,
-  )
-}
-
 const protectedRouteSource = routerSource.slice(
   routerSource.indexOf('<RequireAuth>'),
 )
-assert.match(
-  protectedRouteSource,
-  /children:\s*\[[\s\S]*?\.\.\.temporaryRoutes/,
-  'temporary routes must remain inside the protected route children',
+assert.equal(
+  protectedRouteSource.includes('temporaryRoutes'),
+  false,
+  'temporary consumer routes must not remain',
 )
 
 for (const source of [layoutSource, layoutItemSource]) {
@@ -136,9 +130,9 @@ for (const path of ['/home', '/proxies', '/rules', '/settings']) {
 }
 for (const path of ['/promo-code', '/announcements']) {
   assert.equal(
-    appDataProviderSource.includes(`'${path}'`),
+    routerSource.includes(`import('./${path.slice(1)}')`),
     false,
-    `temporary route behavior must remain unchanged: ${path}`,
+    `legacy redirect must not lazy-load: ${path}`,
   )
 }
 

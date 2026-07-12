@@ -1,8 +1,7 @@
 import {
-  CampaignRounded,
   ChevronRightRounded,
+  ContentCopyRounded,
   ExitToAppRounded,
-  LocalOfferRounded,
   OpenInNewRounded,
   PersonRounded,
   RefreshRounded,
@@ -33,6 +32,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 
 import { BasePage, type DialogRef } from '@/components/base'
+import { PromoRedeemPanel } from '@/components/mine/promo-redeem-panel'
 import { UpdateViewer } from '@/components/setting/mods/update-viewer'
 import { useUpdate } from '@/hooks/use-update'
 import {
@@ -44,11 +44,16 @@ import {
   readAccountLkgCache,
   writeAccountLkgCache,
 } from '@/services/account-lkg-cache'
-import { api, type Announcement, type UsageData } from '@/services/api'
+import { api, type UsageData } from '@/services/api'
 import { apiLogout } from '@/services/auth'
 import { useAuth } from '@/services/auth-store'
+import { copyDiagnosticsBundleToClipboard } from '@/services/diagnostics-bundle'
 import { showNotice } from '@/services/notice-service'
-import { normalizeAnnouncementLevel } from '@/utils/announcements'
+import {
+  classifyClientError,
+  reportSafeClientFailure,
+  toSafeClientErrorMessage,
+} from '@/services/safe-client-error'
 import parseTraffic from '@/utils/parse-traffic'
 
 const DASHBOARD_URL = 'https://xxlink.net/dashboard'
@@ -177,20 +182,17 @@ const MinePage = () => {
     () => readAccountLkgCache(user?.id)?.usage ?? null,
   )
   const [usageRefreshFailed, setUsageRefreshFailed] = useState(false)
-  const [announcement, setAnnouncement] = useState<Announcement | null>(null)
   const text = {
     pageTitle: t('mine.pageTitle'),
     userFallback: t('mine.userFallback'),
     usage: t('mine.usage'),
     remaining: t('mine.remaining'),
     openDashboard: t('mine.openDashboard'),
-    view: t('mine.view'),
     common: t('mine.sections.common'),
     account: t('mine.sections.account'),
-    announcements: t('mine.rows.announcements.title'),
-    announcementsDesc: t('mine.rows.announcements.description'),
-    promo: t('mine.rows.promo.title'),
-    promoDesc: t('mine.rows.promo.description'),
+    diagnostics: t('mine.rows.diagnostics.title'),
+    diagnosticsDesc: t('mine.rows.diagnostics.description'),
+    diagnosticsCopied: t('mine.diagnostics.copied'),
     update: t('mine.rows.update.title'),
     updateDesc: t('mine.rows.update.description'),
     updateFound: t('mine.rows.update.found'),
@@ -267,23 +269,6 @@ const MinePage = () => {
     }
   }, [user?.id])
 
-  useEffect(() => {
-    let cancelled = false
-
-    api.announcements
-      .listUpdates(1)
-      .then((items) => {
-        if (!cancelled) setAnnouncement(items[0] ?? null)
-      })
-      .catch(() => {
-        if (!cancelled) setAnnouncement(null)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   const confirmLogout = useLockFn(async () => {
     try {
       if (refreshToken) await apiLogout(refreshToken)
@@ -303,6 +288,18 @@ const MinePage = () => {
       return
     }
     showNotice.success(text.alreadyLatest)
+  }
+
+  const handleCopyDiagnostics = async () => {
+    try {
+      await copyDiagnosticsBundleToClipboard()
+      showNotice.success(text.diagnosticsCopied)
+    } catch (error) {
+      reportSafeClientFailure('mine-copy-diagnostics', error)
+      showNotice.error(
+        toSafeClientErrorMessage(classifyClientError(error).kind, t),
+      )
+    }
   }
 
   const used = usage ? getNumericBytes(usage.trafficUsed) : 0
@@ -436,36 +433,12 @@ const MinePage = () => {
           </Alert>
         )}
 
-        {announcement?.id && (
-          <Alert
-            severity={normalizeAnnouncementLevel(announcement.level)}
-            action={
-              <Button
-                color="inherit"
-                size="small"
-                onClick={() => navigate('/announcements')}
-              >
-                {text.view}
-              </Button>
-            }
-            sx={{ borderRadius: 3 }}
-          >
-            {announcement.title}
-          </Alert>
-        )}
-
         <MineSection title={text.common}>
           <MineRow
-            icon={<CampaignRounded />}
-            title={text.announcements}
-            description={text.announcementsDesc}
-            onClick={() => navigate('/announcements')}
-          />
-          <MineRow
-            icon={<LocalOfferRounded />}
-            title={text.promo}
-            description={text.promoDesc}
-            onClick={() => navigate('/promo-code')}
+            icon={<ContentCopyRounded />}
+            title={text.diagnostics}
+            description={text.diagnosticsDesc}
+            onClick={() => void handleCopyDiagnostics()}
           />
           <MineRow
             icon={<SystemUpdateAltRounded />}
@@ -493,6 +466,8 @@ const MinePage = () => {
             onClick={() => void handleCheckUpdate()}
           />
         </MineSection>
+
+        <PromoRedeemPanel />
 
         <MineSection title={text.account}>
           <MineRow

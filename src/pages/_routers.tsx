@@ -52,19 +52,6 @@ export const navItems = [
   },
 ]
 
-const temporaryRoutes: RouteObject[] = [
-  {
-    path: '/promo-code',
-    lazy: async () => ({ Component: (await import('./promo-code')).default }),
-  },
-  {
-    path: '/announcements',
-    lazy: async () => ({
-      Component: (await import('./announcement-center')).default,
-    }),
-  },
-]
-
 const redirectRoutes: RouteObject[] = [
   { path: '/home', element: <Navigate to="/connect" replace /> },
   { path: '/profile', element: <Navigate to="/connect" replace /> },
@@ -75,6 +62,8 @@ const redirectRoutes: RouteObject[] = [
   { path: '/settings', element: <Navigate to="/mine" replace /> },
   { path: '/logs', element: <Navigate to="/mine" replace /> },
   { path: '/api-keys', element: <Navigate to="/mine" replace /> },
+  { path: '/promo-code', element: <Navigate to="/mine" replace /> },
+  { path: '/announcements', element: <Navigate to="/mine" replace /> },
 ]
 
 export const router = createBrowserRouter([
@@ -101,7 +90,6 @@ export const router = createBrowserRouter([
             Component: item.Component,
           }) as RouteObject,
       ),
-      ...temporaryRoutes,
       ...redirectRoutes,
     ],
   },
