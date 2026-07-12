@@ -1,21 +1,58 @@
 {
   "actions": {
     "cancel": "Cancel",
+    "close": "Close",
+    "confirm": "Confirm",
     "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
     "new": "New",
+    "enable": "Enable",
+    "upgrade": "Upgrade",
+    "restart": "Restart",
     "resetToDefault": "Reset to Default",
+    "refresh": "Refresh",
     "retry": "Retry",
     "refreshPage": "Refresh Page",
     "showDetails": "Show Details",
-    "hideDetails": "Hide Details"
+    "hideDetails": "Hide Details",
+    "listView": "List View",
+    "tableView": "Table View",
+    "pause": "Pause",
+    "resume": "Resume",
+    "closeAll": "Close All",
+    "clear": "Clear",
+    "previous": "Previous",
+    "next": "Next"
   },
   "labels": {
-    "retryAttempts": "Retry attempts"
+    "updateAt": "Update At",
+    "timeout": "Timeout",
+    "icon": "Icon",
+    "name": "Name",
+    "readOnly": "ReadOnly",
+    "expireTime": "Expire Time",
+    "updateTime": "Update Time",
+    "usedTotal": "Used / Total",
+    "from": "From",
+    "password": "Password",
+    "retryAttempts": "Retry attempts",
+    "downloaded": "Downloaded",
+    "uploaded": "Uploaded"
   },
   "statuses": {
     "enabled": "Enabled",
     "disabled": "Disabled",
+    "saving": "Saving...",
     "empty": "Empty"
+  },
+  "units": {
+    "milliseconds": "ms",
+    "seconds": "seconds",
+    "minutes": "mins",
+    "hours": "hrs",
+    "kilobytes": "KB",
+    "files": "Files"
   },
   "placeholders": {
     "resetInput": "Clear Input",
@@ -26,6 +63,10 @@
   },
   "validation": {
     "invalidRegex": "Invalid regular expression"
+  },
+  "window": {
+    "maximize": "Maximize",
+    "minimize": "Minimize"
   },
   "editorModes": {
     "visualization": "Visualization",
@@ -47,9 +88,15 @@
       "prefixedRaw": "{{prefix}} {{message}}"
     },
     "notifications": {
+      "importSuccess": "Profile Imported Successfully",
       "importSubscriptionSuccess": "Import subscription successful",
+      "importWithClashProxy": "Profile Imported with Clash proxy",
+      "updateAvailable": "Update Available",
+      "saved": "Saved successfully",
       "common": {
         "copySuccess": "Copy Success",
+        "saveSuccess": "Configuration saved successfully",
+        "saveFailed": "Failed to save configuration",
         "refreshFailed": "Refresh failed; showing last loaded value"
       }
     },
@@ -82,11 +129,69 @@
       }
     }
   },
+  "filters": {
+    "logLevels": {
+      "all": "ALL",
+      "debug": "DEBUG",
+      "info": "INFO",
+      "warn": "WARN",
+      "error": "ERROR"
+    }
+  },
   "errorBoundary": {
     "title": "Something went wrong",
     "description": "The application encountered an unexpected error. You can try reloading, or export the log to report the problem.",
     "reload": "Reload",
     "exportLog": "Export log",
     "detailsSummary": "Error details"
+  },
+  "auth": {
+    "forgotPassword": "Forgot password?",
+    "registeredSuccess": "Registered successfully — please log in",
+    "cancelGoogleLogin": "Cancel Google login",
+    "brand": "XXLink",
+    "login": {
+      "subtitle": "Sign in to continue",
+      "submit": "Sign in",
+      "dividerText": "Or sign in with",
+      "noAccount": "Don't have an account?",
+      "goRegister": "Sign up"
+    },
+    "register": {
+      "subtitle": "Create a new account",
+      "submit": "Create account",
+      "hasAccount": "Already have an account?",
+      "goLogin": "Sign in",
+      "passwordPlaceholder": "At least 8 characters"
+    },
+    "form": {
+      "email": "Email",
+      "password": "Password",
+      "confirmPassword": "Confirm password",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password"
+    },
+    "validation": {
+      "passwordMismatch": "Passwords don't match",
+      "passwordTooShort": "Password must be at least 8 characters"
+    },
+    "google": {
+      "signIn": "Sign in with Google",
+      "waiting": "Waiting for Google sign-in...",
+      "notConfigured": "Google sign-in is not configured. Please contact the administrator.",
+      "accessDenied": "You cancelled the authorization. Please try again.",
+      "authFailed": "Google authorization failed: {{error}}",
+      "missingCode": "Google authorization failed: no authorization code received",
+      "loginFailed": "Google sign-in failed: {{error}}"
+    },
+    "errors": {
+      "openBrowser": "Unable to open browser: {{error}}",
+      "loginFailed": "Sign-in failed: {{error}}",
+      "registerFailed": "Registration failed: {{error}}"
+    }
+  },
+  "legal": {
+    "terms": "Terms of Service",
+    "privacy": "Privacy Policy"
   }
 }

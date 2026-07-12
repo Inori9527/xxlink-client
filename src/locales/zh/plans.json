@@ -7,28 +7,47 @@
     },
     "sections": {
       "available": "选择套餐",
-      "availableHint": "打开账户页选择套餐并完成支付。"
+      "availableHint": "打开账户页选择套餐并完成支付。",
+      "promo": "优惠码"
     },
     "current": {
+      "title": "当前套餐：{{name}}",
       "fallback": "选择适合你的套餐",
       "expirePrefix": "到期 {{date}}",
       "syncHint": "购买后会自动同步到客户端",
       "usageUnavailable": "用量暂时不可用",
+      "status": {
+        "active": "活跃",
+        "expired": "已到期",
+        "cancelled": "已取消"
+      },
       "labels": {
         "trafficUsage": "周期用量",
-        "remaining": "剩余 {{traffic}}"
+        "remaining": "剩余 {{traffic}}",
+        "startAt": "开始时间",
+        "expireAt": "到期时间",
+        "subUrl": "订阅链接"
+      },
+      "tooltips": {
+        "copy": "复制订阅链接"
       }
     },
     "card": {
       "badge": "当前",
       "features": {
+        "traffic": "流量",
         "trafficValue": "{{traffic}} 流量",
+        "speed": "限速",
         "unlimited": "不限速",
         "speedMbps": "{{value}} Mbps",
+        "devices": "设备数",
         "devicesValue": "{{count}} 台设备",
+        "duration": "有效期",
         "validUntilExpire": "到期前持续可用"
       },
       "actions": {
+        "purchase": "购买",
+        "processing": "处理中...",
         "current": "当前套餐",
         "subscribe": "订阅",
         "opening": "打开中"
@@ -41,28 +60,45 @@
       "loadFailedSubtitle": "当前网络或服务暂时不可用，请稍后刷新重试。"
     },
     "cached": {
+      "banner": "正在显示上次成功加载的套餐信息，请稍后重试刷新。",
       "partialFailure": "部分套餐、流量或账户信息暂时无法刷新。你仍已登录，请稍后重试。"
     },
+    "form": {
+      "promoPlaceholder": "输入优惠码（可选）",
+      "promoHelp": "购买时将自动应用"
+    },
     "feedback": {
+      "copied": "订阅链接已复制到剪贴板",
       "errors": {
         "loadFailed": "套餐加载失败，请稍后重试。",
-        "purchaseFailed": "无法打开账户页，请稍后重试。"
+        "purchaseFailed": "无法打开账户页，请稍后重试。",
+        "untrustedCheckout": "支付链接未通过安全校验。",
+        "sessionExpired": "登录已过期，请重新登录",
+        "networkError": "网络错误，请稍后重试",
+        "generic": "发生未知错误，请稍后重试"
       }
     },
     "periods": {
       "month": "月卡",
       "quarter": "季卡",
       "year": "年卡"
+    },
+    "duration": {
+      "month": "月",
+      "months": "{{count}} 个月",
+      "days": "{{count}} 天"
     }
   },
   "trial": {
     "title": "公益流量",
     "subtitle": "每日 {{traffic}}，",
+    "remaining": "剩余 {{traffic}}",
     "claim": "领取",
     "claiming": "领取中...",
     "claimSuccess": "公益流量已领取",
     "claimFailed": "领取失败，请稍后重试。",
     "available": "现在可领取",
+    "cooldown": "还需 {{time}}",
     "cooldownHours": "{{count}} 小时后",
     "cooldownDays": "{{count}} 天后",
     "verifyEmail": "请先验证邮箱"

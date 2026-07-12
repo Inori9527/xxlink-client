@@ -3,29 +3,206 @@
 
 export interface TranslationResources {
   translation: {
+    connections: {
+      components: {
+        actions: {
+          active: string
+          closeConnection: string
+          closed: string
+        }
+        columnManager: {
+          dragHandle: string
+          title: string
+        }
+        fields: {
+          chains: string
+          destination: string
+          destinationPort: string
+          dlSpeed: string
+          host: string
+          process: string
+          rule: string
+          source: string
+          time: string
+          type: string
+          ulSpeed: string
+        }
+        order: {
+          default: string
+          downloadSpeed: string
+          uploadSpeed: string
+        }
+      }
+      page: {
+        title: string
+      }
+    }
     home: {
       components: {
+        clashInfo: {
+          fields: {
+            coreVersion: string
+            mixedPort: string
+            rulesCount: string
+            systemProxyAddress: string
+            uptime: string
+          }
+          title: string
+        }
+        clashMode: {
+          descriptions: {
+            direct: string
+            global: string
+            rule: string
+          }
+          errors: {
+            communication: string
+          }
+          labels: {
+            direct: string
+            global: string
+            rule: string
+          }
+        }
+        currentProxy: {
+          actions: {
+            refreshDelay: string
+          }
+          empty: {
+            goToPlans: string
+            noSubscription: string
+          }
+          labels: {
+            directMode: string
+            globalMode: string
+            group: string
+            noActiveNode: string
+            proxy: string
+          }
+          title: string
+        }
+        ipInfo: {
+          errors: {
+            load: string
+          }
+          labels: {
+            asn: string
+            autoRefresh: string
+            ip: string
+            isp: string
+            location: string
+            org: string
+            timezone: string
+            unknown: string
+          }
+          title: string
+        }
+        proxyTun: {
+          status: {
+            systemProxyDisabled: string
+            systemProxyEnabled: string
+            tunModeDisabled: string
+            tunModeEnabled: string
+            tunModeServiceRequired: string
+          }
+          tooltips: {
+            systemProxy: string
+            tunMode: string
+          }
+        }
+        systemInfo: {
+          actions: {
+            settings: string
+          }
+          badges: {
+            adminMode: string
+            adminServiceMode: string
+            serviceMode: string
+            sidecarMode: string
+          }
+          fields: {
+            autoLaunch: string
+            lastCheckUpdate: string
+            osInfo: string
+            runningMode: string
+            vergeVersion: string
+          }
+          title: string
+        }
+        tests: {
+          title: string
+        }
         traffic: {
+          legends: {
+            download: string
+            upload: string
+          }
           metrics: {
+            activeConnections: string
             downloadSpeed: string
             memoryUsage: string
             uploadSpeed: string
           }
+          patterns: {
+            minutes: string
+          }
+        }
+      }
+      page: {
+        cards: {
+          networkSettings: string
+          proxyMode: string
+          trafficStats: string
+        }
+        settings: {
+          cards: {
+            clashInfo: string
+            currentProxy: string
+            ip: string
+            network: string
+            profile: string
+            proxyMode: string
+            systemInfo: string
+            tests: string
+            traffic: string
+          }
+          title: string
+        }
+        title: string
+        tooltips: {
+          lightweightMode: string
+          manual: string
+          settings: string
         }
       }
     }
     layout: {
       components: {
+        announcement: {
+          dismiss: string
+          dismissHint: string
+          label: string
+          viewDetails: string
+        }
         connect: {
           actions: {
             clickToConnect: string
+            clickToDisconnect: string
+            connect: string
+            connecting: string
+            disconnect: string
             retry: string
             switchNode: string
           }
           empty: {
             goToPlans: string
+            noSubscription: string
             rebuild: string
+            rebuilding: string
+            refresh: string
+            refreshing: string
             subtitle: string
+            title: string
           }
           feedback: {
             accountRefreshFailed: string
@@ -37,14 +214,24 @@ export interface TranslationResources {
             trafficExceeded: string
           }
           labels: {
+            both: string
             connected: string
+            connectedHint: string
             connecting: string
             connectionFailed: string
             disconnected: string
+            disconnectFirst: string
+            download: string
             heroSubtitle: string
             heroTitle: string
+            mode: string
             node: string
+            noNode: string
             selectNode: string
+            startHint: string
+            system: string
+            tun: string
+            upload: string
             validating: string
           }
           mode: {
@@ -52,16 +239,22 @@ export interface TranslationResources {
             smart: string
             system: string
           }
+          modeTooltip: string
           session: {
             duration: string
             localTraffic: string
             packageTraffic: string
+            traffic: string
             usageUnavailable: string
           }
           startupSyncFailed: string
           title: string
           trial: {
             claimPrompt: string
+            emptySubtitle: string
+            emptyTitle: string
+            exceededSubtitle: string
+            exceededTitle: string
             openDashboard: string
             trafficExceeded: string
           }
@@ -70,12 +263,25 @@ export interface TranslationResources {
           menu: {
             collapseNavBar: string
             expandNavBar: string
+            lock: string
+            reorderMode: string
+            restoreDefaultOrder: string
+            unlock: string
           }
           tabs: {
+            apiKeys: string
             connect: string
+            connections: string
+            home: string
+            logs: string
             mine: string
             plans: string
+            profiles: string
+            promoCode: string
             proxies: string
+            rules: string
+            settings: string
+            unlock: string
           }
         }
         nodes: {
@@ -101,6 +307,41 @@ export interface TranslationResources {
           readyHint: string
           title: string
         }
+        promoCode: {
+          chips: {
+            autoSync: string
+            trafficCode: string
+          }
+          errors: {
+            empty: string
+            redeemFailed: string
+          }
+          heading: string
+          placeholder: string
+          redeem: string
+          redeeming: string
+          result: {
+            success: string
+            traffic: string
+          }
+          retrySync: string
+          subtitle: string
+          syncing: string
+          syncWarning: string
+          title: string
+        }
+      }
+    }
+    logs: {
+      actions: {
+        showAscending: string
+        showDescending: string
+      }
+      empty: {
+        paused: string
+      }
+      page: {
+        title: string
       }
     }
     mine: {
@@ -144,6 +385,10 @@ export interface TranslationResources {
           description: string
           title: string
         }
+        settings: {
+          description: string
+          title: string
+        }
         update: {
           check: string
           checking: string
@@ -169,18 +414,25 @@ export interface TranslationResources {
           refresh: string
         }
         cached: {
+          banner: string
           partialFailure: string
         }
         card: {
           actions: {
             current: string
             opening: string
+            processing: string
+            purchase: string
             subscribe: string
           }
           badge: string
           features: {
+            devices: string
             devicesValue: string
+            duration: string
+            speed: string
             speedMbps: string
+            traffic: string
             trafficValue: string
             unlimited: string
             validUntilExpire: string
@@ -190,11 +442,28 @@ export interface TranslationResources {
           expirePrefix: string
           fallback: string
           labels: {
+            expireAt: string
             remaining: string
+            startAt: string
+            subUrl: string
             trafficUsage: string
           }
+          status: {
+            active: string
+            cancelled: string
+            expired: string
+          }
           syncHint: string
+          title: string
+          tooltips: {
+            copy: string
+          }
           usageUnavailable: string
+        }
+        duration: {
+          days: string
+          month: string
+          months: string
         }
         empty: {
           loadFailedSubtitle: string
@@ -203,10 +472,19 @@ export interface TranslationResources {
           title: string
         }
         feedback: {
+          copied: string
           errors: {
+            generic: string
             loadFailed: string
+            networkError: string
             purchaseFailed: string
+            sessionExpired: string
+            untrustedCheckout: string
           }
+        }
+        form: {
+          promoHelp: string
+          promoPlaceholder: string
         }
         periods: {
           month: string
@@ -216,6 +494,7 @@ export interface TranslationResources {
         sections: {
           available: string
           availableHint: string
+          promo: string
         }
         title: string
       }
@@ -225,32 +504,526 @@ export interface TranslationResources {
         claimFailed: string
         claiming: string
         claimSuccess: string
+        cooldown: string
         cooldownDays: string
         cooldownHours: string
+        remaining: string
         subtitle: string
         title: string
         verifyEmail: string
       }
     }
     profiles: {
-      page: {
-        feedback: {
-          errors: {
-            invalidUrl: string
+      components: {
+        card: {
+          labels: {
+            clickToImport: string
           }
-          notifications: {
-            batchDeleted: string
+        }
+        fileInput: {
+          chooseFile: string
+        }
+        menu: {
+          editFile: string
+          editGroups: string
+          editInfo: string
+          editProxies: string
+          editRules: string
+          extendConfig: string
+          extendScript: string
+          home: string
+          openFile: string
+          select: string
+          update: string
+          updateViaProxy: string
+        }
+        more: {
+          chips: {
+            merge: string
+            script: string
+          }
+          global: {
+            merge: string
+            script: string
+          }
+        }
+        profileItem: {
+          status: {
+            autoUpdateDisabled: string
+            lastUpdateFailed: string
+            nextUp: string
+            noSchedule: string
+            unknown: string
+          }
+          tooltips: {
+            showLast: string
+            showNext: string
           }
         }
       }
+      modals: {
+        confirmDelete: {
+          message: string
+          title: string
+        }
+        editor: {
+          actions: {
+            format: string
+          }
+          messages: {
+            readOnly: string
+          }
+        }
+        groupsEditor: {
+          actions: {
+            append: string
+            prepend: string
+          }
+          errors: {
+            nameExists: string
+            nameRequired: string
+          }
+          fields: {
+            excludeFilter: string
+            excludeType: string
+            expectedStatus: string
+            filter: string
+            healthCheckUrl: string
+            icon: string
+            includeAll: string
+            includeAllProviders: string
+            includeAllProxies: string
+            interfaceName: string
+            interval: string
+            maxFailedTimes: string
+            name: string
+            provider: string
+            proxies: string
+            routingMark: string
+            type: string
+          }
+          title: string
+          toggles: {
+            disableUdp: string
+            hidden: string
+            lazy: string
+          }
+        }
+        logViewer: {
+          title: string
+        }
+        profileForm: {
+          feedback: {
+            notifications: {
+              creationRetry: string
+              creationSuccess: string
+            }
+          }
+          fields: {
+            acceptInvalidCerts: string
+            allowAutoUpdate: string
+            description: string
+            httpTimeout: string
+            subscriptionUrl: string
+            type: string
+            updateInterval: string
+            useClashProxy: string
+            useSystemProxy: string
+          }
+          title: {
+            create: string
+            edit: string
+          }
+        }
+        proxiesEditor: {
+          actions: {
+            append: string
+            prepend: string
+          }
+          placeholders: {
+            multiUri: string
+          }
+          title: string
+        }
+      }
+      page: {
+        actions: {
+          import: string
+          reactivate: string
+          updateAll: string
+          viewRuntimeConfig: string
+        }
+        batch: {
+          actions: {
+            delete: string
+            deselectAll: string
+            done: string
+            selectAll: string
+          }
+          summary: {
+            items: string
+            selected: string
+          }
+          title: string
+        }
+        empty: {
+          body: string
+          goToPlans: string
+          refresh: string
+          title: string
+        }
+        expiringSoon: string
+        feedback: {
+          errors: {
+            invalidUrl: string
+            onlyYaml: string
+          }
+          notices: {
+            emergencyRefreshFailed: string
+            forceRefreshCompleted: string
+          }
+          notifications: {
+            batchDeleted: string
+            importFail: string
+            importNeedsRefresh: string
+            importRetry: string
+            importSuccess: string
+            profileReactivated: string
+            profileSwitched: string
+            switchInterrupted: string
+          }
+        }
+        forceRebuild: {
+          button: string
+          confirm: string
+          failed: string
+          success: string
+        }
+        importForm: {
+          actions: {
+            paste: string
+          }
+          placeholder: string
+        }
+        title: string
+      }
+    }
+    proxies: {
+      components: {
+        enums: {
+          policies: {
+            DIRECT: string
+            PASS: string
+            REJECT: string
+            'REJECT-DROP': string
+          }
+          strategies: {
+            fallback: string
+            'load-balance': string
+            relay: string
+            select: string
+            'url-test': string
+          }
+        }
+      }
+      feedback: {
+        notifications: {
+          provider: {
+            allUpdated: string
+            genericError: string
+            none: string
+            updateFailed: string
+            updateSuccess: string
+          }
+        }
+      }
+      page: {
+        actions: {
+          clearChainConfig: string
+          connect: string
+          connecting: string
+          disconnect: string
+          toggleChain: string
+        }
+        chain: {
+          connectFailed: string
+          disconnectFailed: string
+          duplicateNode: string
+          empty: string
+          entryNode: string
+          exitNode: string
+          header: string
+          instruction: string
+          minimumNodes: string
+          minimumNodesHint: string
+        }
+        labels: {
+          delayCheckReset: string
+          proxyCount: string
+        }
+        messages: {
+          directMode: string
+        }
+        modes: {
+          direct: string
+          global: string
+          rule: string
+        }
+        placeholders: {
+          delayCheckUrl: string
+        }
+        provider: {
+          actions: {
+            update: string
+            updateAll: string
+          }
+          title: string
+        }
+        rules: {
+          select: string
+          title: string
+        }
+        title: {
+          chainMode: string
+          default: string
+        }
+        tooltips: {
+          delayCheck: string
+          delayCheckUrl: string
+          filter: string
+          locate: string
+          showBasic: string
+          showDetail: string
+          sortDefault: string
+          sortDelay: string
+          sortName: string
+        }
+      }
+    }
+    rules: {
+      feedback: {
+        notifications: {
+          provider: {
+            allUpdated: string
+            genericError: string
+            none: string
+            updateFailed: string
+            updateSuccess: string
+          }
+        }
+      }
+      modals: {
+        editor: {
+          form: {
+            actions: {
+              appendRule: string
+              prependRule: string
+            }
+            labels: {
+              content: string
+              proxyPolicy: string
+              type: string
+            }
+            toggles: {
+              noResolve: string
+            }
+            validation: {
+              conditionRequired: string
+              invalidRule: string
+            }
+          }
+          ruleTypes: {
+            AND: string
+            DOMAIN: string
+            'DOMAIN-KEYWORD': string
+            'DOMAIN-REGEX': string
+            'DOMAIN-SUFFIX': string
+            DSCP: string
+            'DST-PORT': string
+            GEOIP: string
+            GEOSITE: string
+            'IN-NAME': string
+            'IN-PORT': string
+            'IN-TYPE': string
+            'IN-USER': string
+            'IP-ASN': string
+            'IP-CIDR': string
+            'IP-CIDR6': string
+            'IP-SUFFIX': string
+            MATCH: string
+            NETWORK: string
+            NOT: string
+            OR: string
+            'PROCESS-NAME': string
+            'PROCESS-NAME-REGEX': string
+            'PROCESS-PATH': string
+            'PROCESS-PATH-REGEX': string
+            'RULE-SET': string
+            'SRC-GEOIP': string
+            'SRC-IP-ASN': string
+            'SRC-IP-CIDR': string
+            'SRC-IP-SUFFIX': string
+            'SRC-PORT': string
+            'SUB-RULE': string
+            UID: string
+          }
+          title: string
+        }
+      }
+      page: {
+        provider: {
+          actions: {
+            update: string
+            updateAll: string
+          }
+          dialogTitle: string
+          trigger: string
+        }
+        title: string
+      }
     }
     settings: {
+      actions: {
+        cancel: string
+        confirm: string
+        logout: string
+        logoutConfirmBody: string
+        logoutConfirmTitle: string
+      }
+      components: {
+        verge: {
+          advanced: {
+            actions: {
+              copyVersion: string
+            }
+            fields: {
+              backupSetting: string
+              checkUpdates: string
+              exit: string
+              exportDiagnostics: string
+              liteModeSettings: string
+              openConfDir: string
+              openCoreDir: string
+              openDevTools: string
+              openLogsDir: string
+              runtimeConfig: string
+              vergeVersion: string
+            }
+            notifications: {
+              latestVersion: string
+              versionCopied: string
+            }
+            title: string
+            tooltips: {
+              backupInfo: string
+              liteMode: string
+              openConfDir: string
+            }
+          }
+          basic: {
+            actions: {
+              browse: string
+            }
+            fields: {
+              autoConnectOnLaunch: string
+              hotkeySetting: string
+              language: string
+              layoutSetting: string
+              misc: string
+              showAdvancedSettings: string
+              startPage: string
+              themeMode: string
+              themeSetting: string
+              trayClickEvent: string
+            }
+            title: string
+            tooltips: {
+              autoConnectOnLaunch: string
+              showAdvancedSettings: string
+            }
+            trayOptions: {
+              disable: string
+              showMainWindow: string
+              showTrayMenu: string
+            }
+          }
+          layout: {
+            fields: {
+              collapseNavBar: string
+              commonTrayIcon: string
+              enableTrayIcon: string
+              enableTraySpeed: string
+              hoverNavigator: string
+              hoverNavigatorDelay: string
+              memoryUsage: string
+              navIcon: string
+              pauseRenderTrafficStatsOnBlur: string
+              preferSystemTitlebar: string
+              proxyGroupIcon: string
+              proxyGroupsDisplayMode: string
+              showOutboundModesInline: string
+              systemProxyTrayIcon: string
+              toastPosition: string
+              trafficGraph: string
+              trayIcon: string
+              tunTrayIcon: string
+            }
+            options: {
+              icon: {
+                colorful: string
+                disable: string
+                monochrome: string
+              }
+              proxyGroupsDisplayMode: {
+                default: string
+                disable: string
+                inline: string
+              }
+              toastPosition: {
+                bottomLeft: string
+                bottomRight: string
+                topLeft: string
+                topRight: string
+              }
+            }
+            title: string
+            tooltips: {
+              hoverNavigator: string
+              hoverNavigatorDelay: string
+            }
+          }
+          theme: {
+            actions: {
+              editCss: string
+            }
+            dialogs: {
+              editCssTitle: string
+            }
+            fields: {
+              cssInjection: string
+              errorColor: string
+              fontFamily: string
+              infoColor: string
+              primaryColor: string
+              primaryText: string
+              secondaryColor: string
+              secondaryText: string
+              successColor: string
+              warningColor: string
+            }
+            title: string
+          }
+        }
+      }
       feedback: {
         notifications: {
           clash: {
+            alreadyLatestVersion: string
             changeFailed: string
             changeSuccess: string
+            geoDataUpdated: string
             restartSuccess: string
+            versionUpdated: string
           }
           clashService: {
             installSuccess: string
@@ -263,13 +1036,293 @@ export interface TranslationResources {
         }
       }
       modals: {
+        backup: {
+          actions: {
+            backup: string
+            deleteBackup: string
+            export: string
+            exportBackup: string
+            importBackup: string
+            restore: string
+            restoreBackup: string
+            selectTarget: string
+            viewHistory: string
+          }
+          auto: {
+            changeHelper: string
+            changeLabel: string
+            intervalLabel: string
+            options: {
+              days: string
+              hours: string
+            }
+            scheduleHelper: string
+            scheduleLabel: string
+            title: string
+          }
+          fields: {
+            info: string
+            username: string
+            webdavUrl: string
+          }
+          history: {
+            empty: string
+            summary: string
+            title: string
+            unknownPlatform: string
+            unknownTime: string
+          }
+          manual: {
+            configureWebdav: string
+            local: string
+            title: string
+            webdav: string
+          }
+          messages: {
+            backupCreated: string
+            backupFailed: string
+            confirmDelete: string
+            confirmRestore: string
+            invalidWebdavUrl: string
+            localBackupCreated: string
+            localBackupExported: string
+            localBackupExportFailed: string
+            localBackupFailed: string
+            localBackupImported: string
+            localBackupImportFailed: string
+            passwordRequired: string
+            restoreSuccess: string
+            usernameRequired: string
+            webdavConfigSaved: string
+            webdavConfigSaveFailed: string
+            webdavRefreshFailed: string
+            webdavRefreshSuccess: string
+            webdavUrlRequired: string
+          }
+          table: {
+            actions: string
+            backupTime: string
+            filename: string
+            noBackups: string
+            rowsPerPage: string
+          }
+          tabs: {
+            local: string
+            webdav: string
+          }
+          title: string
+          webdav: {
+            title: string
+          }
+        }
+        clashCore: {
+          variants: {
+            alpha: string
+            release: string
+          }
+        }
+        clashPort: {
+          actions: {
+            random: string
+          }
+          fields: {
+            http: string
+            mixed: string
+            redir: string
+            socks: string
+            tproxy: string
+          }
+          messages: {
+            portInUse: string
+            saved: string
+            saveFailed: string
+          }
+          title: string
+        }
+        dns: {
+          dialog: {
+            title: string
+            warning: string
+          }
+          errors: {
+            invalid: string
+            invalidYaml: string
+          }
+          fields: {
+            defaultNameserver: {
+              description: string
+              label: string
+            }
+            directNameserver: {
+              description: string
+              label: string
+            }
+            directPolicy: {
+              description: string
+              label: string
+            }
+            enable: string
+            enhancedMode: string
+            fakeIpFilter: {
+              description: string
+              label: string
+            }
+            fakeIpFilterMode: string
+            fakeIpRange: string
+            fallback: {
+              description: string
+              label: string
+            }
+            fallbackDomain: {
+              description: string
+              label: string
+            }
+            fallbackIpCidr: {
+              description: string
+              label: string
+            }
+            geoipCode: string
+            geoipFiltering: {
+              description: string
+              label: string
+            }
+            hosts: {
+              description: string
+              label: string
+            }
+            ipv6: {
+              description: string
+              label: string
+            }
+            listen: string
+            nameserver: {
+              description: string
+              label: string
+            }
+            nameserverPolicy: {
+              description: string
+              label: string
+            }
+            preferH3: {
+              description: string
+              label: string
+            }
+            proxy: {
+              description: string
+              label: string
+            }
+            respectRules: {
+              description: string
+              label: string
+            }
+            useHosts: {
+              description: string
+              label: string
+            }
+            useSystemHosts: {
+              description: string
+              label: string
+            }
+          }
+          messages: {
+            configError: string
+            saved: string
+          }
+          sections: {
+            fallbackFilter: string
+            general: string
+            hosts: string
+          }
+        }
+        hotkey: {
+          functions: {
+            direct: string
+            entryLightweightMode: string
+            global: string
+            openOrCloseDashboard: string
+            reactivateProfiles: string
+            rule: string
+            toggleSystemProxy: string
+            toggleTunMode: string
+          }
+          title: string
+          toggles: {
+            enableGlobal: string
+          }
+        }
+        liteMode: {
+          actions: {
+            enterNow: string
+          }
+          fields: {
+            delay: string
+          }
+          messages: {
+            autoEnterHint: string
+          }
+          title: string
+          toggles: {
+            autoEnter: string
+          }
+          tooltips: {
+            autoEnter: string
+          }
+        }
+        misc: {
+          fields: {
+            appLogLevel: string
+            appLogMaxCount: string
+            appLogMaxSize: string
+            autoCheckUpdate: string
+            autoCloseConnections: string
+            autoDelayDetection: string
+            autoDelayDetectionInterval: string
+            autoLogClean: string
+            defaultLatencyTest: string
+            defaultLatencyTimeout: string
+            enableBuiltinEnhanced: string
+            proxyLayoutColumns: string
+          }
+          options: {
+            autoLogClean: {
+              never: string
+              retainDays: string
+            }
+            proxyLayoutColumns: {
+              auto: string
+            }
+          }
+          title: string
+          tooltips: {
+            autoCloseConnections: string
+            autoDelayDetection: string
+            defaultLatencyTest: string
+            enableBuiltinEnhanced: string
+          }
+        }
+        networkInterface: {
+          fields: {
+            ipAddress: string
+            macAddress: string
+          }
+          title: string
+        }
+        password: {
+          prompts: {
+            enterRoot: string
+          }
+        }
         sysproxy: {
+          actions: {
+            editPac: string
+          }
           fields: {
             alwaysUseDefaultBypass: string
             bypass: string
             enableBypassCheck: string
             enableStatus: string
             guardDuration: string
+            pacScriptContent: string
             pacUrl: string
             proxyBypass: string
             proxyGuard: string
@@ -320,11 +1373,133 @@ export interface TranslationResources {
           }
           messages: {
             breakChangeError: string
+            portableError: string
+          }
+          title: string
+        }
+        webUI: {
+          actions: {
+            openUrl: string
+          }
+          messages: {
+            placeholderInstruction: string
+            supportedPlaceholders: string
           }
           title: string
         }
       }
+      page: {
+        actions: {
+          github: string
+          manual: string
+          telegram: string
+        }
+        title: string
+      }
       sections: {
+        appearance: {
+          dark: string
+          light: string
+          system: string
+        }
+        clash: {
+          form: {
+            fields: {
+              allowLan: string
+              clashCore: string
+              dnsOverwrite: string
+              external: string
+              ipv6: string
+              logLevel: string
+              openUwpTool: string
+              portConfig: string
+              tunnels: {
+                actions: {
+                  add: string
+                  addNew: string
+                }
+                default: string
+                existing: string
+                localAddr: string
+                localPort: string
+                messages: {
+                  incomplete: string
+                  invalidLocalAddr: string
+                  invalidLocalPort: string
+                  invalidTargetAddr: string
+                  invalidTargetPort: string
+                }
+                optional: string
+                protocols: string
+                proxyGroup: string
+                proxyNode: string
+                targetAddr: string
+                targetPort: string
+                title: string
+              }
+              unifiedDelay: string
+              updateGeoData: string
+              webUI: string
+            }
+            options: {
+              logLevel: {
+                debug: string
+                error: string
+                info: string
+                silent: string
+                warning: string
+              }
+            }
+            tooltips: {
+              logLevel: string
+              networkInterface: string
+              openUwpTool: string
+              unifiedDelay: string
+            }
+          }
+          title: string
+        }
+        externalController: {
+          fields: {
+            address: string
+            enable: string
+            secret: string
+          }
+          messages: {
+            addressRequired: string
+            controllerCopied: string
+            copyFailed: string
+            secretCopied: string
+            secretRequired: string
+          }
+          placeholders: {
+            address: string
+            secret: string
+          }
+          title: string
+          tooltips: {
+            copy: string
+          }
+        }
+        externalCors: {
+          actions: {
+            add: string
+          }
+          fields: {
+            allowedOrigins: string
+            allowPrivateNetwork: string
+          }
+          messages: {
+            alwaysIncluded: string
+          }
+          placeholders: {
+            origin: string
+          }
+          title: string
+          tooltips: {
+            open: string
+          }
+        }
         proxyControl: {
           actions: {
             installService: string
@@ -341,12 +1516,87 @@ export interface TranslationResources {
           }
         }
         system: {
+          fields: {
+            autoLaunch: string
+            silentStart: string
+          }
           notifications: {
             tunMode: {
               autoDisabled: string
               autoDisableFailed: string
             }
           }
+          title: string
+          toggles: {
+            systemProxy: string
+            tunMode: string
+          }
+          tooltips: {
+            silentStart: string
+          }
+        }
+      }
+      simplified: {
+        hero: {
+          eyebrow: string
+          subtitle: string
+          title: string
+        }
+        pageTitle: string
+        rows: {
+          advancedToggle: {
+            description: string
+            title: string
+          }
+          autoLaunch: {
+            description: string
+            title: string
+          }
+          autoUpdate: {
+            description: string
+            title: string
+          }
+          bypass: {
+            description: string
+            title: string
+          }
+          connections: {
+            description: string
+            title: string
+          }
+          language: {
+            description: string
+            title: string
+          }
+          logs: {
+            description: string
+            title: string
+          }
+          profileRepair: {
+            description: string
+            title: string
+          }
+          rules: {
+            description: string
+            title: string
+          }
+          theme: {
+            description: string
+            title: string
+          }
+          tun: {
+            description: string
+            title: string
+          }
+        }
+        sections: {
+          advanced: string
+          common: string
+        }
+        theme: {
+          dark: string
+          light: string
+          system: string
         }
       }
       statuses: {
@@ -363,13 +1613,74 @@ export interface TranslationResources {
     shared: {
       actions: {
         cancel: string
+        clear: string
+        close: string
+        closeAll: string
+        confirm: string
+        delete: string
+        edit: string
+        enable: string
         hideDetails: string
+        listView: string
         new: string
+        next: string
+        pause: string
+        previous: string
+        refresh: string
         refreshPage: string
         resetToDefault: string
+        restart: string
+        resume: string
         retry: string
         save: string
         showDetails: string
+        tableView: string
+        upgrade: string
+      }
+      auth: {
+        brand: string
+        cancelGoogleLogin: string
+        errors: {
+          loginFailed: string
+          openBrowser: string
+          registerFailed: string
+        }
+        forgotPassword: string
+        form: {
+          confirmPassword: string
+          email: string
+          hidePassword: string
+          password: string
+          showPassword: string
+        }
+        google: {
+          accessDenied: string
+          authFailed: string
+          loginFailed: string
+          missingCode: string
+          notConfigured: string
+          signIn: string
+          waiting: string
+        }
+        login: {
+          dividerText: string
+          goRegister: string
+          noAccount: string
+          submit: string
+          subtitle: string
+        }
+        register: {
+          goLogin: string
+          hasAccount: string
+          passwordPlaceholder: string
+          submit: string
+          subtitle: string
+        }
+        registeredSuccess: string
+        validation: {
+          passwordMismatch: string
+          passwordTooShort: string
+        }
       }
       editorModes: {
         advanced: string
@@ -401,8 +1712,14 @@ export interface TranslationResources {
           common: {
             copySuccess: string
             refreshFailed: string
+            saveFailed: string
+            saveSuccess: string
           }
           importSubscriptionSuccess: string
+          importSuccess: string
+          importWithClashProxy: string
+          saved: string
+          updateAvailable: string
         }
         validation: {
           config: {
@@ -433,8 +1750,33 @@ export interface TranslationResources {
           }
         }
       }
+      filters: {
+        logLevels: {
+          all: string
+          debug: string
+          error: string
+          info: string
+          warn: string
+        }
+      }
       labels: {
+        downloaded: string
+        expireTime: string
+        from: string
+        icon: string
+        name: string
+        password: string
+        readOnly: string
         retryAttempts: string
+        timeout: string
+        updateAt: string
+        updateTime: string
+        uploaded: string
+        usedTotal: string
+      }
+      legal: {
+        privacy: string
+        terms: string
       }
       placeholders: {
         filter: string
@@ -447,9 +1789,75 @@ export interface TranslationResources {
         disabled: string
         empty: string
         enabled: string
+        saving: string
+      }
+      units: {
+        files: string
+        hours: string
+        kilobytes: string
+        milliseconds: string
+        minutes: string
+        seconds: string
       }
       validation: {
         invalidRegex: string
+      }
+      window: {
+        maximize: string
+        minimize: string
+      }
+    }
+    tests: {
+      components: {
+        item: {
+          actions: {
+            test: string
+          }
+        }
+      }
+      modals: {
+        test: {
+          fields: {
+            url: string
+          }
+          title: {
+            create: string
+            edit: string
+          }
+        }
+      }
+      page: {
+        actions: {
+          testAll: string
+        }
+        title: string
+      }
+      statuses: {
+        test: {
+          completed: string
+          disallowedIsp: string
+          failed: string
+          failedNetwork: string
+          no: string
+          noDisney: string
+          originalsOnly: string
+          pending: string
+          unsupportedRegion: string
+          yes: string
+        }
+      }
+      unlock: {
+        page: {
+          actions: {
+            testing: string
+          }
+          empty: string
+          messages: {
+            detectionFailedWithName: string
+            detectionTimeout: string
+          }
+          title: string
+        }
       }
     }
   }

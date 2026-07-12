@@ -7,28 +7,47 @@
     },
     "sections": {
       "available": "Available plans",
-      "availableHint": "Open the dashboard to choose a plan and finish checkout."
+      "availableHint": "Open the dashboard to choose a plan and finish checkout.",
+      "promo": "Promo code"
     },
     "current": {
+      "title": "Current plan: {{name}}",
       "fallback": "Choose a plan",
       "expirePrefix": "Expires {{date}}",
       "syncHint": "Purchases sync to the client automatically.",
       "usageUnavailable": "Usage temporarily unavailable",
+      "status": {
+        "active": "Active",
+        "expired": "Expired",
+        "cancelled": "Cancelled"
+      },
       "labels": {
         "trafficUsage": "Traffic usage",
-        "remaining": "Remaining {{traffic}}"
+        "remaining": "Remaining {{traffic}}",
+        "startAt": "Start date",
+        "expireAt": "Expire date",
+        "subUrl": "Subscription URL"
+      },
+      "tooltips": {
+        "copy": "Copy subscription URL"
       }
     },
     "card": {
       "badge": "Current",
       "features": {
+        "traffic": "Traffic",
         "trafficValue": "{{traffic}} traffic",
+        "speed": "Speed limit",
         "unlimited": "Unlimited",
         "speedMbps": "{{value}} Mbps",
+        "devices": "Devices",
         "devicesValue": "{{count}} devices",
+        "duration": "Duration",
         "validUntilExpire": "Available until expiry"
       },
       "actions": {
+        "purchase": "Purchase",
+        "processing": "Processing...",
         "current": "Current plan",
         "subscribe": "Subscribe",
         "opening": "Opening"
@@ -41,28 +60,45 @@
       "loadFailedSubtitle": "Network or service is temporarily unavailable. Refresh again in a moment."
     },
     "cached": {
+      "banner": "Showing the last successfully loaded plan information. Try refresh again later.",
       "partialFailure": "Some plan, traffic, or account data could not refresh. You are still signed in; retry later."
     },
+    "form": {
+      "promoPlaceholder": "Enter promo code (optional)",
+      "promoHelp": "Will be applied automatically at checkout"
+    },
     "feedback": {
+      "copied": "Subscription URL copied to clipboard",
       "errors": {
         "loadFailed": "Failed to load. Please try again later.",
-        "purchaseFailed": "Unable to open the dashboard. Please try again later."
+        "purchaseFailed": "Unable to open the dashboard. Please try again later.",
+        "untrustedCheckout": "Checkout link failed the security check.",
+        "sessionExpired": "Session expired. Please log in again.",
+        "networkError": "Network error. Please try again later.",
+        "generic": "An unknown error occurred. Please try again later."
       }
     },
     "periods": {
       "month": "Monthly",
       "quarter": "Quarterly",
       "year": "Annual"
+    },
+    "duration": {
+      "month": "month",
+      "months": "{{count}} months",
+      "days": "{{count}} days"
     }
   },
   "trial": {
     "title": "Trial traffic",
     "subtitle": "{{traffic}} daily. ",
+    "remaining": "Remaining plan traffic: {{traffic}}",
     "claim": "Claim",
     "claiming": "Claiming...",
     "claimSuccess": "Trial traffic claimed",
     "claimFailed": "Claim failed. Please try again later.",
     "available": "Available now",
+    "cooldown": "{{time}} remaining",
     "cooldownHours": "In {{count}} hours",
     "cooldownDays": "In {{count}} days",
     "verifyEmail": "Verify email first"

@@ -1,6 +1,96 @@
 {
+  "simplified": {
+    "pageTitle": "设置",
+    "hero": {
+      "eyebrow": "设置",
+      "title": "保留常用项，收起复杂项",
+      "subtitle": "默认只展示日常会用到的设置；排障工具放在高级入口里。"
+    },
+    "sections": {
+      "common": "常用",
+      "advanced": "高级"
+    },
+    "theme": {
+      "system": "系统",
+      "light": "亮",
+      "dark": "暗"
+    },
+    "rows": {
+      "language": {
+        "title": "语言",
+        "description": "切换客户端界面语言。"
+      },
+      "theme": {
+        "title": "主题",
+        "description": "跟随系统，或手动选择浅色/深色。"
+      },
+      "autoLaunch": {
+        "title": "开机启动",
+        "description": "Windows 登录后自动启动 XXLink。"
+      },
+      "autoUpdate": {
+        "title": "自动检查更新",
+        "description": "启动后自动检查 Windows 客户端新版本。"
+      },
+      "advancedToggle": {
+        "title": "显示高级配置",
+        "description": "仅在排障或手动配置时打开。"
+      },
+      "tun": {
+        "title": "全局加速",
+        "description": "让系统流量走加密通道；通常在连接页切换即可。"
+      },
+      "bypass": {
+        "title": "直连名单",
+        "description": "让指定网站或本地网络直接访问。"
+      },
+      "logs": {
+        "title": "诊断日志",
+        "description": "连接失败或加载异常时查看日志。"
+      },
+      "profileRepair": {
+        "title": "节点修复",
+        "description": "仅在客服指导或节点异常时使用。"
+      },
+      "connections": {
+        "title": "实时连接",
+        "description": "查看当前网络连接明细。"
+      },
+      "rules": {
+        "title": "分流明细",
+        "description": "查看网络走向明细，仅用于排障。"
+      }
+    }
+  },
+  "actions": {
+    "logout": "退出登录",
+    "logoutConfirmTitle": "退出登录",
+    "logoutConfirmBody": "确定退出登录吗？",
+    "confirm": "确定",
+    "cancel": "取消"
+  },
+  "page": {
+    "actions": {
+      "manual": "使用手册",
+      "telegram": "Telegram 频道",
+      "github": "GitHub 项目地址"
+    },
+    "title": "设置"
+  },
   "sections": {
     "system": {
+      "title": "系统设置",
+      "toggles": {
+        "tunMode": "虚拟网卡模式",
+        "systemProxy": "浏览器加速"
+      },
+      "tooltips": {
+        "silentStart": "程序启动时以后台模式运行，不显示程序面板"
+      },
+      "fields": {
+        "autoLaunch": "开机自启",
+        "silentStart": "静默启动"
+      },
       "notifications": {
         "tunMode": {
           "autoDisabled": "由于服务不可用，全局加速已自动关闭",
@@ -22,9 +112,390 @@
         "systemProxy": "浏览器加速",
         "tunMode": "全局加速"
       }
+    },
+    "externalController": {
+      "title": "外部控制器监听地址",
+      "fields": {
+        "enable": "启用外部控制器",
+        "address": "外部控制器监听地址",
+        "secret": "访问密码"
+      },
+      "placeholders": {
+        "address": "必填",
+        "secret": "建议设置"
+      },
+      "tooltips": {
+        "copy": "复制到剪贴板"
+      },
+      "messages": {
+        "addressRequired": "控制器地址不能为空",
+        "secretRequired": "访问密钥不能为空",
+        "copyFailed": "复制失败",
+        "controllerCopied": "控制器地址已复制到剪贴板",
+        "secretCopied": "访问密钥已复制到剪贴板"
+      }
+    },
+    "externalCors": {
+      "title": "外部控制跨域设置",
+      "fields": {
+        "allowPrivateNetwork": "允许专用网络访问",
+        "allowedOrigins": "允许的来源"
+      },
+      "placeholders": {
+        "origin": "请输入有效的网址"
+      },
+      "actions": {
+        "add": "添加"
+      },
+      "messages": {
+        "alwaysIncluded": "始终包含来源：{{urls}}"
+      },
+      "tooltips": {
+        "open": "外部控制跨域设置"
+      }
+    },
+    "appearance": {
+      "light": "浅色",
+      "dark": "深色",
+      "system": "系统"
+    },
+    "clash": {
+      "title": "连接高级设置",
+      "form": {
+        "fields": {
+          "allowLan": "局域网连接",
+          "dnsOverwrite": "DNS 覆写",
+          "ipv6": "IPv6",
+          "unifiedDelay": "统一延迟",
+          "logLevel": "日志等级",
+          "portConfig": "本地连接设置",
+          "external": "外部控制",
+          "webUI": "网页界面",
+          "clashCore": "连接引擎",
+          "openUwpTool": "修复微软商店应用联网",
+          "updateGeoData": "更新地区数据",
+          "tunnels": {
+            "title": "流量隧道管理",
+            "localAddr": "本地监听地址",
+            "localPort": "本机入口",
+            "targetAddr": "目标服务",
+            "targetPort": "目标入口",
+            "proxyGroup": "线路组",
+            "proxyNode": "线路节点",
+            "protocols": "连接方式",
+            "existing": "已配置的隧道",
+            "default": "跟随当前配置",
+            "optional": "可选",
+            "messages": {
+              "incomplete": "请完整填写隧道信息",
+              "invalidLocalAddr": "无效的本地监听地址",
+              "invalidLocalPort": "无效的本机入口",
+              "invalidTargetAddr": "无效的目标地址",
+              "invalidTargetPort": "无效的目标入口"
+            },
+            "actions": {
+              "add": "添加",
+              "addNew": "添加新隧道"
+            }
+          }
+        },
+        "tooltips": {
+          "networkInterface": "网络接口",
+          "unifiedDelay": "开启统一延迟时，会进行两次延迟测试，以消除连接握手等带来的不同类型节点的延迟差异",
+          "logLevel": "仅对日志目录 Service 文件夹下的内核日志文件生效",
+          "openUwpTool": "Windows 8 开始限制 UWP 应用（如微软商店）直接访问本地主机的网络服务，使用此工具可绕过该限制"
+        },
+        "options": {
+          "logLevel": {
+            "debug": "Debug",
+            "info": "Info",
+            "warning": "Warn",
+            "error": "Error",
+            "silent": "Silent"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "verge": {
+      "basic": {
+        "title": "XXLink 基础设置",
+        "actions": {
+          "browse": "浏览"
+        },
+        "trayOptions": {
+          "showMainWindow": "显示主窗口",
+          "showTrayMenu": "显示托盘菜单",
+          "disable": "禁用"
+        },
+        "tooltips": {
+          "showAdvancedSettings": "显示高级开发者及诊断选项",
+          "autoConnectOnLaunch": "开启后，启动时会恢复上次退出时的连接状态（开或关）"
+        },
+        "fields": {
+          "language": "语言设置",
+          "themeMode": "主题模式",
+          "trayClickEvent": "托盘点击事件",
+          "startPage": "启动页面",
+          "autoConnectOnLaunch": "记住上次连接状态",
+          "themeSetting": "主题设置",
+          "layoutSetting": "界面设置",
+          "misc": "杂项设置",
+          "hotkeySetting": "热键设置",
+          "showAdvancedSettings": "高级模式"
+        }
+      },
+      "advanced": {
+        "title": "XXLink 高级设置",
+        "tooltips": {
+          "backupInfo": "支持本地或 WebDAV 方式备份配置文件",
+          "openConfDir": "如果软件运行异常，!备份!并删除此文件夹下的所有文件，重启软件",
+          "liteMode": "关闭 GUI 界面，仅保留内核运行"
+        },
+        "actions": {
+          "copyVersion": "复制 XXLink 版本号"
+        },
+        "notifications": {
+          "latestVersion": "当前已是最新版本",
+          "versionCopied": "XXLink 版本已复制到剪贴板"
+        },
+        "fields": {
+          "backupSetting": "备份设置",
+          "runtimeConfig": "当前配置",
+          "openConfDir": "配置目录",
+          "openCoreDir": "内核目录",
+          "openLogsDir": "日志目录",
+          "checkUpdates": "检查更新",
+          "openDevTools": "开发者工具",
+          "liteModeSettings": "轻量模式设置",
+          "exit": "退出",
+          "exportDiagnostics": "导出诊断信息",
+          "vergeVersion": "XXLink 版本"
+        }
+      },
+      "theme": {
+        "title": "主题设置",
+        "fields": {
+          "primaryColor": "主要颜色",
+          "secondaryColor": "次要颜色",
+          "primaryText": "文本主要颜色",
+          "secondaryText": "文本次要颜色",
+          "infoColor": "信息颜色",
+          "warningColor": "警告颜色",
+          "errorColor": "错误颜色",
+          "successColor": "成功颜色",
+          "fontFamily": "字体系列",
+          "cssInjection": "CSS 注入"
+        },
+        "actions": {
+          "editCss": "编辑 CSS"
+        },
+        "dialogs": {
+          "editCssTitle": "编辑 CSS"
+        }
+      },
+      "layout": {
+        "title": "界面设置",
+        "fields": {
+          "preferSystemTitlebar": "优先使用系统标题栏",
+          "trafficGraph": "流量图显",
+          "memoryUsage": "内核占用",
+          "proxyGroupIcon": "代理组图标",
+          "toastPosition": "通知位置",
+          "hoverNavigator": "悬浮跳转导航",
+          "hoverNavigatorDelay": "悬浮跳转导航延迟",
+          "navIcon": "导航栏图标",
+          "collapseNavBar": "收起导航栏",
+          "trayIcon": "托盘图标",
+          "proxyGroupsDisplayMode": "托盘代理组显示模式",
+          "showOutboundModesInline": "将出站模式显示在托盘一级菜单",
+          "commonTrayIcon": "常规托盘图标",
+          "systemProxyTrayIcon": "浏览器加速托盘图标",
+          "tunTrayIcon": "全局加速托盘图标",
+          "enableTrayIcon": "启用托盘图标",
+          "enableTraySpeed": "启用托盘速率",
+          "pauseRenderTrafficStatsOnBlur": "失去焦点时暂停渲染流量统计"
+        },
+        "tooltips": {
+          "hoverNavigator": "鼠标悬停在字母上时自动滚动到对应代理组",
+          "hoverNavigatorDelay": "鼠标悬停后触发自动跳转前等待的毫秒数"
+        },
+        "options": {
+          "icon": {
+            "monochrome": "单色图标",
+            "colorful": "彩色图标",
+            "disable": "禁用"
+          },
+          "toastPosition": {
+            "topLeft": "左上角",
+            "topRight": "右上角",
+            "bottomLeft": "左下角",
+            "bottomRight": "右下角"
+          },
+          "proxyGroupsDisplayMode": {
+            "default": "默认",
+            "inline": "一级菜单",
+            "disable": "禁用"
+          }
+        }
+      }
     }
   },
   "modals": {
+    "clashPort": {
+      "title": "本地连接设置",
+      "fields": {
+        "mixed": "默认入口",
+        "socks": "应用入口",
+        "http": "浏览器入口",
+        "redir": "高级入口",
+        "tproxy": "高级透明入口"
+      },
+      "actions": {
+        "random": "随机入口"
+      },
+      "messages": {
+        "portInUse": "入口 {{port}} 已被占用",
+        "saved": "本地连接设置已保存",
+        "saveFailed": "本地连接设置保存失败"
+      }
+    },
+    "clashCore": {
+      "variants": {
+        "release": "正式版",
+        "alpha": "预览版"
+      }
+    },
+    "liteMode": {
+      "title": "轻量模式设置",
+      "actions": {
+        "enterNow": "立即进入轻量模式"
+      },
+      "toggles": {
+        "autoEnter": "自动进入轻量模式"
+      },
+      "tooltips": {
+        "autoEnter": "启用后，将在窗口关闭一段时间后自动激活轻量模式"
+      },
+      "fields": {
+        "delay": "自动进入轻量模式延迟"
+      },
+      "messages": {
+        "autoEnterHint": "关闭窗口后，轻量模式将在 {{n}} 分钟后自动激活"
+      }
+    },
+    "backup": {
+      "title": "备份设置",
+      "tabs": {
+        "local": "本地备份",
+        "webdav": "WebDAV 备份"
+      },
+      "actions": {
+        "selectTarget": "选择备份目标",
+        "backup": "备份",
+        "export": "导出",
+        "exportBackup": "导出备份",
+        "importBackup": "导入备份",
+        "deleteBackup": "删除备份",
+        "restore": "恢复",
+        "restoreBackup": "恢复备份",
+        "viewHistory": "查看记录"
+      },
+      "fields": {
+        "webdavUrl": "WebDAV 服务器地址 http(s)://",
+        "username": "用户名",
+        "info": "在应用数据目录中创建本地备份，您可以通过下方列表进行恢复或删除。"
+      },
+      "messages": {
+        "webdavUrlRequired": "WebDAV 服务器地址不能为空",
+        "invalidWebdavUrl": "无效的 WebDAV 服务器地址格式",
+        "usernameRequired": "用户名不能为空",
+        "passwordRequired": "密码不能为空",
+        "webdavConfigSaved": "WebDAV 配置保存成功",
+        "webdavConfigSaveFailed": "保存 WebDAV 配置失败: {{error}}",
+        "backupCreated": "备份创建成功",
+        "backupFailed": "备份失败: {{error}}",
+        "localBackupCreated": "本地备份创建成功",
+        "localBackupFailed": "本地备份失败",
+        "restoreSuccess": "恢复成功，应用将在 1 秒后重启",
+        "localBackupExported": "本地备份导出成功",
+        "localBackupExportFailed": "本地备份导出失败",
+        "localBackupImported": "本地备份导入成功",
+        "localBackupImportFailed": "本地备份导入失败：{{error}}",
+        "webdavRefreshSuccess": "WebDAV 刷新成功",
+        "webdavRefreshFailed": "WebDAV 刷新失败: {{error}}",
+        "confirmDelete": "确认删除此备份文件吗？",
+        "confirmRestore": "确认恢复此份文件吗？"
+      },
+      "auto": {
+        "title": "自动备份",
+        "scheduleLabel": "启用定时备份",
+        "scheduleHelper": "按设定频率在后台创建本地备份文件。",
+        "intervalLabel": "备份频率",
+        "changeLabel": "关键变更时自动备份",
+        "changeHelper": "全局扩展覆写配置/脚本更改后自动备份。",
+        "options": {
+          "hours": "每 {{n}} 小时",
+          "days": "每 {{n}} 天"
+        }
+      },
+      "manual": {
+        "title": "手动备份",
+        "local": "在本设备的应用数据目录中创建备份。",
+        "webdav": "配置 WebDAV 后，可直接上传备份到服务器。",
+        "configureWebdav": "配置 WebDAV"
+      },
+      "history": {
+        "title": "备份记录",
+        "summary": "共 {{count}} 份备份 · 最近 {{recent}}",
+        "empty": "暂无备份记录",
+        "unknownPlatform": "未知",
+        "unknownTime": "未知时间"
+      },
+      "webdav": {
+        "title": "WebDAV 设置"
+      },
+      "table": {
+        "filename": "文件名称",
+        "backupTime": "备份时间",
+        "actions": "操作",
+        "noBackups": "暂无备份",
+        "rowsPerPage": "每页行数"
+      }
+    },
+    "misc": {
+      "title": "杂项设置",
+      "fields": {
+        "appLogLevel": "应用日志等级",
+        "appLogMaxSize": "应用日志最大大小",
+        "appLogMaxCount": "应用日志最大数量",
+        "autoCloseConnections": "自动关闭连接",
+        "autoCheckUpdate": "自动检查更新",
+        "enableBuiltinEnhanced": "内置增强功能",
+        "proxyLayoutColumns": "代理页布局列数",
+        "autoLogClean": "自动清理日志",
+        "autoDelayDetection": "自动延迟检测",
+        "autoDelayDetectionInterval": "自动延迟检测间隔",
+        "defaultLatencyTest": "默认测试链接",
+        "defaultLatencyTimeout": "测试超时时间"
+      },
+      "tooltips": {
+        "autoCloseConnections": "当代理组选中节点或代理模式变动时，关闭已建立的连接",
+        "enableBuiltinEnhanced": "配置文件的兼容性处理",
+        "autoDelayDetection": "后台定时检测当前节点延迟",
+        "defaultLatencyTest": "仅用于 HTTP 客户端请求测试，不会对配置文件产生影响"
+      },
+      "options": {
+        "proxyLayoutColumns": {
+          "auto": "自动列数"
+        },
+        "autoLogClean": {
+          "never": "不清理",
+          "retainDays": "保留 {{n}} 天"
+        }
+      }
+    },
     "update": {
       "title": "新版本 v{{version}}",
       "actions": {
@@ -32,6 +503,7 @@
         "update": "更新"
       },
       "messages": {
+        "portableError": "便携版不支持应用内更新，请手动下载替换",
         "breakChangeError": "此版本为重大更新，不支持应用内更新，请卸载后手动下载安装"
       }
     },
@@ -51,7 +523,8 @@
         "alwaysUseDefaultBypass": "始终使用默认绕过",
         "enableBypassCheck": "验证直连名单格式",
         "proxyBypass": "直连名单设置：",
-        "bypass": "当前绕过："
+        "bypass": "当前绕过：",
+        "pacScriptContent": "PAC 脚本内容"
       },
       "tooltips": {
         "proxyGuard": "开启以防止其他软件修改操作系统的代理设置"
@@ -60,6 +533,9 @@
         "durationTooShort": "连接守护间隔时间不得低于 1 秒",
         "invalidBypass": "无效的直连名单格式",
         "invalidProxyHost": "连接主机格式无效"
+      },
+      "actions": {
+        "editPac": "编辑 PAC"
       }
     },
     "tun": {
@@ -84,14 +560,150 @@
         "invalidRouteExcludeAddress": "请输入有效的 CIDR 网段",
         "routeExcludeAddressHint": "仅支持 IPv4/IPv6 CIDR，例如 192.168.0.0/16 或 fd00::/8"
       }
+    },
+    "dns": {
+      "dialog": {
+        "title": "DNS 覆写",
+        "warning": "如果你不清楚这里的设置请不要修改，并保持 DNS 覆写开启"
+      },
+      "sections": {
+        "general": "DNS 设置",
+        "fallbackFilter": "回退过滤设置",
+        "hosts": "Hosts 设置"
+      },
+      "fields": {
+        "enable": "启用 DNS",
+        "listen": "DNS 监听地址",
+        "enhancedMode": "增强模式",
+        "fakeIpRange": "Fake IP 范围",
+        "fakeIpFilterMode": "Fake IP 过滤模式",
+        "ipv6": {
+          "label": "IPv6",
+          "description": "启用 IPv6 DNS 解析"
+        },
+        "preferH3": {
+          "label": "优先使用快速连接",
+          "description": "优先使用更快的 DNS 连接方式"
+        },
+        "respectRules": {
+          "label": "遵循路由规则",
+          "description": "DNS 连接遵循路由规则"
+        },
+        "useHosts": {
+          "label": "使用 Hosts",
+          "description": "启用通过 hosts 文件解析域名"
+        },
+        "useSystemHosts": {
+          "label": "使用系统 Hosts",
+          "description": "启用通过系统 hosts 文件解析域名"
+        },
+        "directPolicy": {
+          "label": "直连域名服务器遵循策略",
+          "description": "是否遵循 nameserver-policy 设置"
+        },
+        "defaultNameserver": {
+          "label": "默认域名服务器",
+          "description": "用于解析 DNS 服务器的默认 DNS 服务器"
+        },
+        "nameserver": {
+          "label": "域名服务器",
+          "description": "DNS 服务器列表，用逗号分隔"
+        },
+        "fallback": {
+          "label": "回退服务器",
+          "description": "回退 DNS 服务器列表，用逗号分隔"
+        },
+        "proxy": {
+          "label": "代理节点DNS",
+          "description": "代理节点域名解析服务器，仅用于解析代理节点的域名，用逗号分隔"
+        },
+        "directNameserver": {
+          "label": "直连域名服务器",
+          "description": "直连出口域名解析服务器，支持 system 关键字，用逗号分隔"
+        },
+        "fakeIpFilter": {
+          "label": "Fake IP 过滤",
+          "description": "跳过 Fake IP 解析的域名，用逗号分隔"
+        },
+        "nameserverPolicy": {
+          "label": "域名服务器策略",
+          "description": "特定域名的 DNS 服务器，多个服务器使用分号分隔，格式: domain=server1;server2"
+        },
+        "geoipFiltering": {
+          "label": "GeoIP 过滤",
+          "description": "启用 GeoIP 回退过滤"
+        },
+        "geoipCode": "GeoIP 国家代码",
+        "fallbackIpCidr": {
+          "label": "回退 IP CIDR",
+          "description": "不使用回退服务器的 IP CIDR，用逗号分隔"
+        },
+        "fallbackDomain": {
+          "label": "回退域名",
+          "description": "使用回退服务器的域名，用逗号分隔"
+        },
+        "hosts": {
+          "label": "Hosts",
+          "description": "自定义域名到 IP 或域名的映射，用逗号分隔"
+        }
+      },
+      "messages": {
+        "saved": "DNS 设置已保存",
+        "configError": "DNS 配置错误："
+      },
+      "errors": {
+        "invalid": "配置无效",
+        "invalidYaml": "YAML 格式无效"
+      }
+    },
+    "webUI": {
+      "actions": {
+        "openUrl": "打开链接"
+      },
+      "title": "网页界面",
+      "messages": {
+        "supportedPlaceholders": "支持主机、入口和访问密码占位符",
+        "placeholderInstruction": "可使用占位符表示主机、入口和访问密码"
+      }
+    },
+    "hotkey": {
+      "toggles": {
+        "enableGlobal": "启用全局热键"
+      },
+      "title": "热键设置",
+      "functions": {
+        "rule": "规则模式",
+        "global": "全局模式",
+        "openOrCloseDashboard": "打开/关闭面板",
+        "toggleSystemProxy": "打开/关闭浏览器加速",
+        "toggleTunMode": "打开/关闭全局加速",
+        "entryLightweightMode": "进入轻量模式",
+        "direct": "直连模式",
+        "reactivateProfiles": "重新激活订阅"
+      }
+    },
+    "password": {
+      "prompts": {
+        "enterRoot": "请输入您的 root 密码"
+      }
+    },
+    "networkInterface": {
+      "title": "网络接口",
+      "fields": {
+        "ipAddress": "IP 地址",
+        "macAddress": "MAC 地址"
+      }
     }
   },
   "feedback": {
     "notifications": {
       "clash": {
         "restartSuccess": "已重启连接引擎",
+        "versionUpdated": "连接引擎已更新",
+        "alreadyLatestVersion": "已经是最新连接引擎",
         "changeSuccess": "连接引擎切换成功",
-        "changeFailed": "无法切换连接引擎"
+        "changeFailed": "无法切换连接引擎",
+        "geoDataUpdated": "已更新地区数据"
       },
       "clashService": {
         "installSuccess": "已成功安装服务",

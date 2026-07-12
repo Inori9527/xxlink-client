@@ -15,20 +15,12 @@ const BACKEND_LOCALES_DIR = path.resolve(
   __dirname,
   '../crates/xxlink-i18n/locales',
 )
-const FRONTEND_GENERATED_TYPES_DIR = path.resolve(
-  __dirname,
-  '../src/types/generated',
-)
 const DEFAULT_FRONTEND_SOURCE_DIRS = [path.resolve(__dirname, '../src')]
 const DEFAULT_BACKEND_SOURCE_DIRS = [
   path.resolve(__dirname, '../src-tauri'),
   path.resolve(__dirname, '../crates'),
 ]
-const EXCLUDE_USAGE_DIRS = [
-  FRONTEND_LOCALES_DIR,
-  BACKEND_LOCALES_DIR,
-  FRONTEND_GENERATED_TYPES_DIR,
-]
+const EXCLUDE_USAGE_DIRS = [FRONTEND_LOCALES_DIR, BACKEND_LOCALES_DIR]
 const DEFAULT_BASELINE_LANG = 'en'
 const IGNORE_DIR_NAMES = new Set([
   '.git',

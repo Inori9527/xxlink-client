@@ -3,11 +3,24 @@
     "navigation": {
       "tabs": {
         "connect": "连接",
+        "home": "首页",
         "proxies": "节点",
+        "profiles": "订阅",
+        "connections": "实时连接",
+        "rules": "规则",
+        "logs": "日志",
+        "unlock": "解锁测试",
         "plans": "套餐",
+        "promoCode": "优惠码",
+        "apiKeys": "开发者访问",
+        "settings": "设置",
         "mine": "我的"
       },
       "menu": {
+        "reorderMode": "菜单排序模式",
+        "restoreDefaultOrder": "恢复默认排序",
+        "unlock": "解锁菜单排序",
+        "lock": "锁定菜单排序",
         "collapseNavBar": "收起导航栏",
         "expandNavBar": "展开导航栏"
       }
@@ -15,7 +28,11 @@
     "connect": {
       "title": "连接",
       "actions": {
+        "connect": "连接",
+        "disconnect": "断开",
+        "connecting": "连接中...",
         "clickToConnect": "点击连接",
+        "clickToDisconnect": "点击断开",
         "switchNode": "切换",
         "retry": "重试"
       },
@@ -23,30 +40,51 @@
         "heroTitle": "一键连接",
         "heroSubtitle": "选择模式，点击圆形按钮即可开始。",
         "selectNode": "选择节点",
+        "noNode": "暂无节点",
+        "disconnectFirst": "已连接，请先断开再切换节点",
+        "mode": "模式",
         "node": "节点",
+        "system": "浏览器加速",
+        "tun": "全局加速",
+        "both": "两者",
+        "upload": "上传",
+        "download": "下载",
         "connecting": "连接中",
         "validating": "验证中",
         "connectionFailed": "连接失败",
         "connected": "已连接",
-        "disconnected": "未连接"
+        "disconnected": "未连接",
+        "connectedHint": "已连接",
+        "startHint": "点击开始"
       },
       "mode": {
         "system": "浏览器",
         "both": "全局加速",
         "smart": "智能分流"
       },
+      "modeTooltip": "浏览器：仅接管支持系统代理的应用。全局加速：所有流量通过 XXLink。智能分流：大陆直连，境外通过 XXLink。",
       "empty": {
+        "title": "暂无可用节点",
         "subtitle": "暂无节点，请刷新节点或查看套餐",
         "goToPlans": "前往套餐",
-        "rebuild": "刷新节点"
+        "refresh": "刷新节点",
+        "rebuild": "刷新节点",
+        "rebuilding": "正在刷新节点...",
+        "refreshing": "刷新中...",
+        "noSubscription": "您还没有订阅"
       },
       "trial": {
         "claimPrompt": "请领取今日公益流量",
+        "emptyTitle": "公益流量待领取",
+        "emptySubtitle": "领取后再刷新节点即可使用。",
         "trafficExceeded": "今日公益流量已用完，请等待下次刷新或升级套餐",
+        "exceededTitle": "今日公益流量已用完",
+        "exceededSubtitle": "请等待下次 24 小时刷新，或升级套餐继续使用。",
         "openDashboard": "打开账户页"
       },
       "session": {
         "duration": "已连接时长",
+        "traffic": "当前周期用量",
         "localTraffic": "本次连接",
         "packageTraffic": "套餐周期用量",
         "usageUnavailable": "用量暂时不可用"
@@ -84,6 +122,35 @@
         "title": "暂无可用节点",
         "subtitle": "请在连接页刷新节点，或确认当前套餐权益。"
       }
+    },
+    "promoCode": {
+      "title": "优惠码",
+      "heading": "兑换优惠码",
+      "subtitle": "输入优惠码，兑换流量或账号权益。",
+      "placeholder": "请输入优惠码",
+      "redeem": "立即兑换",
+      "redeeming": "兑换中...",
+      "syncing": "同步中...",
+      "retrySync": "重试同步",
+      "syncWarning": "优惠码已兑换，但节点同步失败。请重试同步，或到连接页点击刷新节点。",
+      "chips": {
+        "autoSync": "兑换后同步",
+        "trafficCode": "支持流量码和体验码"
+      },
+      "errors": {
+        "empty": "请输入优惠码",
+        "redeemFailed": "优惠码兑换失败"
+      },
+      "result": {
+        "traffic": "权益",
+        "success": "已兑换 {{traffic}}，有效期 {{days}} 天。"
+      }
+    },
+    "announcement": {
+      "label": "XXLink 公告",
+      "dismissHint": "关闭后不再提醒，直到下一条公告。",
+      "viewDetails": "查看详情",
+      "dismiss": "知道了"
     }
   }
 }

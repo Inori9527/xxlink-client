@@ -3,11 +3,24 @@
     "navigation": {
       "tabs": {
         "connect": "Connect",
+        "home": "Home",
         "proxies": "Nodes",
+        "profiles": "Profiles",
+        "connections": "Connections",
+        "rules": "Rules",
+        "logs": "Logs",
+        "unlock": "Test",
         "plans": "Plans",
+        "promoCode": "Promo Code",
+        "apiKeys": "API Keys",
+        "settings": "Settings",
         "mine": "Account"
       },
       "menu": {
+        "reorderMode": "Menu reorder mode",
+        "restoreDefaultOrder": "Restore default order",
+        "unlock": "Unlock menu order",
+        "lock": "Lock menu order",
         "collapseNavBar": "Collapse navigation bar",
         "expandNavBar": "Expand navigation bar"
       }
@@ -15,7 +28,11 @@
     "connect": {
       "title": "Connect",
       "actions": {
+        "connect": "Connect",
+        "disconnect": "Disconnect",
+        "connecting": "Connecting...",
         "clickToConnect": "Click to connect",
+        "clickToDisconnect": "Click to disconnect",
         "switchNode": "Switch",
         "retry": "Retry"
       },
@@ -23,30 +40,51 @@
         "heroTitle": "One-click connect",
         "heroSubtitle": "Choose a mode, then press the round button to start.",
         "selectNode": "Select Node",
+        "noNode": "No node available",
+        "disconnectFirst": "Connected — disconnect first to switch nodes",
+        "mode": "Mode",
         "node": "Node",
+        "system": "System Proxy",
+        "tun": "TUN",
+        "both": "Both",
+        "upload": "Upload",
+        "download": "Download",
         "connecting": "Connecting",
         "validating": "Validating",
         "connectionFailed": "Connection failed",
         "connected": "Connected",
-        "disconnected": "Disconnected"
+        "disconnected": "Disconnected",
+        "connectedHint": "Connected",
+        "startHint": "Click to start"
       },
       "mode": {
         "system": "Browser",
         "both": "Full VPN",
         "smart": "Smart Split"
       },
+      "modeTooltip": "Browser: only apps honoring system proxy. Full VPN: route all traffic. Smart Split: direct traffic in mainland China, route overseas traffic through XXLink.",
       "empty": {
+        "title": "No nodes available",
         "subtitle": "Please purchase a plan or refresh nodes",
         "goToPlans": "Go to Plans",
-        "rebuild": "Refresh nodes"
+        "refresh": "Refresh nodes",
+        "rebuild": "Refresh nodes",
+        "rebuilding": "Refreshing nodes...",
+        "refreshing": "Refreshing...",
+        "noSubscription": "You don't have a subscription yet"
       },
       "trial": {
         "claimPrompt": "Please claim today's Trial public benefit traffic in the dashboard",
+        "emptyTitle": "Trial traffic is ready to claim",
+        "emptySubtitle": "Your Trial currently has no usable traffic. Claim today's Trial public benefit traffic in the dashboard, then refresh nodes.",
         "trafficExceeded": "Today's public benefit traffic is used up. Please wait for the next refresh or upgrade your plan.",
+        "exceededTitle": "Today's Trial traffic is used up",
+        "exceededSubtitle": "Please wait for the next 24-hour refresh, or upgrade your plan to continue.",
         "openDashboard": "Open dashboard"
       },
       "session": {
         "duration": "Connected time",
+        "traffic": "Current cycle usage",
         "localTraffic": "This connection",
         "packageTraffic": "Plan cycle usage",
         "usageUnavailable": "Usage temporarily unavailable"
@@ -84,6 +122,35 @@
         "title": "No nodes available",
         "subtitle": "Refresh nodes on Connect, or check your plan."
       }
+    },
+    "promoCode": {
+      "title": "Promo Code",
+      "heading": "Redeem promo code",
+      "subtitle": "Enter a promo code issued by the dashboard. After redemption, XXLink will refresh your account benefits and nodes.",
+      "placeholder": "Enter promo code",
+      "redeem": "Redeem",
+      "redeeming": "Redeeming...",
+      "syncing": "Syncing...",
+      "retrySync": "Retry sync",
+      "syncWarning": "The promo code was redeemed, but node sync failed. Retry sync, or open Connect and refresh nodes.",
+      "chips": {
+        "autoSync": "Auto-sync after redemption",
+        "trafficCode": "Supports traffic codes; plan trial codes can be added later"
+      },
+      "errors": {
+        "empty": "Enter a promo code",
+        "redeemFailed": "Failed to redeem promo code"
+      },
+      "result": {
+        "traffic": "benefit",
+        "success": "Redeemed {{traffic}}, valid for {{days}} days."
+      }
+    },
+    "announcement": {
+      "label": "XXLink Announcement",
+      "dismissHint": "After closing, this announcement will not appear again. You will be notified when a new announcement is published.",
+      "viewDetails": "View details",
+      "dismiss": "Do not show again"
     }
   }
 }

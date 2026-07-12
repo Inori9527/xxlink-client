@@ -25,6 +25,10 @@
       "check": "Check",
       "latest": "You are on the latest version"
     },
+    "settings": {
+      "title": "Settings",
+      "description": "Startup, theme, and appearance"
+    },
     "logout": {
       "title": "Log out",
       "description": "Clear local sign-in state",
