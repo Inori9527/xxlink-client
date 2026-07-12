@@ -4,24 +4,18 @@
   "usage": "套餐周期用量",
   "remaining": "剩余",
   "openDashboard": "打开控制台",
-  "view": "查看",
   "cancel": "取消",
   "currentAccount": "当前账号",
   "usageUnavailable": "用量暂时不可用",
   "usageRefreshFailed": "用量暂时无法刷新。你仍保持登录，可稍后重试。",
   "sections": {
     "common": "常用",
-    "management": "管理",
     "account": "账户"
   },
   "rows": {
-    "announcements": {
-      "title": "公告中心",
-      "description": "最新公告和历史记录"
-    },
-    "promo": {
-      "title": "优惠码",
-      "description": "兑换流量或账号权益"
+    "diagnostics": {
+      "title": "复制诊断信息",
+      "description": "复制已脱敏的支持诊断包"
     },
     "update": {
       "title": "检查更新",
@@ -40,6 +34,30 @@
       "description": "清除本机登录状态",
       "confirmTitle": "退出登录？",
       "confirmBody": "退出后需要重新登录才能同步节点和账号权益。"
+    }
+  },
+  "diagnostics": {
+    "copied": "已复制脱敏诊断信息"
+  },
+  "promo": {
+    "heading": "兑换优惠码",
+    "subtitle": "为当前账号兑换流量或账号权益。",
+    "placeholder": "输入优惠码",
+    "redeem": "兑换",
+    "redeeming": "兑换中...",
+    "syncing": "同步中...",
+    "retrySync": "重试同步",
+    "syncWarning": "兑换成功，但订阅同步需要重试。",
+    "chips": {
+      "autoSync": "自动同步订阅",
+      "trafficCode": "支持流量和权益优惠码"
+    },
+    "errors": {
+      "empty": "请先输入优惠码。"
+    },
+    "result": {
+      "traffic": "账号权益",
+      "success": "已兑换 {{traffic}}，有效期 {{days}} 天。"
     }
   }
 }

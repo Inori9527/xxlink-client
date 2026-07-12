@@ -4,24 +4,18 @@
   "usage": "Plan cycle usage",
   "remaining": "Remaining",
   "openDashboard": "Open dashboard",
-  "view": "View",
   "cancel": "Cancel",
   "currentAccount": "Current account",
   "usageUnavailable": "Usage temporarily unavailable",
   "usageRefreshFailed": "Usage could not refresh. You are still signed in; retry later.",
   "sections": {
     "common": "Common",
-    "management": "Management",
     "account": "Account"
   },
   "rows": {
-    "announcements": {
-      "title": "Announcements",
-      "description": "Latest notices and history"
-    },
-    "promo": {
-      "title": "Promo code",
-      "description": "Redeem traffic or account benefits"
+    "diagnostics": {
+      "title": "Copy diagnostics",
+      "description": "Copy a redacted support bundle"
     },
     "update": {
       "title": "Check for updates",
@@ -40,6 +34,30 @@
       "description": "Clear local sign-in state",
       "confirmTitle": "Log out?",
       "confirmBody": "After logging out, you need to sign in again to sync nodes and account benefits."
+    }
+  },
+  "diagnostics": {
+    "copied": "Redacted diagnostics copied"
+  },
+  "promo": {
+    "heading": "Redeem a promo code",
+    "subtitle": "Apply traffic or account benefits to this account.",
+    "placeholder": "Enter promo code",
+    "redeem": "Redeem",
+    "redeeming": "Redeeming...",
+    "syncing": "Syncing...",
+    "retrySync": "Retry sync",
+    "syncWarning": "Redeemed successfully, but subscription sync needs a retry.",
+    "chips": {
+      "autoSync": "Syncs subscription automatically",
+      "trafficCode": "Traffic and benefit codes supported"
+    },
+    "errors": {
+      "empty": "Enter a promo code first."
+    },
+    "result": {
+      "traffic": "account benefit",
+      "success": "Redeemed {{traffic}} for {{days}} days."
     }
   }
 }
