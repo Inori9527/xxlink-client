@@ -20,7 +20,15 @@ const DEFAULT_BACKEND_SOURCE_DIRS = [
   path.resolve(__dirname, '../src-tauri'),
   path.resolve(__dirname, '../crates'),
 ]
-const EXCLUDE_USAGE_DIRS = [FRONTEND_LOCALES_DIR, BACKEND_LOCALES_DIR]
+const GENERATED_I18N_TYPES_DIR = path.resolve(
+  __dirname,
+  '../src/types/generated',
+)
+const EXCLUDE_USAGE_DIRS = [
+  FRONTEND_LOCALES_DIR,
+  BACKEND_LOCALES_DIR,
+  GENERATED_I18N_TYPES_DIR,
+]
 const DEFAULT_BASELINE_LANG = 'en'
 const IGNORE_DIR_NAMES = new Set([
   '.git',
@@ -108,8 +116,9 @@ function printUsage() {
   console.log(`Usage: pnpm node scripts/cleanup-unused-i18n.mjs [options]
 
 Options:
-  --apply            Write locale files with unused keys removed (default: report only)
+  --apply            Write locale files after applying the selected cleanup options
   --align            Align locale structure/order using the baseline locale
+  --preserve-unused  Keep detected unused keys when applying changes
   --baseline <lang>  Baseline locale file name for frontend/backend (default: ${DEFAULT_BASELINE_LANG})
   --keep-extra       Preserve keys that exist only in non-baseline locales when aligning
   --no-backup        Skip creating \`.bak\` backups when applying changes
@@ -128,6 +137,7 @@ function parseArgs(argv) {
     align: false,
     baseline: DEFAULT_BASELINE_LANG,
     keepExtra: false,
+    preserveUnused: false,
   }
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -141,6 +151,9 @@ function parseArgs(argv) {
         break
       case '--keep-extra':
         options.keepExtra = true
+        break
+      case '--preserve-unused':
+        options.preserveUnused = true
         break
       case '--no-backup':
         options.backup = false
@@ -861,6 +874,77 @@ function cleanupEmptyBranches(target) {
   return Object.keys(target).length === 0
 }
 
+function readLocaleKey(target, dottedKey) {
+  if (!target || typeof target !== 'object' || Array.isArray(target)) {
+    return { found: false }
+  }
+
+  if (Object.hasOwn(target, dottedKey)) {
+    return { found: true, direct: true, value: target[dottedKey] }
+  }
+
+  let current = target
+  for (const part of dottedKey.split('.')) {
+    if (
+      !current ||
+      typeof current !== 'object' ||
+      Array.isArray(current) ||
+      !Object.hasOwn(current, part)
+    ) {
+      return { found: false }
+    }
+    current = current[part]
+  }
+
+  return { found: true, direct: false, value: current }
+}
+
+function restoreLocaleKey(target, dottedKey, entry) {
+  const value = JSON.parse(JSON.stringify(entry.value))
+  if (entry.direct) {
+    target[dottedKey] = value
+    return
+  }
+
+  const parts = dottedKey.split('.').filter(Boolean)
+  let current = target
+  for (const part of parts.slice(0, -1)) {
+    if (!current[part] || typeof current[part] !== 'object') {
+      current[part] = {}
+    }
+    current = current[part]
+  }
+  current[parts.at(-1)] = value
+}
+
+export function updateLocaleData(baselineData, localeData, unused, options) {
+  const updated = options.align
+    ? alignToBaseline(baselineData, localeData, options)
+    : JSON.parse(JSON.stringify(localeData))
+  const removed = []
+
+  if (options.preserveUnused) {
+    for (const key of unused) {
+      const entry = readLocaleKey(localeData, key)
+      if (entry.found) {
+        restoreLocaleKey(updated, key, entry)
+      }
+    }
+  } else {
+    for (const key of unused) {
+      removeKey(updated, key)
+      removed.push(key)
+    }
+    cleanupEmptyBranches(updated)
+  }
+
+  return {
+    updated,
+    removed,
+    aligned: Boolean(options.align),
+  }
+}
+
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -1254,19 +1338,10 @@ function processLocale(
   const removed = []
   let aligned = false
   if (options.apply) {
-    let updated
-    if (options.align) {
-      aligned = true
-      updated = alignToBaseline(baselineData, data, options)
-    } else {
-      updated = JSON.parse(JSON.stringify(data))
-    }
-
-    for (const key of unused) {
-      removeKey(updated, key)
-      removed.push(key)
-    }
-    cleanupEmptyBranches(updated)
+    const update = updateLocaleData(baselineData, data, unused, options)
+    const { updated } = update
+    removed.push(...update.removed)
+    aligned = update.aligned
 
     writeLocale(locale, updated, options)
     locale.data = JSON.parse(JSON.stringify(updated))
@@ -1476,6 +1551,7 @@ function main() {
         align: options.align,
         baseline: options.baseline,
         keepExtra: options.keepExtra,
+        preserveUnused: options.preserveUnused,
       },
       groups: groupReports.map((report) => ({
         group: report.group,
@@ -1491,10 +1567,12 @@ function main() {
   }
 }
 
-try {
-  main()
-} catch (error) {
-  console.error('Failed to complete i18n cleanup draft.')
-  console.error(error)
-  process.exit(1)
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  try {
+    main()
+  } catch (error) {
+    console.error('Failed to complete i18n cleanup draft.')
+    console.error(error)
+    process.exit(1)
+  }
 }

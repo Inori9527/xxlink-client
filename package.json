@@ -35,7 +35,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "i18n:check": "node scripts/cleanup-unused-i18n.mjs",
-    "i18n:format": "node scripts/cleanup-unused-i18n.mjs --align --apply",
+    "i18n:format": "node scripts/cleanup-unused-i18n.mjs --align --preserve-unused",
+    "i18n:align": "node scripts/cleanup-unused-i18n.mjs --align --apply --preserve-unused",
+    "i18n:prune": "node scripts/cleanup-unused-i18n.mjs --align --apply",
     "i18n:types": "node scripts/generate-i18n-keys.mjs",
     "typecheck": "tsc --noEmit",
     "test:idle-resume": "node --test scripts/test-phase1-idle-resume.mjs"
