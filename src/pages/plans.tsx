@@ -54,6 +54,11 @@ import {
 import { authStore } from '@/services/auth-store'
 import { showNotice } from '@/services/notice-service'
 import { runResumeRecovery } from '@/services/resume-recovery'
+import {
+  classifyClientError,
+  reportSafeClientFailure,
+  toSafeClientErrorMessage,
+} from '@/services/safe-client-error'
 
 const DASHBOARD_RECHARGE_URL = 'https://xxlink.net/dashboard/recharge'
 type BillingPeriod = 'month' | 'quarter' | 'year'
@@ -364,11 +369,10 @@ const PlansPage = () => {
       await loadPlans()
       showNotice.success(t('plans.trial.claimSuccess'))
     } catch (claimError) {
-      const message =
-        claimError instanceof Error
-          ? claimError.message
-          : t('plans.trial.claimFailed')
-      setError(message)
+      reportSafeClientFailure('plans-claim-public-benefit', claimError)
+      setError(
+        toSafeClientErrorMessage(classifyClientError(claimError).kind, t),
+      )
     } finally {
       setClaimingBenefit(false)
     }

@@ -710,13 +710,12 @@ const ConnectPage = () => {
             await patchVerge(rollbackPayload)
             await refreshProxy()
           } catch (rollbackError) {
-            console.error('[Connect] mode rollback failed', rollbackError)
+            reportSafeClientFailure('connect-mode-rollback', rollbackError)
           }
 
-          console.error('[Connect] mode change failed', error)
+          reportSafeClientFailure('connect-mode-change', error)
           showNotice.error(
-            'layout.components.connect.feedback.toggleFailed',
-            error,
+            toSafeClientErrorMessage(classifyClientError(error).kind, t),
           )
           triggerErrorFlash()
         } finally {
@@ -731,6 +730,7 @@ const ConnectPage = () => {
       patchVerge,
       refreshProxy,
       runtimeConnected,
+      t,
       triggerErrorFlash,
     ],
   )
@@ -785,17 +785,13 @@ const ConnectPage = () => {
         }
         await refreshProxy()
       } catch (error) {
-        console.error(
-          '[Connect] readiness failure auto-disconnect failed',
-          error,
-        )
+        reportSafeClientFailure('connect-readiness-auto-disconnect', error)
         showNotice.error(
-          'layout.components.connect.feedback.toggleFailed',
-          error,
+          toSafeClientErrorMessage(classifyClientError(error).kind, t),
         )
       }
     },
-    [mode, patchVerge, refreshProxy],
+    [mode, patchVerge, refreshProxy, t],
   )
 
   const validateSelectedNodeReadiness = useCallback(async () => {
@@ -898,8 +894,10 @@ const ConnectPage = () => {
       }
       await refreshAccountState()
     } catch (error) {
-      console.error('[Connect] toggle failed', error)
-      showNotice.error('layout.components.connect.feedback.toggleFailed', error)
+      reportSafeClientFailure('connect-toggle', error)
+      showNotice.error(
+        toSafeClientErrorMessage(classifyClientError(error).kind, t),
+      )
       setReadinessStatus(runtimeConnected ? 'failed' : 'disconnected')
       triggerErrorFlash()
     } finally {
@@ -922,10 +920,9 @@ const ConnectPage = () => {
       setStartupSyncError(false)
       showNotice.success('layout.components.connect.feedback.refreshed')
     } catch (error) {
-      console.error('[Connect] refresh failed', error)
+      reportSafeClientFailure('connect-refresh', error)
       showNotice.error(
-        'layout.components.connect.feedback.refreshFailed',
-        error,
+        toSafeClientErrorMessage(classifyClientError(error).kind, t),
       )
     } finally {
       setRefreshing(false)
@@ -967,7 +964,7 @@ const ConnectPage = () => {
       await refreshAccountState()
       showNotice.error('layout.components.connect.feedback.trafficExceeded')
     } catch (error) {
-      console.error('[Connect] disconnect after traffic exceeded failed', error)
+      reportSafeClientFailure('connect-traffic-exceeded-disconnect', error)
       showNotice.error('layout.components.connect.feedback.trafficExceeded')
     } finally {
       setBusy(false)
@@ -1002,7 +999,7 @@ const ConnectPage = () => {
           up: heartbeatTrafficRef.current.up + bytesUp,
           down: heartbeatTrafficRef.current.down + bytesDown,
         }
-        console.warn('[Connect] traffic heartbeat failed', error)
+        reportSafeClientFailure('connect-traffic-heartbeat', error)
       }
     }
 
