@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { listen } from '@tauri-apps/api/event'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { useLocation } from 'react-router'
 import {
   getBaseConfig,
   getRuleProviders,
@@ -64,14 +63,6 @@ const withStartupTimeout = async <T,>(
   }
 }
 
-const ADVANCED_DATA_ROUTES = new Set([
-  '/home',
-  '/profile',
-  '/proxies',
-  '/rules',
-  '/settings',
-])
-
 // 全局数据提供者组件
 export const AppDataProvider = ({
   children,
@@ -79,7 +70,6 @@ export const AppDataProvider = ({
   children: React.ReactNode
 }) => {
   const { verge } = useVerge()
-  const { pathname } = useLocation()
   const [startupQueriesEnabled, setStartupQueriesEnabled] = useState(false)
 
   useEffect(() => {
@@ -90,14 +80,7 @@ export const AppDataProvider = ({
     return () => window.clearTimeout(timer)
   }, [])
 
-  const shouldLoadAdvancedData = useMemo(
-    () =>
-      startupQueriesEnabled &&
-      Array.from(ADVANCED_DATA_ROUTES).some((route) =>
-        pathname.startsWith(route),
-      ),
-    [pathname, startupQueriesEnabled],
-  )
+  const shouldLoadAdvancedData = false
 
   const { data: proxiesData, refetch: refreshProxy } = useQuery({
     queryKey: ['getProxies'],

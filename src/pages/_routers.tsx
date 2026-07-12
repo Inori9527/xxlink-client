@@ -18,14 +18,7 @@ import NodesPage from './nodes'
 import PlansPage from './plans'
 import RegisterPage from './register'
 
-/**
- * navItems drives both the sidebar navigation and the router.
- *
- * Rules, Logs, and API Keys are intentionally excluded from
- * this list so they do not appear in the navigation bar. Their routes are
- * still registered below via hiddenRoutes so the pages remain reachable if
- * needed.
- */
+/** navItems drives both the fixed sidebar navigation and the router. */
 export const navItems = [
   {
     label: 'layout.components.navigation.tabs.connect',
@@ -59,39 +52,10 @@ export const navItems = [
   },
 ]
 
-/** Routes for pages hidden from the nav bar but still routable. */
-const hiddenRoutes: RouteObject[] = [
-  {
-    path: '/home',
-    lazy: async () => ({ Component: (await import('./home')).default }),
-  },
-  {
-    path: '/proxies',
-    lazy: async () => ({ Component: (await import('./proxies')).default }),
-  },
-  {
-    path: '/profile',
-    lazy: async () => ({ Component: (await import('./profiles')).default }),
-  },
-  {
-    path: '/connections',
-    lazy: async () => ({ Component: (await import('./connections')).default }),
-  },
-  {
-    path: '/rules',
-    lazy: async () => ({ Component: (await import('./rules')).default }),
-  },
-  {
-    path: '/unlock',
-    lazy: async () => ({ Component: (await import('./unlock')).default }),
-  },
+const temporaryRoutes: RouteObject[] = [
   {
     path: '/promo-code',
     lazy: async () => ({ Component: (await import('./promo-code')).default }),
-  },
-  {
-    path: '/settings',
-    lazy: async () => ({ Component: (await import('./settings')).default }),
   },
   {
     path: '/announcements',
@@ -99,14 +63,18 @@ const hiddenRoutes: RouteObject[] = [
       Component: (await import('./announcement-center')).default,
     }),
   },
-  {
-    path: '/logs',
-    Component: () => null /* KeepAlive: real LogsPage rendered in Layout */,
-  },
-  {
-    path: '/api-keys',
-    lazy: async () => ({ Component: (await import('./api-keys')).default }),
-  },
+]
+
+const redirectRoutes: RouteObject[] = [
+  { path: '/home', element: <Navigate to="/connect" replace /> },
+  { path: '/profile', element: <Navigate to="/connect" replace /> },
+  { path: '/connections', element: <Navigate to="/connect" replace /> },
+  { path: '/rules', element: <Navigate to="/connect" replace /> },
+  { path: '/unlock', element: <Navigate to="/connect" replace /> },
+  { path: '/proxies', element: <Navigate to="/nodes" replace /> },
+  { path: '/settings', element: <Navigate to="/mine" replace /> },
+  { path: '/logs', element: <Navigate to="/mine" replace /> },
+  { path: '/api-keys', element: <Navigate to="/mine" replace /> },
 ]
 
 export const router = createBrowserRouter([
@@ -133,7 +101,8 @@ export const router = createBrowserRouter([
             Component: item.Component,
           }) as RouteObject,
       ),
-      ...hiddenRoutes,
+      ...temporaryRoutes,
+      ...redirectRoutes,
     ],
   },
 ])
