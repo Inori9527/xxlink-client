@@ -77,6 +77,7 @@ import {
 } from '@/services/node-latency-display'
 import { showNotice } from '@/services/notice-service'
 import { runResumeRecovery } from '@/services/resume-recovery'
+import { reportSafeClientFailure } from '@/services/safe-client-error'
 import {
   checkSelectedNodeReadiness,
   getReadinessFailureDisconnectPayload,
@@ -245,7 +246,8 @@ const ConnectPage = () => {
   )
   const { changeProxy } = useProxySelection({
     onSuccess: () => refreshProxy(),
-    onError: (error) => console.error('[Connect] proxy change failed', error),
+    onError: (error) =>
+      reportSafeClientFailure('connect-proxy-selection', error),
     forceConnectionCleanup: true,
   })
 
@@ -740,7 +742,6 @@ const ConnectPage = () => {
         globalGroup.name,
         entry.name,
         currentRuntimeNode || currentNode,
-        true,
       )
     },
     [
