@@ -1677,6 +1677,12 @@ export interface TranslationResources {
       }
       feedback: {
         errors: {
+          safeClient: {
+            auth: string
+            network: string
+            service: string
+            unknown: string
+          }
           trafficStats: string
           trafficStatsDescription: string
         }

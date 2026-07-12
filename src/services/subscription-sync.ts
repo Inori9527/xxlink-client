@@ -22,13 +22,16 @@ import {
   patchProfilesConfig,
 } from '@/services/cmds'
 import delayManager from '@/services/delay'
+import { reportSafeClientFailure } from '@/services/safe-client-error'
 
 /**
  * Fetch the current subscription from the backend, import (or refresh) the
  * Clash profile, then activate it.
  *
  * Designed to be called fire-and-forget:
- *   syncSubscription().catch(console.error)
+ *   syncSubscription().catch((error) =>
+ *     reportSafeClientFailure('subscription-sync', error),
+ *   )
  */
 let inflight: Promise<void> | null = null
 const APPLIED_GENERATION_KEY = 'xxlink:subscription-profile-generation'
@@ -81,8 +84,8 @@ async function doSync(force: boolean): Promise<void> {
   let visibleNodes: Node[] | null = null
   try {
     visibleNodes = await api.nodes.list()
-  } catch (err) {
-    console.warn('[subscription-sync] node generation probe failed', err)
+  } catch (error) {
+    reportSafeClientFailure('subscription-sync-node-generation', error)
   }
 
   const clashUrl = getSubUrl(sub.subUrl, 'clash')
@@ -129,8 +132,8 @@ async function doSync(force: boolean): Promise<void> {
     for (const stale of remoteProfiles) {
       try {
         await deleteProfile(stale.uid)
-      } catch (err) {
-        console.warn('[subscription-sync] rebuild delete failed', err)
+      } catch (error) {
+        reportSafeClientFailure('subscription-sync-rebuild-delete', error)
       }
     }
 

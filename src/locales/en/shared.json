@@ -75,7 +75,13 @@
   "feedback": {
     "errors": {
       "trafficStats": "Traffic Statistics Error",
-      "trafficStatsDescription": "The traffic statistics component encountered an error and has been disabled to prevent crashes."
+      "trafficStatsDescription": "The traffic statistics component encountered an error and has been disabled to prevent crashes.",
+      "safeClient": {
+        "network": "Network connection failed. Please try again.",
+        "auth": "Your session is no longer valid. Please sign in again.",
+        "service": "The service could not complete the request. Please try again later.",
+        "unknown": "Something went wrong. Please try again."
+      }
     },
     "notices": {
       "raw": "{{message}}",
