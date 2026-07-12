@@ -18,6 +18,11 @@ import { useTranslation } from 'react-i18next'
 import { BasePage } from '@/components/base'
 import { useAppData } from '@/providers/app-data-context'
 import { api, type PromoRedeemResult } from '@/services/api'
+import {
+  classifyClientError,
+  reportSafeClientFailure,
+  toSafeClientErrorMessage,
+} from '@/services/safe-client-error'
 import { syncSubscription } from '@/services/subscription-sync'
 
 function formatRedeemResult(
@@ -56,10 +61,7 @@ const PromoCodePage = () => {
       await syncSubscription({ force: true })
       await refreshProxy()
     } catch (syncError) {
-      console.warn(
-        '[PromoCode] subscription refresh after redeem failed',
-        syncError,
-      )
+      reportSafeClientFailure('promo-sync', syncError)
       setSyncWarning(true)
     } finally {
       setSyncing(false)
@@ -83,11 +85,10 @@ const PromoCodePage = () => {
       setCode('')
       await handleSync()
     } catch (redeemError) {
-      const message =
-        redeemError instanceof Error
-          ? redeemError.message
-          : t('layout.components.promoCode.errors.redeemFailed')
-      setError(message)
+      reportSafeClientFailure('promo-redeem', redeemError)
+      setError(
+        toSafeClientErrorMessage(classifyClientError(redeemError).kind, t),
+      )
     } finally {
       setSubmitting(false)
     }

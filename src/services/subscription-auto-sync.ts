@@ -1,4 +1,5 @@
 import { authStore } from '@/services/auth-store'
+import { reportSafeClientFailure } from '@/services/safe-client-error'
 import { syncSubscription } from '@/services/subscription-sync'
 
 const AUTO_SYNC_INTERVAL_MS = 12 * 60 * 60 * 1000
@@ -15,7 +16,7 @@ async function runAutoSync(): Promise<void> {
   try {
     await syncSubscription()
   } catch (error) {
-    console.error('[subscription-auto-sync] periodic sync failed', error)
+    reportSafeClientFailure('subscription-auto-sync', error)
   } finally {
     running = false
   }
@@ -55,4 +56,3 @@ export function stopSubscriptionAutoSync(): void {
   unsubscribe = null
   started = false
 }
-
