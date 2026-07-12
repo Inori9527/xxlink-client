@@ -20,7 +20,7 @@ const temporaryGeneratedSource = path.join(
   '__i18n-cleanup-generated-test.ts',
 )
 const temporaryReport = path.join(root, 'tmp-i18n-cleanup-test-report.json')
-const retiredKey = 'connections.page.title'
+const unusedKey = 'home.page.tooltips.lightweightMode'
 
 function assertSafeI18nScripts() {
   const scripts = JSON.parse(
@@ -37,13 +37,13 @@ function assertSafeI18nScripts() {
 function writeTemporarySources(realUsage) {
   fs.writeFileSync(
     temporaryGeneratedSource,
-    `export type GeneratedOnlyKey = '${retiredKey}'\n`,
+    `export type GeneratedOnlyKey = '${unusedKey}'\n`,
     'utf8',
   )
   fs.writeFileSync(
     temporarySource,
     realUsage
-      ? `const key = '${retiredKey}'\nvoid key\n`
+      ? `const key = '${unusedKey}'\nvoid key\n`
       : "const key = 'plans.page.title'\nvoid key\n",
     'utf8',
   )
@@ -72,13 +72,13 @@ try {
 
   writeTemporarySources(false)
   assert.ok(
-    readUnusedFrontendKeys().includes(retiredKey),
+    readUnusedFrontendKeys().includes(unusedKey),
     'generated i18n types must not count as a runtime translation consumer',
   )
 
   writeTemporarySources(true)
   assert.ok(
-    !readUnusedFrontendKeys().includes(retiredKey),
+    !readUnusedFrontendKeys().includes(unusedKey),
     'a real source consumer must keep its translation key in use',
   )
 
