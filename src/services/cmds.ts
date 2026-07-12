@@ -36,13 +36,6 @@ export async function importProfile(url: string, option?: IProfileOption) {
   })
 }
 
-export async function reorderProfile(activeId: string, overId: string) {
-  return invoke<void>('reorder_profile', {
-    activeId,
-    overId,
-  })
-}
-
 export async function updateProfile(index: string, option?: IProfileOption) {
   return invoke<void>('update_profile', { index, option })
 }
@@ -232,10 +225,6 @@ export async function getClashLogs() {
   }, [])
 }
 
-export async function clearLogs() {
-  return invoke<void>('clear_logs')
-}
-
 export async function getVergeConfig() {
   return invoke<IVergeConfig>('get_verge_config')
 }
@@ -320,38 +309,6 @@ export const openWebUrl = async (url: string) => {
     await invoke('open_web_url', { url })
   } catch (err: any) {
     showNotice.error(err)
-  }
-}
-
-export async function cmdGetProxyDelay(
-  name: string,
-  timeout: number,
-  url?: string,
-) {
-  // 确保URL不为空
-  const testUrl = url || 'http://cp.cloudflare.com/generate_204'
-
-  try {
-    // 不再在前端编码代理名称，由后端统一处理编码
-    const result = await invoke<{ delay: number }>(
-      'clash_api_get_proxy_delay',
-      {
-        name,
-        url: testUrl, // 传递经过验证的URL
-        timeout,
-      },
-    )
-
-    // 验证返回结果中是否有delay字段，并且值是一个有效的数字
-    if (result && typeof result.delay === 'number') {
-      return result
-    } else {
-      // 返回一个有效的结果对象，但标记为超时
-      return { delay: 1e6 }
-    }
-  } catch {
-    // 返回一个有效的结果对象，但标记为错误
-    return { delay: 1e6 }
   }
 }
 

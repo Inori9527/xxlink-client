@@ -2,11 +2,11 @@ use super::CmdResult;
 use crate::core::{autostart, handle};
 use crate::utils::resolve::ui::{self, UiReadyStage};
 use crate::{cmd::StringifyErr as _, feat, utils::dirs};
-use xxlink_logging::{Type, logging};
 use smartstring::alias::String;
 use tauri::AppHandle;
 #[cfg(feature = "verge-dev")]
 use tauri::Manager as _;
+use xxlink_logging::{Type, logging};
 
 /// 打开应用程序所在目录
 #[tauri::command]
@@ -37,26 +37,6 @@ pub fn open_web_url(url: String) -> CmdResult<()> {
         return Err("only http:// and https:// URLs are allowed".into());
     }
     open::that(url.as_str()).stringify_err()
-}
-
-// TODO 后续可以为前端提供接口，当前作为托盘菜单使用
-/// 打开 Verge 最新日志
-#[tauri::command]
-pub async fn open_app_log() -> CmdResult<()> {
-    let log_path = dirs::app_latest_log().stringify_err()?;
-    #[cfg(target_os = "windows")]
-    let log_path = crate::utils::help::snapshot_path(&log_path).stringify_err()?;
-    open::that(log_path).stringify_err()
-}
-
-// TODO 后续可以为前端提供接口，当前作为托盘菜单使用
-/// 打开 Clash 最新日志
-#[tauri::command]
-pub async fn open_core_log() -> CmdResult<()> {
-    let log_path = dirs::clash_latest_log().stringify_err()?;
-    #[cfg(target_os = "windows")]
-    let log_path = crate::utils::help::snapshot_path(&log_path).stringify_err()?;
-    open::that(log_path).stringify_err()
 }
 
 /// 打开/关闭开发者工具

@@ -139,8 +139,6 @@ mod app_init {
             cmd::open_logs_dir,
             cmd::open_web_url,
             cmd::open_core_dir,
-            cmd::open_app_log,
-            cmd::open_core_log,
             cmd::get_network_interfaces,
             cmd::get_system_hostname,
             cmd::restart_app,
@@ -189,15 +187,11 @@ mod app_init {
             cmd::view_profile,
             cmd::patch_profile,
             cmd::import_profile,
-            cmd::reorder_profile,
             cmd::update_profile,
             cmd::delete_profile,
             cmd::read_profile_file,
             cmd::save_profile_file,
             cmd::get_next_update_time,
-            cmd::get_unlock_items,
-            cmd::check_media_unlock,
-            cmd::open_oauth_window,
         ]
     }
 }

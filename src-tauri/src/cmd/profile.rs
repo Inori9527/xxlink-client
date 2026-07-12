@@ -4,9 +4,7 @@ use crate::utils::window_manager::WindowManager;
 use crate::{
     config::{
         Config, IProfiles, PrfItem, PrfOption,
-        profiles::{
-            profiles_delete_item_safe, profiles_patch_item_safe, profiles_reorder_safe, profiles_save_file_safe,
-        },
+        profiles::{profiles_delete_item_safe, profiles_patch_item_safe, profiles_save_file_safe},
         profiles_append_item_safe,
     },
     core::{CoreManager, handle, timer::Timer, tray::Tray},
@@ -108,21 +106,6 @@ pub async fn import_profile(url: std::string::String, option: Option<PrfOption>)
 
     logging!(info, Type::Cmd, "[导入订阅] 导入完成: {}", help::mask_url(&url));
     Ok(())
-}
-
-/// 调整profile的顺序
-#[tauri::command]
-pub async fn reorder_profile(active_id: String, over_id: String) -> CmdResult {
-    match profiles_reorder_safe(&active_id, &over_id).await {
-        Ok(_) => {
-            logging!(info, Type::Cmd, "重新排序配置文件");
-            Ok(())
-        }
-        Err(err) => {
-            logging!(error, Type::Cmd, "重新排序配置文件失败: {}", err);
-            Err(format!("重新排序配置文件失败: {}", err).into())
-        }
-    }
 }
 
 /// 更新配置文件
