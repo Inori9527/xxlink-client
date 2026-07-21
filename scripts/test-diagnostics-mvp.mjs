@@ -475,6 +475,31 @@ test('clipboard final gate rejects a forced invalid value before invoking writer
   assert.equal(writes, 0)
 })
 
+test('clipboard writes canonical parsed JSON without bytes from duplicate properties', async () => {
+  const { buildDiagnosticsBundle, writeDiagnosticsJsonToClipboard } =
+    loadDiagnosticsModule()
+  const bundle = buildDiagnosticsBundle(
+    { appVersion: '2.4.15' },
+    { now: () => new Date('2026-06-29T12:00:00.000Z') },
+  )
+  const canonical = JSON.stringify(bundle, null, 2)
+  const sentinel = RANDOM_SENTINELS[9]
+  const duplicateKeyJson = `{"app":{"version":"${sentinel}"},${canonical.slice(1)}`
+  const parsed = JSON.parse(duplicateKeyJson)
+  const parsedCanonical = JSON.stringify(parsed, null, 2)
+  let clipboardText = ''
+
+  assert.equal(parsed.app.version, bundle.app.version)
+  assert.equal(parsedCanonical.includes(sentinel), false)
+  await writeDiagnosticsJsonToClipboard(duplicateKeyJson, async (text) => {
+    clipboardText = text
+  })
+
+  assert.equal(clipboardText, parsedCanonical)
+  assert.equal(clipboardText.includes(sentinel), false)
+  assert.notEqual(clipboardText, duplicateKeyJson)
+})
+
 test('metadata-only diagnostics source has no free-form parser dependency', () => {
   const source = fs.readFileSync(
     path.join(repoRoot, 'src/services/diagnostics-bundle.ts'),

@@ -895,9 +895,16 @@ export async function writeDiagnosticsJsonToClipboard(
   json: string,
   writer: (text: string) => Promise<void>,
 ): Promise<void> {
-  if (diagnosticsJsonHasForbiddenMaterial(json)) {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(json)
+  } catch {
     throw new Error('Diagnostics bundle contains forbidden material')
   }
 
-  await writer(json)
+  if (!isSafeDiagnosticsBundle(parsed)) {
+    throw new Error('Diagnostics bundle contains forbidden material')
+  }
+
+  await writer(JSON.stringify(parsed, null, 2))
 }
