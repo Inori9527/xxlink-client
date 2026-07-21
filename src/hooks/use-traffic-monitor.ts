@@ -8,7 +8,7 @@ import {
 } from 'react'
 import { Traffic } from 'tauri-plugin-mihomo-api'
 
-import { debugLog } from '@/utils/debug'
+import { reportSafeClientFailure } from '@/services/safe-client-error'
 import { TrafficDataSampler, formatTrafficName } from '@/utils/traffic-sampler'
 
 // 引用计数管理器
@@ -22,13 +22,11 @@ class ReferenceCounter {
 
   increment(): () => void {
     this.count++
-    debugLog(`[ReferenceCounter] 引用计数增加: ${this.count}`)
 
     this.notify()
 
     return () => {
       this.count--
-      debugLog(`[ReferenceCounter] 引用计数减少: ${this.count}`)
 
       this.notify()
     }
@@ -167,7 +165,6 @@ class TrafficWorkerClient {
 
   start(rangeMinutes?: number) {
     if (typeof window === 'undefined') {
-      debugLog('[TrafficWorkerClient] Window not available, skip start')
       return
     }
 
@@ -204,7 +201,7 @@ class TrafficWorkerClient {
         }
 
         this.worker.onerror = (error) => {
-          debugLog(`[TrafficWorkerClient] Worker error: ${String(error)}`)
+          reportSafeClientFailure('traffic-worker-runtime', error)
         }
 
         this.ready = true
@@ -212,16 +209,10 @@ class TrafficWorkerClient {
         this.flushQueue()
         return
       } catch (error) {
-        debugLog(
-          `[TrafficWorkerClient] Worker initialization failed, falling back to inline sampler: ${String(error)}`,
-        )
+        reportSafeClientFailure('traffic-worker-initialize', error)
         this.worker = null
         this.mode = null
       }
-    } else {
-      debugLog(
-        '[TrafficWorkerClient] Worker not supported, using inline sampler',
-      )
     }
 
     this.startInline(initMessage)

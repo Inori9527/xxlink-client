@@ -18,6 +18,39 @@ const HOSTILE_DIAGNOSTIC_SAMPLES = [
   },
   {
     value:
+      'proxy socks5://socks-user:socks-password@proxy.example.test:1080/path',
+    fragments: ['socks-user', 'socks-password', 'proxy.example.test'],
+  },
+  {
+    value:
+      '- name: standalone-private-proxy\n  type: socks5\n  server: standalone.example.test\n  port: 1080\n  username: standalone-user\n  password: standalone-password',
+    fragments: [
+      'standalone-private-proxy',
+      'standalone.example.test',
+      'standalone-user',
+      'standalone-password',
+    ],
+  },
+  {
+    value:
+      '- name: credential-free-private-proxy\n  type: trojan\n  server: credential-free.example.test\n  port: 443',
+    fragments: [
+      'credential-free-private-proxy',
+      'credential-free.example.test',
+    ],
+  },
+  {
+    value:
+      '{"name":"json-private-proxy","type":"http","server":"json-standalone.example.test","port":8080,"username":"json-user","password":"json-password"}',
+    fragments: [
+      'json-private-proxy',
+      'json-standalone.example.test',
+      'json-user',
+      'json-password',
+    ],
+  },
+  {
+    value:
       'request https://api.example.test/path?token=query-token&api_key=query-api-key&safe=metadata',
     fragments: ['query-token', 'query-api-key'],
   },
@@ -188,7 +221,6 @@ test('redaction removes forbidden diagnostics material from strings and objects'
   assert.equal(json.includes('authenticated'), true)
   assert.equal(diagnosticsJsonHasForbiddenMaterial(json), false)
   assert.equal(diagnosticsJsonHasForbiddenMaterial(unsafe), true)
-
   for (const sample of HOSTILE_DIAGNOSTIC_SAMPLES) {
     const sanitized = redactText(sample.value)
     assert.equal(
@@ -379,4 +411,21 @@ test('runtime collector copies a serializable redacted bundle to clipboard', asy
       assert.equal(extraContext.clipboardText.includes(fragment), false)
     }
   }
+})
+
+test('clipboard final gate rejects unsafe serialization before invoking writer', async () => {
+  const { writeDiagnosticsJsonToClipboard } = loadDiagnosticsModule()
+  let writes = 0
+  const hostile = JSON.stringify({
+    proxy: 'socks://user:password@standalone.example.test:1080',
+  })
+
+  await assert.rejects(
+    () =>
+      writeDiagnosticsJsonToClipboard(hostile, async () => {
+        writes++
+      }),
+    /forbidden material/i,
+  )
+  assert.equal(writes, 0)
 })

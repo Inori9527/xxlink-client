@@ -45,7 +45,6 @@ import {
   reportSafeClientFailure,
   toSafeClientErrorMessage,
 } from '@/services/safe-client-error'
-import { debugLog } from '@/utils/debug'
 import getSystem from '@/utils/get-system'
 
 const sleep = (ms: number) =>
@@ -256,7 +255,6 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
       let hostname = ''
       try {
         hostname = await getSystemHostname()
-        debugLog('获取到主机名:', hostname)
       } catch (err) {
         reportSafeClientFailure('sysproxy-hostname', err)
       }
@@ -270,12 +268,7 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
         if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
           hostname = hostname + '.local'
           options.push(hostname)
-          debugLog('主机名已添加到选项中:', hostname)
-        } else {
-          debugLog('主机名与已有选项重复:', hostname)
         }
-      } else {
-        debugLog('主机名为空')
       }
 
       // 添加IP地址
@@ -283,7 +276,6 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
 
       // 去重
       const uniqueOptions = Array.from(new Set(options))
-      debugLog('最终选项列表:', uniqueOptions)
       setHostOptions(uniqueOptions)
     } catch (error) {
       reportSafeClientFailure('sysproxy-network-interfaces', error)

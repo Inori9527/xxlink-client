@@ -12,7 +12,6 @@ import {
   syncTrayProxySelection,
 } from '@/services/cmds'
 import { reportSafeClientFailure } from '@/services/safe-client-error'
-import { debugLog } from '@/utils/debug'
 
 // 缓存连接清理
 const cleanupConnections = async (previousProxy: string) => {
@@ -24,7 +23,6 @@ const cleanupConnections = async (previousProxy: string) => {
 
     if (cleanupPromises.length > 0) {
       await Promise.allSettled(cleanupPromises)
-      debugLog(`[ProxySelection] 清理了 ${cleanupPromises.length} 个连接`)
     }
   } catch (error) {
     reportSafeClientFailure('proxy-selection-cleanup', error)
@@ -109,7 +107,6 @@ export const useProxySelection = (options: ProxySelectionOptions = {}) => {
   const executeChange = useCallback(
     async (request: ProxyChangeRequest) => {
       const { groupName, proxyName, previousProxy, skipConfigSave } = request
-      debugLog(`[ProxySelection] 代理切换: ${groupName} -> ${proxyName}`)
 
       try {
         await selectNodeForGroup(groupName, proxyName)
@@ -120,10 +117,6 @@ export const useProxySelection = (options: ProxySelectionOptions = {}) => {
         } catch (error) {
           reportSafeClientFailure('proxy-selection-persist', error)
         }
-        debugLog(
-          `[ProxySelection] 代理和状态同步完成: ${groupName} -> ${proxyName}`,
-        )
-
         if (
           config.enableConnectionCleanup &&
           (config.forceConnectionCleanup || config.autoCloseConnection) &&
@@ -143,9 +136,6 @@ export const useProxySelection = (options: ProxySelectionOptions = {}) => {
           } catch (error) {
             reportSafeClientFailure('proxy-selection-persist', error)
           }
-          debugLog(
-            `[ProxySelection] 代理切换回退成功: ${groupName} -> ${proxyName}`,
-          )
         } catch (fallbackError) {
           reportSafeClientFailure('proxy-selection-fallback', fallbackError)
           onError?.(fallbackError)

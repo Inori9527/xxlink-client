@@ -80,6 +80,29 @@ function loadNoticeServiceModule(consoleImpl = console) {
   return module.exports
 }
 
+function loadDebugModule(consoleImpl = console) {
+  const sourcePath = resolve(repoRoot, 'src/utils/debug.ts')
+  const source = readFileSync(sourcePath, 'utf8')
+    .replaceAll('import.meta.env.DEV', 'false')
+    .replaceAll('import.meta.env.VITE_ENABLE_DEBUG_LOGS', "'true'")
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+    fileName: sourcePath,
+  })
+  const module = { exports: {} }
+
+  vm.runInNewContext(outputText, {
+    console: consoleImpl,
+    exports: module.exports,
+    module,
+  })
+
+  return module.exports
+}
+
 function loadNotificationHandlersModule(consoleImpl, noticeService) {
   const sourcePath = resolve(
     repoRoot,
@@ -112,6 +135,52 @@ function loadNotificationHandlersModule(consoleImpl, noticeService) {
   })
 
   return module.exports
+}
+
+function listTypeScriptSources(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = resolve(directory, entry.name)
+    if (entry.isDirectory()) return listTypeScriptSources(path)
+    return /\.tsx?$/.test(entry.name) ? [path] : []
+  })
+}
+
+function collectCalls(sourcePath) {
+  const source = readFileSync(sourcePath, 'utf8')
+  const sourceFile = ts.createSourceFile(
+    sourcePath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    sourcePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  )
+  const calls = []
+
+  function visit(node, caughtNames = new Set()) {
+    let names = caughtNames
+    if (ts.isCatchClause(node) && node.variableDeclaration?.name) {
+      names = new Set(caughtNames)
+      names.add(node.variableDeclaration.name.getText(sourceFile))
+    }
+
+    if (ts.isCallExpression(node)) {
+      calls.push({
+        caughtNames: names,
+        expression: node.expression.getText(sourceFile),
+        arguments: node.arguments.map((argument) =>
+          argument.getText(sourceFile),
+        ),
+        line:
+          sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
+            .line + 1,
+      })
+    }
+
+    ts.forEachChild(node, (child) => visit(child, names))
+  }
+
+  visit(sourceFile)
+  return calls
 }
 
 function asPlainValue(value) {
@@ -241,6 +310,32 @@ test('safe messages and reports contain only localized copy and classification',
   assert.equal(JSON.stringify(calls[0]).includes(rawFixture), false)
 })
 
+test('production-enableable debug wrapper emits only allowlisted categorical metadata', () => {
+  const calls = []
+  const debug = loadDebugModule({ info: (...args) => calls.push(args) })
+  const raw = HOSTILE_ERROR_FRAGMENTS.join('\n')
+
+  assert.deepEqual(
+    asPlainValue(
+      debug.toSafeDebugRecord('delay-test-complete', {
+        count: 3,
+        enabled: true,
+        proxyName: raw,
+        result: { url: raw },
+        [raw]: 7,
+      }),
+    ),
+    { event: 'delay-test-complete', count: 3, enabled: true },
+  )
+  assert.deepEqual(asPlainValue(debug.toSafeDebugRecord(raw, { url: raw })), {
+    event: 'client-debug',
+  })
+
+  debug.debugLog(raw, { url: raw })
+  assert.deepEqual(asPlainValue(calls), [[{ event: 'client-debug' }]])
+  assert.equal(JSON.stringify(calls).includes(raw), false)
+})
+
 test('safe failure records exclude hostile client material from logs, copies, and persistence payloads', () => {
   const calls = []
   const consoleImpl = {
@@ -363,6 +458,40 @@ test('safe clipboard and notice sinks receive generic material only', async () =
   }
 })
 
+test('legacy error notices map unknown values to generic copy without extracting raw text', async () => {
+  const notices = loadNoticeServiceModule({ warn: () => {} })
+  const raw = HOSTILE_ERROR_FRAGMENTS.join('\n')
+
+  notices.showNotice.error(new Error(raw))
+  notices.showNotice.error(
+    'shared.feedback.notifications.common.refreshFailed',
+    new Error(raw),
+  )
+  notices.showNotice.error({
+    key: 'shared.feedback.notifications.common.refreshFailed',
+    params: { detail: { message: raw } },
+  })
+
+  const snapshot = notices.getSnapshotNotices()
+  assert.equal(snapshot.length, 3)
+  for (const notice of snapshot) {
+    assert.deepEqual(asPlainValue(notice.i18n), {
+      key: 'shared.feedback.errors.safeClient.unknown',
+    })
+    let copied = ''
+    await notices.copyNoticeToClipboard(
+      notice,
+      raw,
+      'Something went wrong. Please try again.',
+      async (text) => {
+        copied = text
+      },
+    )
+    assert.equal(copied, 'Something went wrong. Please try again.')
+    assert.equal(JSON.stringify(notice).includes(raw), false)
+  }
+})
+
 test('backend notification errors preserve actions without forwarding raw message payloads', () => {
   const calls = []
   const consoleImpl = { warn: (...args) => calls.push(args) }
@@ -428,6 +557,58 @@ test('reporter scopes are a closed runtime allowlist covering every literal call
 
   reportSafeClientFailure('attacker-controlled-scope', new Error('fixture'))
   assert.equal(calls.at(-1)[0].scope, 'client-failure')
+})
+
+test('repo-wide TypeScript sink inventory rejects raw console, debug, and caught-error notices', () => {
+  const sourceRoot = resolve(repoRoot, 'src')
+  const sourcePaths = listTypeScriptSources(sourceRoot)
+  const consoleAllowlist = new Set([
+    resolve(sourceRoot, 'services/safe-client-error.ts'),
+    resolve(sourceRoot, 'utils/debug.ts'),
+  ])
+
+  assert.equal(sourcePaths.length > 0, true)
+  for (const sourcePath of sourcePaths) {
+    const relativePath = sourcePath.slice(repoRoot.length + 1)
+    for (const call of collectCalls(sourcePath)) {
+      if (/^console\.(?:log|debug|info|warn|error)$/.test(call.expression)) {
+        assert.equal(
+          consoleAllowlist.has(sourcePath),
+          true,
+          `${relativePath}:${call.line} uses console outside a safe reporter`,
+        )
+      }
+
+      if (call.expression === 'debugLog') {
+        const event = call.arguments[0]
+        assert.match(
+          event ?? '',
+          /^['"][a-z0-9-]+['"]$/,
+          `${relativePath}:${call.line} uses a nonliteral debug event`,
+        )
+        assert.doesNotMatch(
+          call.arguments.slice(1).join(' '),
+          /\b(?:err(?:or)?|result|url|name|proxy|group|profile|host|worker|message)\b/i,
+          `${relativePath}:${call.line} passes sensitive-shaped debug metadata`,
+        )
+      }
+
+      if (call.expression === 'showNotice.error') {
+        const caughtValue = [...call.caughtNames].find((name) =>
+          call.arguments.some(
+            (argument) =>
+              new RegExp(`\\b${name}\\b`).test(argument) &&
+              !argument.includes('toSafeClientErrorMessage'),
+          ),
+        )
+        assert.equal(
+          caughtValue,
+          undefined,
+          `${relativePath}:${call.line} forwards caught value ${caughtValue} to a notice`,
+        )
+      }
+    }
+  }
 })
 
 test('reachable safety-tail sinks never display, persist, copy, or log raw errors', () => {

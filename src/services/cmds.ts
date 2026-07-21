@@ -3,7 +3,6 @@ import dayjs from 'dayjs'
 import { getProxies, getProxyProviders } from 'tauri-plugin-mihomo-api'
 
 import { reportSafeClientFailure } from '@/services/safe-client-error'
-import { debugLog } from '@/utils/debug'
 
 export async function getProfiles() {
   return invoke<IProfilesConfig>('get_profiles')
@@ -223,12 +222,10 @@ export async function getSystemProxy() {
 
 export async function getAutotemProxy() {
   try {
-    debugLog('[API] 开始调用 get_auto_proxy')
     const result = await invoke<{
       enable: boolean
       url: string
     }>('get_auto_proxy')
-    debugLog('[API] get_auto_proxy 调用成功:', result)
     return result
   } catch (error) {
     reportSafeClientFailure('auto-proxy-read', error)

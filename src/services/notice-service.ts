@@ -12,8 +12,11 @@ type NoticeType = 'success' | 'error' | 'info'
 
 export interface NoticeTranslationDescriptor {
   key: string
-  params?: Record<string, unknown>
+  params?: SafeNoticeParams
 }
+
+type SafeNoticeParam = number | boolean | null | undefined
+type SafeNoticeParams = Record<string, SafeNoticeParam>
 
 export interface NoticeItem {
   readonly id: number
@@ -24,9 +27,9 @@ export interface NoticeItem {
   timerId?: ReturnType<typeof setTimeout>
 }
 
-type NoticeContent = unknown
+type NoticeContent = ReactNode | NoticeTranslationDescriptor
 
-type NoticeExtra = unknown
+type NoticeExtra = SafeNoticeParams | number | undefined
 
 type NoticeShortcut = (
   message: NoticeContent,
@@ -62,17 +65,16 @@ function notifySubscribers() {
 }
 
 interface ParsedNoticeExtras {
-  params?: Record<string, unknown>
-  raw?: unknown
+  params?: SafeNoticeParams
   duration?: number
+  unsafe: boolean
 }
 
 function parseNoticeExtras(extras: NoticeExtra[]): ParsedNoticeExtras {
-  let params: Record<string, unknown> | undefined
-  let raw: unknown
+  let params: SafeNoticeParams | undefined
   let duration: number | undefined
+  let unsafe = false
 
-  // Prioritize objects as translation params, then as raw payloads, while the first number wins as duration.
   for (const extra of extras) {
     if (extra === undefined) continue
 
@@ -81,33 +83,19 @@ function parseNoticeExtras(extras: NoticeExtra[]): ParsedNoticeExtras {
       continue
     }
 
-    if (isPlainRecord(extra)) {
+    if (isSafeNoticeParams(extra)) {
       if (!params) {
         params = extra
         continue
       }
-      if (!raw) {
-        raw = extra
-        continue
-      }
-    }
-
-    if (!raw) {
-      raw = extra
+      unsafe = true
       continue
     }
 
-    if (!params && isPlainRecord(extra)) {
-      params = extra
-      continue
-    }
-
-    if (duration === undefined && typeof extra === 'number') {
-      duration = extra
-    }
+    unsafe = true
   }
 
-  return { params, raw, duration }
+  return { params, duration, unsafe }
 }
 
 function resolveDuration(type: NoticeType, override?: number) {
@@ -159,21 +147,22 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return proto === Object.prototype || proto === null
 }
 
-function createRawDescriptor(message: string): NoticeTranslationDescriptor {
-  return {
-    key: 'shared.feedback.notices.raw',
-    params: { message },
-  }
+function isSafeNoticeParams(value: unknown): value is SafeNoticeParams {
+  if (!isPlainRecord(value)) return false
+  return Object.values(value).every(
+    (item) =>
+      item === null ||
+      item === undefined ||
+      typeof item === 'boolean' ||
+      (typeof item === 'number' && Number.isFinite(item)),
+  )
 }
 
 function isLikelyTranslationKey(key: string) {
   return TRANSLATION_KEY_PATTERN.test(key)
 }
 
-function shouldUseTranslationKey(
-  key: string,
-  params?: Record<string, unknown>,
-) {
+function shouldUseTranslationKey(key: string, params?: SafeNoticeParams) {
   if (params && Object.keys(params).length > 0) return true
   if (isLikelyTranslationKey(key)) return true
   if (i18n.isInitialized) {
@@ -188,50 +177,32 @@ function extractDisplayText(input: unknown): string | undefined {
   if (typeof input === 'number' || typeof input === 'boolean') {
     return String(input)
   }
-  if (input instanceof Error) {
-    return input.message || input.name
-  }
-  if (typeof input === 'object' && input !== null) {
-    const maybeMessage = (input as { message?: unknown }).message
-    if (typeof maybeMessage === 'string') return maybeMessage
-  }
-  try {
-    return JSON.stringify(input)
-  } catch {
-    return String(input)
-  }
+  return undefined
+}
+
+const GENERIC_ERROR_NOTICE: NoticeTranslationDescriptor = {
+  key: 'shared.feedback.errors.safeClient.unknown',
 }
 
 function normalizeNoticeMessage(
   message: NoticeContent,
-  params?: Record<string, unknown>,
-  raw?: unknown,
+  params?: SafeNoticeParams,
+  unsafe = false,
 ): { message?: ReactNode; i18n?: NoticeTranslationDescriptor } {
-  const rawText = raw !== undefined ? extractDisplayText(raw) : undefined
+  if (unsafe) return { i18n: GENERIC_ERROR_NOTICE }
 
   if (isValidElement(message)) {
     return { message }
   }
 
   if (isMaybeTranslationDescriptor(message)) {
+    if (message.params && !isSafeNoticeParams(message.params)) {
+      return { i18n: GENERIC_ERROR_NOTICE }
+    }
     const originalParams = message.params ?? {}
     const mergedParams = Object.keys(params ?? {}).length
       ? { ...originalParams, ...params }
       : { ...originalParams }
-
-    if (rawText !== undefined) {
-      return {
-        i18n: {
-          key: 'shared.feedback.notices.prefixedRaw',
-          params: {
-            ...mergedParams,
-            prefixKey: message.key,
-            prefixParams: originalParams,
-            message: rawText,
-          },
-        },
-      }
-    }
 
     return {
       i18n: {
@@ -242,32 +213,6 @@ function normalizeNoticeMessage(
   }
 
   if (typeof message === 'string') {
-    if (rawText !== undefined) {
-      if (shouldUseTranslationKey(message, params)) {
-        return {
-          i18n: {
-            key: 'shared.feedback.notices.prefixedRaw',
-            params: {
-              ...(params ?? {}),
-              prefixKey: message,
-              message: rawText,
-            },
-          },
-        }
-      }
-      // Prefer showing the original string while still surfacing the raw details below.
-      return {
-        i18n: {
-          key: 'shared.feedback.notices.prefixedRaw',
-          params: {
-            ...(params ?? {}),
-            prefix: message,
-            message: rawText,
-          },
-        },
-      }
-    }
-
     if (shouldUseTranslationKey(message, params)) {
       return {
         i18n: {
@@ -276,19 +221,10 @@ function normalizeNoticeMessage(
         },
       }
     }
-    return { i18n: createRawDescriptor(message) }
+    return { message }
   }
 
-  if (rawText !== undefined) {
-    return { i18n: createRawDescriptor(rawText) }
-  }
-
-  const extracted = extractDisplayText(message)
-  if (extracted !== undefined) {
-    return { i18n: createRawDescriptor(extracted) }
-  }
-
-  return { i18n: createRawDescriptor('') }
+  return { i18n: GENERIC_ERROR_NOTICE }
 }
 
 const baseShowNotice = (
@@ -297,14 +233,14 @@ const baseShowNotice = (
   ...extras: NoticeExtra[]
 ): number => {
   const id = nextId++
-  const { params, raw, duration } = parseNoticeExtras(extras)
+  const { params, duration, unsafe } = parseNoticeExtras(extras)
   const effectiveDuration = resolveDuration(type, duration)
   const timerId =
     effectiveDuration > 0
       ? setTimeout(() => hideNotice(id), effectiveDuration)
       : undefined
 
-  const normalizedMessage = normalizeNoticeMessage(message, params, raw)
+  const normalizedMessage = normalizeNoticeMessage(message, params, unsafe)
   const notice = buildNotice(
     id,
     type,
@@ -321,14 +257,14 @@ const baseShowNotice = (
 /**
  * Shows a global notice; `showNotice.success / error / info` are the usual entry points.
  *
- * - `message`: i18n key string, `{ key, params }`, ReactNode, Error/any value (message is extracted)
- * - `extras` parsed left-to-right: first plain object is i18n params; next value is raw payload; first number overrides duration (ms, 0 = persistent; defaults: success 3000 / info 5000 / error 8000)
+ * - `message`: localized safe string, i18n key, `{ key, params }`, or ReactNode
+ * - `extras`: optional i18n params and duration (ms, 0 = persistent)
+ * - Unsupported runtime values map to a generic error instead of being inspected
  * - Returns a notice id for manual closing via `hideNotice(id)`
  *
  * @example showNotice.success("profiles.page.feedback.notifications.batchDeleted");
- * @example showNotice.error(err); // pass an Error directly
- * @example showNotice.error("shared.feedback.notifications.common.refreshFailed", err); // Simply pass an Error directly; but we recommend using { err } with i18n key and placeholders.
- * @example showNotice.error("profiles.page.feedback.errors.invalidUrl", { url }, 4000);
+ * @example showNotice.error("shared.feedback.errors.safeClient.unknown");
+ * @example showNotice.error({ key: "profiles.page.feedback.errors.invalidUrl" }, 4000);
  */
 export const showNotice: ShowNotice = Object.assign(baseShowNotice, {
   success: (message: NoticeContent, ...extras: NoticeExtra[]) =>
@@ -354,20 +290,7 @@ export function resolveNoticeCopyText(
   safeErrorText: string,
 ): string | undefined {
   if (notice.type === 'error') {
-    const isSafeClientNotice = notice.i18n?.key.startsWith(
-      'shared.feedback.errors.safeClient.',
-    )
-    return isSafeClientNotice
-      ? extractDisplayText(resolvedMessage)
-      : safeErrorText
-  }
-
-  if (
-    notice.i18n?.key === 'shared.feedback.notices.prefixedRaw' ||
-    notice.i18n?.key === 'shared.feedback.notices.raw'
-  ) {
-    const rawText = extractDisplayText(notice.i18n?.params?.message)
-    if (rawText) return rawText
+    return safeErrorText
   }
 
   return (

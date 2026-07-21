@@ -160,12 +160,13 @@ const UUID_PATTERN =
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi
 
 const PROFILE_URL_PATTERN =
-  /\b(?:vless|vmess|trojan|ssr?|hysteria2?|tuic):\/\/[^\s"'<>]+/gi
+  /\b(?:vless|vmess|trojan|ssr?|hysteria2?|tuic|socks4a?|socks5h?|socks):\/\/[^\s"'<>]+/gi
 
 const SUBSCRIPTION_URL_PATTERN =
   /https?:\/\/[^\s"'<>]+\/subscription\/[^\s"'<>]+/gi
 
-const HTTP_CREDENTIAL_URL_PATTERN = /(https?:\/\/)[^/\s:@"'<>]+:[^@/\s"'<>]+@/gi
+const CREDENTIAL_PROXY_URL_PATTERN =
+  /\b(?:https?|socks4a?|socks5h?|socks):\/\/[^\s"'<>@]+@[^\s"'<>]+/gi
 
 const QUERY_CREDENTIAL_PATTERN =
   /([?&](?:access_?token|refresh_?token|token|auth|authorization|api_?key|password|passwd|secret|credential|session|sid)=)[^&#\s"'<>]+/gi
@@ -175,6 +176,48 @@ const FORBIDDEN_QUERY_CREDENTIAL_PATTERN =
 
 const PROFILE_BLOCK_PATTERN =
   /(?:^|\n)\s*(?:proxies|proxy-groups|proxy-providers|rule-providers|inbounds|outbounds|wireguard|mixed-port|socks-port|redir-port|tproxy-port|allow-lan|external-controller|external-ui|dns|tun|rules)\s*:|["'](?:proxies|proxy-groups|proxy-providers|rule-providers|inbounds|outbounds|wireguard|mixed-port|socks-port|redir-port|tproxy-port|allow-lan|external-controller|external-ui|dns|tun|rules)["']\s*:/i
+
+const PROFILE_ENTRY_KEY_PATTERN =
+  /(?:^|\n)\s*-?\s*(name|type|server|port|username|password|uuid|cipher|plugin)\s*:|["'](name|type|server|port|username|password|uuid|cipher|plugin)["']\s*:/gi
+
+function hasStandaloneProfileEntry(value: string): boolean {
+  const keys = new Set<string>()
+  for (const match of value.matchAll(PROFILE_ENTRY_KEY_PATTERN)) {
+    keys.add((match[1] ?? match[2]).toLowerCase())
+  }
+
+  return (
+    keys.has('server') &&
+    keys.has('port') &&
+    (keys.has('type') || keys.has('name'))
+  )
+}
+
+function hasProfileEntryValue(
+  value: unknown,
+  seen = new WeakSet<object>(),
+): boolean {
+  if (typeof value === 'string') return hasStandaloneProfileEntry(value)
+  if (typeof value !== 'object' || value === null) return false
+  if (seen.has(value)) return false
+  seen.add(value)
+
+  if (Array.isArray(value)) {
+    return value.some((item) => hasProfileEntryValue(item, seen))
+  }
+
+  const record = value as Record<string, unknown>
+  const keys = new Set(Object.keys(record).map((key) => key.toLowerCase()))
+  if (
+    keys.has('server') &&
+    keys.has('port') &&
+    (keys.has('type') || keys.has('name'))
+  ) {
+    return true
+  }
+
+  return Object.values(record).some((item) => hasProfileEntryValue(item, seen))
+}
 
 const KEY_VALUE_SECRET_PATTERN =
   /\b(accessToken|refreshToken|token|authorization|cookie|privateKey|shortId|uuid|password|secret|credential|server|sni)\s*[:=]\s*["']?[^"',\s;}]+/gi
@@ -190,7 +233,7 @@ const FORBIDDEN_OUTPUT_PATTERNS = [
   AUTH_HEADER_PATTERN,
   BEARER_PATTERN,
   COOKIE_HEADER_PATTERN,
-  HTTP_CREDENTIAL_URL_PATTERN,
+  CREDENTIAL_PROXY_URL_PATTERN,
   FORBIDDEN_QUERY_CREDENTIAL_PATTERN,
   PROFILE_BLOCK_PATTERN,
   SUBSCRIPTION_URL_PATTERN,
@@ -207,9 +250,12 @@ export function redactText(value: string): string {
   if (PROFILE_BLOCK_PATTERN.test(value)) {
     return '[REDACTED_PROFILE_BLOCK]'
   }
+  if (hasStandaloneProfileEntry(value)) {
+    return '[REDACTED_PROFILE_ENTRY]'
+  }
 
   return value
-    .replace(HTTP_CREDENTIAL_URL_PATTERN, '$1[REDACTED_CREDENTIALS]@')
+    .replace(CREDENTIAL_PROXY_URL_PATTERN, '[REDACTED_PROXY_URL]')
     .replace(QUERY_CREDENTIAL_PATTERN, '$1[REDACTED]')
     .replace(SUBSCRIPTION_URL_PATTERN, '[REDACTED_SUBSCRIPTION_URL]')
     .replace(PROFILE_URL_PATTERN, '[REDACTED_PROFILE_URL]')
@@ -235,6 +281,7 @@ export function redactDiagnosticsValue(
 ): unknown {
   if (typeof value === 'string') return redactText(value)
   if (typeof value !== 'object' || value === null) return value
+  if (hasProfileEntryValue(value)) return '[REDACTED_PROFILE_ENTRY]'
 
   if (seen.has(value)) return '[Circular]'
   seen.add(value)
@@ -255,6 +302,11 @@ export function redactDiagnosticsValue(
 }
 
 export function diagnosticsJsonHasForbiddenMaterial(json: string): boolean {
+  try {
+    if (hasProfileEntryValue(JSON.parse(json))) return true
+  } catch {
+    if (hasStandaloneProfileEntry(json)) return true
+  }
   return FORBIDDEN_OUTPUT_PATTERNS.some((pattern) => {
     pattern.lastIndex = 0
     return pattern.test(json)
@@ -597,10 +649,17 @@ export async function copyDiagnosticsBundleToClipboard(
   const bundle = await collectDiagnosticsBundle(options)
   const json = JSON.stringify(bundle, null, 2)
 
+  await writeDiagnosticsJsonToClipboard(json, writeText)
+  return bundle
+}
+
+export async function writeDiagnosticsJsonToClipboard(
+  json: string,
+  writer: (text: string) => Promise<void>,
+): Promise<void> {
   if (diagnosticsJsonHasForbiddenMaterial(json)) {
-    throw new Error('Diagnostics bundle failed redaction validation')
+    throw new Error('Diagnostics bundle contains forbidden material')
   }
 
-  await writeText(json)
-  return bundle
+  await writer(json)
 }
