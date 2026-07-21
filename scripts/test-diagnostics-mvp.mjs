@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { randomBytes } from 'node:crypto'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
@@ -216,103 +217,43 @@ function loadDiagnosticsModule(extraContext = {}) {
   return module.exports
 }
 
-test('redaction removes forbidden diagnostics material from strings and objects', () => {
-  const {
-    diagnosticsJsonHasForbiddenMaterial,
-    redactDiagnosticsValue,
-    redactText,
-  } = loadDiagnosticsModule()
+const RANDOM_SENTINELS = Array.from(
+  { length: 12 },
+  () => `random-sentinel-${randomBytes(12).toString('hex')}`,
+)
 
-  const unsafe =
-    'Authorization: Bearer raw-access-token Cookie: sid=raw-cookie ' +
-    'refreshToken=raw-refresh-token alice@example.test ' +
-    'https://api.xxlink.net/subscription/clash/raw-subscription-token ' +
-    'vless://11111111-2222-4333-8444-555555555555@host:443?shortId=abcdef12&privateKey=raw-private-key'
-
-  const redacted = redactText(unsafe)
-  assert.equal(redacted.includes('raw-access-token'), false)
-  assert.equal(redacted.includes('raw-cookie'), false)
-  assert.equal(redacted.includes('raw-refresh-token'), false)
-  assert.equal(redacted.includes('alice@example.test'), false)
-  assert.equal(redacted.includes('raw-subscription-token'), false)
-  assert.equal(redacted.includes('11111111-2222-4333-8444-555555555555'), false)
-  assert.equal(redacted.includes('raw-private-key'), false)
-  assert.match(redacted, /\[REDACTED/)
-
-  const redactedObject = redactDiagnosticsValue({
-    accessToken: 'raw-access-token',
-    nested: {
-      authorization: 'Bearer raw-access-token',
-      safeStatus: 'authenticated',
-    },
-  })
-  const json = JSON.stringify(redactedObject)
-  assert.equal(json.includes('raw-access-token'), false)
-  assert.equal(json.includes('authenticated'), true)
-  assert.equal(diagnosticsJsonHasForbiddenMaterial(json), false)
-  assert.equal(diagnosticsJsonHasForbiddenMaterial(unsafe), true)
-
-  const safeFlowMetadata =
-    '{status: healthy, retryable: false, count: 3, mode: rule}'
-  assert.equal(redactText(safeFlowMetadata), safeFlowMetadata)
-  assert.equal(
-    diagnosticsJsonHasForbiddenMaterial(JSON.stringify({ safeFlowMetadata })),
-    false,
-  )
-
+const assertOriginalsAbsent = (serialized) => {
   for (const sample of HOSTILE_DIAGNOSTIC_SAMPLES) {
-    const sanitized = redactText(sample.value)
-    assert.equal(
-      diagnosticsJsonHasForbiddenMaterial(sample.value),
-      true,
-      `forbidden gate missed: ${sample.value.slice(0, 40)}`,
-    )
-    assert.equal(diagnosticsJsonHasForbiddenMaterial(sanitized), false)
-    for (const fragment of sample.fragments) {
-      assert.equal(sanitized.includes(fragment), false)
-    }
-  }
-})
-
-test('diagnostics serialization drops complete hostile profiles while retaining metadata', () => {
-  const { buildDiagnosticsBundle, diagnosticsJsonHasForbiddenMaterial } =
-    loadDiagnosticsModule()
-  const runtimeEntries = HOSTILE_DIAGNOSTIC_SAMPLES.map((sample, index) => [
-    index === 0 ? 'WARN' : 'INFO',
-    sample.value,
-  ])
-  runtimeEntries.push(['INFO', 'safe lifecycle metadata: retryable=false'])
-
-  const bundle = buildDiagnosticsBundle({
-    appVersion: '2.4.15',
-    runningMode: 'rule',
-    logs: { runtime: { default: runtimeEntries }, clash: [] },
-  })
-  const serialized = JSON.stringify(bundle)
-
-  assert.equal(bundle.runtimeCore.runningMode, 'rule')
-  assert.equal(bundle.logs.runtime.default.at(-1)?.[0], 'INFO')
-  assert.equal(
-    bundle.logs.runtime.default.at(-1)?.[1],
-    'safe lifecycle metadata: retryable=false',
-  )
-  assert.equal(diagnosticsJsonHasForbiddenMaterial(serialized), false)
-  for (const sample of HOSTILE_DIAGNOSTIC_SAMPLES) {
+    assert.equal(serialized.includes(sample.value), false)
     for (const fragment of sample.fragments) {
       assert.equal(serialized.includes(fragment), false)
     }
   }
-})
+  for (const sentinel of RANDOM_SENTINELS) {
+    assert.equal(serialized.includes(sentinel), false)
+  }
+}
 
-test('bundle shape contains only safe class/status fields', () => {
+test('bundle serializes metadata only for arbitrary strings, errors, profiles, and logs', () => {
   const { buildDiagnosticsBundle, diagnosticsJsonHasForbiddenMaterial } =
     loadDiagnosticsModule()
+
+  const runtimeEntries = [
+    ...HOSTILE_DIAGNOSTIC_SAMPLES.map((sample, index) => [
+      index === 0 ? 'WARN' : 'INFO',
+      `component wrapper ${sample.value}`,
+    ]),
+    ...RANDOM_SENTINELS.map((sentinel) => [
+      'ERROR',
+      new Error(`prefixed worker failure ${sentinel}`),
+    ]),
+    ['INFO', { arbitrary: { payload: RANDOM_SENTINELS[0] } }],
+  ]
 
   const bundle = buildDiagnosticsBundle(
     {
       appVersion: '2.4.15',
-      systemInfo:
-        'Windows 11\nUser alice@example.test\nAuthorization: Bearer bad-token',
+      systemInfo: `Windows 11\nUser alice@example.test\n${RANDOM_SENTINELS[0]}`,
       appUptimeMs: 123_456,
       runningMode: 'rule',
       authState: {
@@ -331,18 +272,18 @@ test('bundle shape contains only safe class/status fields', () => {
       selectedNodeRaw: 'Tokyo paid node 11111111-2222-4333-8444-555555555555',
       profileGenerationRaw:
         '{"nodes":"node-secret:host:443","subscription":"https://api.xxlink.net/subscription/raw"}',
-      lastSyncErrorRaw:
-        '{"message":"sync failed for https://api.xxlink.net/subscription/raw","code":"TOKEN"}',
+      lastSyncErrorRaw: `worker failed: ${RANDOM_SENTINELS[1]} https://api.xxlink.net/subscription/raw`,
       logs: {
         runtime: {
-          default: [['WARN', 'shortId=abcdef12 privateKey=raw-private-key']],
+          [RANDOM_SENTINELS[2]]: runtimeEntries,
         },
         clash: [
           {
             time: '06-29 12:00:00',
             type: 'warning',
-            payload: 'vless://11111111-2222-4333-8444-555555555555@host:443',
+            payload: `prefixed log ${RANDOM_SENTINELS[3]} socks5://user:pass@host:1080`,
           },
+          ...HOSTILE_DIAGNOSTIC_SAMPLES.map((sample) => sample.value),
         ],
       },
     },
@@ -352,6 +293,7 @@ test('bundle shape contains only safe class/status fields', () => {
   assert.equal(bundle.schemaVersion, 1)
   assert.equal(bundle.exportedAt, '2026-06-29T12:00:00.000Z')
   assert.equal(bundle.app.version, '2.4.15')
+  assert.equal(bundle.system.platform, 'windows')
   assert.equal(bundle.authSession.status, 'authenticated')
   assert.equal(bundle.authSession.accessToken, 'present')
   assert.equal(bundle.authSession.refreshToken, 'present')
@@ -360,39 +302,100 @@ test('bundle shape contains only safe class/status fields', () => {
   assert.equal(bundle.nodeSync.status, 'error')
   assert.equal(bundle.runtimeCore.runningMode, 'rule')
   assert.equal(bundle.dataPlane.status, 'not-tested')
+  assert.equal(bundle.logs.runtime.source, 'runtime')
+  assert.equal(bundle.logs.runtime.componentCount, 1)
+  assert.equal(bundle.logs.runtime.totalCount, runtimeEntries.length)
+  assert.equal(bundle.logs.clash.source, 'clash')
+  assert.equal(
+    bundle.logs.clash.totalCount,
+    HOSTILE_DIAGNOSTIC_SAMPLES.length + 1,
+  )
 
-  const json = JSON.stringify(bundle)
-  assert.equal(json.includes('alice@example.test'), false)
-  assert.equal(json.includes('bad-token'), false)
-  assert.equal(json.includes('raw-private-key'), false)
-  assert.equal(json.includes('11111111-2222-4333-8444-555555555555'), false)
-  assert.equal(json.includes('https://api.xxlink.net/subscription/raw'), false)
-  assert.equal(diagnosticsJsonHasForbiddenMaterial(json), false)
+  const serialized = JSON.stringify(bundle)
+  assertOriginalsAbsent(serialized)
+  assert.equal(serialized.includes('alice@example.test'), false)
+  assert.equal(serialized.includes('Tokyo paid node'), false)
+  assert.equal(serialized.includes('node-secret'), false)
+  assert.equal(serialized.includes('api.xxlink.net'), false)
+  assert.equal(serialized.includes('prefixed worker failure'), false)
+  assert.equal(serialized.includes('component wrapper'), false)
+  assert.equal(diagnosticsJsonHasForbiddenMaterial(serialized), false)
 })
 
-test('log samples are tailed and redacted before export', () => {
+test('log summaries bound inspected entries and count limit plus one without retaining lines', () => {
   const { buildDiagnosticsBundle } = loadDiagnosticsModule()
+  const limit = 50
 
-  const clash = Array.from({ length: 65 }, (_, index) => ({
+  const clash = Array.from({ length: limit + 1 }, (_, index) => ({
     time: `06-29 12:${String(index).padStart(2, '0')}:00`,
     type: 'info',
-    payload: `line-${index} Cookie: session=${index}`,
+    payload: `line-${index}-${RANDOM_SENTINELS[index % RANDOM_SENTINELS.length]}`,
   }))
+  const runtime = Array.from({ length: limit + 1 }, (_, index) => [
+    index % 2 === 0 ? 'WARN' : 'INFO',
+    `prefixed-${index}-${RANDOM_SENTINELS[index % RANDOM_SENTINELS.length]}`,
+  ])
 
   const bundle = buildDiagnosticsBundle(
     {
       appVersion: '2.4.15',
-      logs: { clash, runtime: {} },
+      logs: { clash, runtime: { default: runtime } },
     },
-    { now: () => new Date('2026-06-29T12:00:00.000Z'), maxLogItems: 50 },
+    {
+      now: () => new Date('2026-06-29T12:00:00.000Z'),
+      maxLogItems: limit,
+    },
   )
 
-  assert.equal(bundle.logs.clash.length, 50)
-  assert.equal(bundle.logs.clash[0]?.payload.includes('line-15'), true)
-  assert.equal(JSON.stringify(bundle.logs).includes('session=64'), false)
+  for (const summary of [bundle.logs.runtime, bundle.logs.clash]) {
+    assert.equal(summary.totalCount, limit + 1)
+    assert.equal(summary.inspectedCount, limit)
+    assert.equal(summary.omittedCount, 1)
+  }
+  const serialized = JSON.stringify(bundle.logs)
+  assert.equal(serialized.includes('line-'), false)
+  assert.equal(serialized.includes('prefixed-'), false)
+  assertOriginalsAbsent(serialized)
 })
 
-test('runtime collector copies a serializable redacted bundle to clipboard', async () => {
+test('unrecognized, oversized, structured, and prefixed log inputs become closed counters', () => {
+  const { buildDiagnosticsBundle } = loadDiagnosticsModule()
+  const oversized = `${'x'.repeat(1025)}${RANDOM_SENTINELS[6]}`
+  const flowYaml = HOSTILE_DIAGNOSTIC_SAMPLES[5].value
+  const socksCredential = HOSTILE_DIAGNOSTIC_SAMPLES[1].value
+  const httpCredential = HOSTILE_DIAGNOSTIC_SAMPLES[0].value
+  const prefixed = `worker lifecycle changed ${RANDOM_SENTINELS[7]}`
+
+  const bundle = buildDiagnosticsBundle({
+    appVersion: '2.4.15',
+    logs: {
+      runtime: {
+        default: [
+          ['INFO', { wrapper: RANDOM_SENTINELS[8] }],
+          ['WARN', oversized],
+          ['WARN', flowYaml],
+          ['ERROR', socksCredential],
+          ['ERROR', httpCredential],
+          ['INFO', prefixed],
+        ],
+      },
+    },
+  })
+
+  assert.equal(bundle.logs.runtime.categories.unrecognized, 1)
+  assert.equal(bundle.logs.runtime.categories.oversized, 1)
+  assert.equal(bundle.logs.runtime.categories['structured-or-sensitive'], 3)
+  assert.equal(bundle.logs.runtime.categories.other, 1)
+  const serialized = JSON.stringify(bundle)
+  assert.equal(serialized.includes(oversized), false)
+  assert.equal(serialized.includes(flowYaml), false)
+  assert.equal(serialized.includes(socksCredential), false)
+  assert.equal(serialized.includes(httpCredential), false)
+  assert.equal(serialized.includes(prefixed), false)
+  assertOriginalsAbsent(serialized)
+})
+
+test('runtime collector copies only metadata and no hostile sentinel reaches clipboard', async () => {
   const extraContext = {
     clipboardText: '',
     localStorage: {
@@ -411,11 +414,20 @@ test('runtime collector copies a serializable redacted bundle to clipboard', asy
     },
     tauriMocks: {
       getRuntimeLogs: async () => ({
-        default: HOSTILE_DIAGNOSTIC_SAMPLES.map((sample) => [
-          'WARN',
-          sample.value,
-        ]),
+        [RANDOM_SENTINELS[4]]: [
+          ...HOSTILE_DIAGNOSTIC_SAMPLES.map((sample) => [
+            'WARN',
+            `runtime prefix ${sample.value}`,
+          ]),
+          ...RANDOM_SENTINELS.map((sentinel) => ['ERROR', new Error(sentinel)]),
+        ],
       }),
+      getClashLogs: async () =>
+        HOSTILE_DIAGNOSTIC_SAMPLES.map((sample) => ({
+          time: RANDOM_SENTINELS[5],
+          type: 'warning',
+          payload: sample.value,
+        })),
     },
   }
   const {
@@ -436,41 +448,38 @@ test('runtime collector copies a serializable redacted bundle to clipboard', asy
     JSON.stringify(JSON.parse(extraContext.clipboardText)),
     JSON.stringify(bundle),
   )
+  assertOriginalsAbsent(extraContext.clipboardText)
+  assert.equal(extraContext.clipboardText.includes('runtime prefix'), false)
   assert.equal(extraContext.clipboardText.includes('raw-refresh-token'), false)
-  assert.equal(
-    extraContext.clipboardText.includes('11111111-2222-4333-8444-555555555555'),
-    false,
-  )
+  assert.equal(extraContext.clipboardText.includes('raw-node-secret'), false)
   assert.equal(
     diagnosticsJsonHasForbiddenMaterial(extraContext.clipboardText),
     false,
   )
-  for (const sample of HOSTILE_DIAGNOSTIC_SAMPLES) {
-    for (const fragment of sample.fragments) {
-      assert.equal(extraContext.clipboardText.includes(fragment), false)
-    }
-  }
 })
 
-test('clipboard final gate rejects every unsafe serialization before invoking writer', async () => {
+test('clipboard final gate rejects a forced invalid value before invoking writer', async () => {
   const { writeDiagnosticsJsonToClipboard } = loadDiagnosticsModule()
   let writes = 0
-  const hostileValues = [
-    'socks://user:password@standalone.example.test:1080',
-    ...HOSTILE_DIAGNOSTIC_SAMPLES.slice(5, 9).map((sample) => sample.value),
-  ]
 
-  for (const hostile of hostileValues) {
-    await assert.rejects(
-      () =>
-        writeDiagnosticsJsonToClipboard(
-          JSON.stringify({ diagnostic: hostile }),
-          async () => {
-            writes++
-          },
-        ),
-      /forbidden material/i,
-    )
-  }
+  await assert.rejects(
+    () =>
+      writeDiagnosticsJsonToClipboard(
+        JSON.stringify({ schemaVersion: 1, forced: RANDOM_SENTINELS[0] }),
+        async () => {
+          writes++
+        },
+      ),
+    /forbidden material/i,
+  )
   assert.equal(writes, 0)
+})
+
+test('metadata-only diagnostics source has no free-form parser dependency', () => {
+  const source = fs.readFileSync(
+    path.join(repoRoot, 'src/services/diagnostics-bundle.ts'),
+    'utf8',
+  )
+  assert.doesNotMatch(source, /from ['"]js-yaml['"]/)
+  assert.doesNotMatch(source, /redactText|redactDiagnosticsValue|parseYaml/)
 })
