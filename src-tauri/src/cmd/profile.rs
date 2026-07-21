@@ -4,9 +4,7 @@ use crate::utils::window_manager::WindowManager;
 use crate::{
     config::{
         Config, IProfiles, PrfItem, PrfOption,
-        profiles::{
-            profiles_delete_item_safe, profiles_patch_item_safe, profiles_reorder_safe, profiles_save_file_safe,
-        },
+        profiles::{profiles_delete_item_safe, profiles_patch_item_safe, profiles_save_file_safe},
         profiles_append_item_safe,
     },
     core::{CoreManager, handle, timer::Timer, tray::Tray},
@@ -108,21 +106,6 @@ pub async fn import_profile(url: std::string::String, option: Option<PrfOption>)
 
     logging!(info, Type::Cmd, "[导入订阅] 导入完成: {}", help::mask_url(&url));
     Ok(())
-}
-
-/// 调整profile的顺序
-#[tauri::command]
-pub async fn reorder_profile(active_id: String, over_id: String) -> CmdResult {
-    match profiles_reorder_safe(&active_id, &over_id).await {
-        Ok(_) => {
-            logging!(info, Type::Cmd, "重新排序配置文件");
-            Ok(())
-        }
-        Err(err) => {
-            logging!(error, Type::Cmd, "重新排序配置文件失败: {}", err);
-            Err(format!("重新排序配置文件失败: {}", err).into())
-        }
-    }
 }
 
 /// 更新配置文件
@@ -435,47 +418,4 @@ pub async fn patch_profile(index: String, profile: PrfItem) -> CmdResult {
     }
 
     Ok(())
-}
-
-/// 查看配置文件
-#[tauri::command]
-pub async fn view_profile(index: String) -> CmdResult {
-    let profiles = Config::profiles().await;
-    let profiles_ref = profiles.latest_arc();
-    let file = profiles_ref
-        .get_item(&index)
-        .stringify_err()?
-        .file
-        .as_ref()
-        .ok_or("the file field is null")?;
-
-    let path = dirs::app_profiles_dir().stringify_err()?.join(file.as_str());
-    if !path.exists() {
-        return CmdResult::Err(format!("file not found \"{}\"", path.display()).into());
-    }
-
-    help::open_file(path).stringify_err()
-}
-
-/// 读取配置文件内容
-#[tauri::command]
-pub async fn read_profile_file(index: String) -> CmdResult<String> {
-    let item = {
-        let profiles = Config::profiles().await;
-        let profiles_ref = profiles.latest_arc();
-        PrfItem {
-            file: profiles_ref.get_item(&index).stringify_err()?.file.to_owned(),
-            ..Default::default()
-        }
-    };
-    let data = item.read_file().await.stringify_err()?;
-    Ok(data)
-}
-
-/// 获取下一次更新时间
-#[tauri::command]
-pub async fn get_next_update_time(uid: String) -> CmdResult<Option<i64>> {
-    let timer = Timer::global();
-    let next_time = timer.get_next_update_time(&uid).await;
-    Ok(next_time)
 }

@@ -122,6 +122,16 @@ assert.equal(
   false,
   'api request helper must not clear local auth state',
 )
+assert.doesNotMatch(
+  apiSource,
+  /getServiceBlockedMessage\(code\?: string, message\?: string\)/,
+  'account-state mapping must not accept raw backend messages',
+)
+assert.doesNotMatch(
+  apiSource,
+  /handleAuthFatal\([\s\S]{0,180}?error\.message/,
+  'refresh failures must not forward raw exception messages',
+)
 
 const sessionSource = readSource('src/services/session.ts')
 assert.equal(

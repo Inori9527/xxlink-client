@@ -30,6 +30,13 @@ import {
   runResumeRecovery,
   startResumeRecoveryListeners,
 } from './services/resume-recovery'
+import {
+  handleGlobalErrorEvent,
+  handleGlobalPromiseRejection,
+  reportSafeClientFailure,
+  toSafeClientFailureRecord,
+  writeSafeClientFailureToClipboard,
+} from './services/safe-client-error'
 import { SESSION_EXPIRED_EVENT } from './services/session'
 import {
   LoadingCacheProvider,
@@ -150,15 +157,12 @@ const renderSplashTimeoutFallback = (error: unknown) => {
   exportBtn.style.cssText =
     'padding:8px 16px;border-radius:6px;border:1px solid #d1d5db;background:transparent;color:inherit;font-size:14px;cursor:pointer;'
   exportBtn.addEventListener('click', () => {
-    const payload = {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      ua: navigator.userAgent,
-      time: new Date().toISOString(),
-    }
-    void navigator.clipboard
-      ?.writeText(JSON.stringify(payload, null, 2))
-      .catch(console.error)
+    if (!navigator.clipboard) return
+    void writeSafeClientFailureToClipboard('startup-timeout', error, (text) =>
+      navigator.clipboard.writeText(text),
+    ).catch((clipboardError) =>
+      reportSafeClientFailure('startup-timeout-copy', clipboardError),
+    )
   })
 
   btnRow.appendChild(reloadBtn)
@@ -173,7 +177,7 @@ const rememberStartupTimeout = (error: unknown) => {
     localStorage.setItem(
       STARTUP_TIMEOUT_NOTICE_KEY,
       JSON.stringify({
-        message: error instanceof Error ? error.message : String(error),
+        ...toSafeClientFailureRecord('startup-timeout', error),
         ts: Date.now(),
       }),
     )
@@ -201,7 +205,7 @@ const bootstrap = async () => {
 
   if (result === timeoutSymbol) {
     const timeoutError = new Error('App startup timed out')
-    console.error('[main.tsx]', timeoutError)
+    reportSafeClientFailure('startup-timeout', timeoutError)
     rememberStartupTimeout(timeoutError)
     renderSplashTimeoutFallback(timeoutError)
     initializeApp(resolveThemeMode(getPreloadConfig()))
@@ -219,16 +223,10 @@ window.addEventListener(SESSION_EXPIRED_EVENT, () => {
 })
 
 bootstrap().catch((error) => {
-  console.error(
-    '[main.tsx] App bootstrap failed, falling back to default language:',
-    error,
-  )
+  reportSafeClientFailure('app-bootstrap', error)
   initializeLanguage(FALLBACK_LANGUAGE)
     .catch((fallbackError) => {
-      console.error(
-        '[main.tsx] Fallback language initialization failed:',
-        fallbackError,
-      )
+      reportSafeClientFailure('fallback-language-init', fallbackError)
     })
     .finally(() => {
       initializeApp(resolveThemeMode(getPreloadConfig()))
@@ -236,13 +234,9 @@ bootstrap().catch((error) => {
     })
 })
 
-window.addEventListener('error', (event) => {
-  console.error('[main.tsx] Global error:', event.error)
-})
+window.addEventListener('error', handleGlobalErrorEvent)
 
-window.addEventListener('unhandledrejection', (event) => {
-  console.error('[main.tsx] Unhandled promise rejection:', event.reason)
-})
+window.addEventListener('unhandledrejection', handleGlobalPromiseRejection)
 
 window.addEventListener('beforeunload', () => {
   MihomoWebSocket.cleanupAll()

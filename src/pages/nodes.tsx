@@ -20,6 +20,7 @@ import { useVerge } from '@/hooks/use-verge'
 import { useAppData } from '@/providers/app-data-context'
 import delayManager from '@/services/delay'
 import { showNotice } from '@/services/notice-service'
+import { reportSafeClientFailure } from '@/services/safe-client-error'
 import {
   getProxyDisplayKey,
   getProxyDisplayName,
@@ -50,7 +51,7 @@ const NodesPage = () => {
   )
   const { changeProxy } = useProxySelection({
     onSuccess: () => refreshProxy(),
-    onError: (error) => console.error('[Nodes] proxy change failed', error),
+    onError: (error) => reportSafeClientFailure('nodes-proxy-selection', error),
     forceConnectionCleanup: true,
   })
 
@@ -122,12 +123,7 @@ const NodesPage = () => {
 
   const handleSelect = (node: DisplayNode) => {
     if (!globalGroup?.name || node.name === currentNode) return
-    changeProxy(
-      globalGroup.name,
-      node.name,
-      currentRuntimeNode || currentNode,
-      true,
-    )
+    changeProxy(globalGroup.name, node.name, currentRuntimeNode || currentNode)
   }
 
   const handleTestDelay = useLockFn(async () => {

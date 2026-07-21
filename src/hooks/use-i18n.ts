@@ -6,6 +6,7 @@ import {
   resolveLanguage,
   supportedLanguages,
 } from '@/services/i18n'
+import { reportSafeClientFailure } from '@/services/safe-client-error'
 
 import { useVerge } from './use-verge'
 
@@ -19,7 +20,10 @@ export const useI18n = () => {
       const targetLanguage = resolveLanguage(language)
 
       if (!supportedLanguages.includes(targetLanguage)) {
-        console.warn(`Unsupported language: ${language}`)
+        reportSafeClientFailure(
+          'i18n-switch-language',
+          new Error('Unsupported language'),
+        )
         return
       }
 
@@ -35,7 +39,7 @@ export const useI18n = () => {
           await patchVerge({ language: targetLanguage })
         }
       } catch (error) {
-        console.error('Failed to change language:', error)
+        reportSafeClientFailure('i18n-switch-language', error)
       } finally {
         setIsLoading(false)
       }

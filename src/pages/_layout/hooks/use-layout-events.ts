@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 
 import { useListen } from '@/hooks/use-listen'
 import { queryClient } from '@/services/query-client'
+import { reportSafeClientFailure } from '@/services/safe-client-error'
 
 export const useLayoutEvents = (
   handleNotice: (payload: [string, string]) => void,
@@ -39,7 +40,7 @@ export const useLayoutEvents = (
           }
         })
         .catch((error) =>
-          console.error('[Event Listener] Registration failed:', error),
+          reportSafeClientFailure('layout-event-registration', error),
         )
     }
 
@@ -89,22 +90,14 @@ export const useLayoutEvents = (
 
     return () => {
       disposed = true
-      const errors: Error[] = []
 
       unlisteners.forEach((unlisten) => {
         try {
           unlisten()
         } catch (error) {
-          errors.push(error instanceof Error ? error : new Error(String(error)))
+          reportSafeClientFailure('layout-event-cleanup', error)
         }
       })
-
-      if (errors.length > 0) {
-        console.error(
-          `[Event Listener] Encountered ${errors.length} errors during cleanup:`,
-          errors,
-        )
-      }
 
       unlisteners.length = 0
     }

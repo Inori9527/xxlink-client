@@ -132,15 +132,8 @@ mod app_init {
             tauri_plugin_xxlink_sysinfo::commands::get_app_uptime,
             tauri_plugin_xxlink_sysinfo::commands::app_is_admin,
             tauri_plugin_xxlink_sysinfo::commands::export_diagnostic_info,
-            cmd::is_port_in_use,
             cmd::get_sys_proxy,
             cmd::get_auto_proxy,
-            cmd::open_app_dir,
-            cmd::open_logs_dir,
-            cmd::open_web_url,
-            cmd::open_core_dir,
-            cmd::open_app_log,
-            cmd::open_core_log,
             cmd::get_network_interfaces,
             cmd::get_system_hostname,
             cmd::restart_app,
@@ -151,7 +144,6 @@ mod app_init {
             cmd::update_ui_stage,
             cmd::get_running_mode,
             cmd::get_auto_launch_status,
-            cmd::entry_lightweight_mode,
             cmd::exit_lightweight_mode,
             cmd::install_service,
             cmd::uninstall_service,
@@ -160,44 +152,24 @@ mod app_init {
             cmd::is_service_available,
             cmd::get_clash_info,
             cmd::patch_clash_config,
-            cmd::patch_clash_mode,
             cmd::change_clash_core,
             cmd::get_runtime_config,
-            cmd::get_runtime_yaml,
             cmd::get_runtime_exists,
             cmd::get_runtime_logs,
-            cmd::get_runtime_proxy_chain_config,
-            cmd::update_proxy_chain_config_in_runtime,
-            cmd::invoke_uwp_tool,
             cmd::sync_tray_proxy_selection,
-            cmd::save_dns_config,
-            cmd::apply_dns_config,
-            cmd::check_dns_config_exists,
-            cmd::get_dns_config_content,
-            cmd::validate_dns_config,
             cmd::get_clash_logs,
             cmd::get_verge_config,
             cmd::patch_verge_config,
             cmd::test_delay,
             cmd::get_app_dir,
-            cmd::open_devtools,
-            cmd::exit_app,
             cmd::get_network_interfaces_info,
             cmd::get_profiles,
             cmd::enhance_profiles,
             cmd::patch_profiles_config,
-            cmd::view_profile,
             cmd::patch_profile,
             cmd::import_profile,
-            cmd::reorder_profile,
             cmd::update_profile,
             cmd::delete_profile,
-            cmd::read_profile_file,
-            cmd::save_profile_file,
-            cmd::get_next_update_time,
-            cmd::get_unlock_items,
-            cmd::check_media_unlock,
-            cmd::open_oauth_window,
         ]
     }
 }
@@ -292,9 +264,7 @@ pub fn run() {
 
             if let tauri::WindowEvent::CloseRequested { api, .. } = api {
                 api.prevent_close();
-                if let Some(window) = WindowManager::get_main_window() {
-                    let _ = window.hide();
-                }
+                WindowManager::handle_close_requested();
             }
         }
     }

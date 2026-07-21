@@ -2,8 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import dayjs from 'dayjs'
 import { getProxies, getProxyProviders } from 'tauri-plugin-mihomo-api'
 
-import { showNotice } from '@/services/notice-service'
-import { debugLog } from '@/utils/debug'
+import { reportSafeClientFailure } from '@/services/safe-client-error'
 
 export async function getProfiles() {
   return invoke<IProfilesConfig>('get_profiles')
@@ -17,29 +16,10 @@ export async function patchProfilesConfig(profiles: IProfilesConfig) {
   return invoke<boolean>('patch_profiles_config', { profiles })
 }
 
-export async function viewProfile(index: string) {
-  return invoke<void>('view_profile', { index })
-}
-
-export async function readProfileFile(index: string) {
-  return invoke<string>('read_profile_file', { index })
-}
-
-export async function saveProfileFile(index: string, fileData: string) {
-  return invoke<void>('save_profile_file', { index, fileData })
-}
-
 export async function importProfile(url: string, option?: IProfileOption) {
   return invoke<void>('import_profile', {
     url,
     option: option || { with_proxy: true },
-  })
-}
-
-export async function reorderProfile(activeId: string, overId: string) {
-  return invoke<void>('reorder_profile', {
-    activeId,
-    overId,
   })
 }
 
@@ -67,10 +47,6 @@ export async function getRuntimeConfig() {
   return invoke<IConfigData | null>('get_runtime_config')
 }
 
-export async function getRuntimeYaml() {
-  return invoke<string | null>('get_runtime_yaml')
-}
-
 export async function getRuntimeExists() {
   return invoke<string[]>('get_runtime_exists')
 }
@@ -79,24 +55,8 @@ export async function getRuntimeLogs() {
   return invoke<Record<string, [string, string][]>>('get_runtime_logs')
 }
 
-export async function getRuntimeProxyChainConfig(proxyChainExitNode: string) {
-  return invoke<string>('get_runtime_proxy_chain_config', {
-    proxyChainExitNode,
-  })
-}
-
-export async function updateProxyChainConfigInRuntime(proxyChainConfig: any) {
-  return invoke<void>('update_proxy_chain_config_in_runtime', {
-    proxyChainConfig,
-  })
-}
-
 export async function patchClashConfig(payload: Partial<IConfigData>) {
   return invoke<void>('patch_clash_config', { payload })
-}
-
-export async function patchClashMode(payload: string) {
-  return invoke<void>('patch_clash_mode', { payload })
 }
 
 export async function syncTrayProxySelection() {
@@ -232,10 +192,6 @@ export async function getClashLogs() {
   }, [])
 }
 
-export async function clearLogs() {
-  return invoke<void>('clear_logs')
-}
-
 export async function getVergeConfig() {
   return invoke<IVergeConfig>('get_verge_config')
 }
@@ -254,15 +210,13 @@ export async function getSystemProxy() {
 
 export async function getAutotemProxy() {
   try {
-    debugLog('[API] 开始调用 get_auto_proxy')
     const result = await invoke<{
       enable: boolean
       url: string
     }>('get_auto_proxy')
-    debugLog('[API] get_auto_proxy 调用成功:', result)
     return result
   } catch (error) {
-    console.error('[API] get_auto_proxy 调用失败:', error)
+    reportSafeClientFailure('auto-proxy-read', error)
     return {
       enable: false,
       url: '',
@@ -274,7 +228,7 @@ export async function getAutoLaunchStatus() {
   try {
     return await invoke<boolean>('get_auto_launch_status')
   } catch (error) {
-    console.error('获取自启动状态失败:', error)
+    reportSafeClientFailure('auto-launch-read', error)
     return false
   }
 }
@@ -303,74 +257,8 @@ export async function getAppDir() {
   return invoke<string>('get_app_dir')
 }
 
-export async function openAppDir() {
-  return invoke<void>('open_app_dir').catch((err) => showNotice.error(err))
-}
-
-export async function openCoreDir() {
-  return invoke<void>('open_core_dir').catch((err) => showNotice.error(err))
-}
-
-export async function openLogsDir() {
-  return invoke<void>('open_logs_dir').catch((err) => showNotice.error(err))
-}
-
-export const openWebUrl = async (url: string) => {
-  try {
-    await invoke('open_web_url', { url })
-  } catch (err: any) {
-    showNotice.error(err)
-  }
-}
-
-export async function cmdGetProxyDelay(
-  name: string,
-  timeout: number,
-  url?: string,
-) {
-  // 确保URL不为空
-  const testUrl = url || 'http://cp.cloudflare.com/generate_204'
-
-  try {
-    // 不再在前端编码代理名称，由后端统一处理编码
-    const result = await invoke<{ delay: number }>(
-      'clash_api_get_proxy_delay',
-      {
-        name,
-        url: testUrl, // 传递经过验证的URL
-        timeout,
-      },
-    )
-
-    // 验证返回结果中是否有delay字段，并且值是一个有效的数字
-    if (result && typeof result.delay === 'number') {
-      return result
-    } else {
-      // 返回一个有效的结果对象，但标记为超时
-      return { delay: 1e6 }
-    }
-  } catch {
-    // 返回一个有效的结果对象，但标记为错误
-    return { delay: 1e6 }
-  }
-}
-
 export async function cmdTestDelay(url: string) {
   return invoke<number>('test_delay', { url })
-}
-
-export async function invoke_uwp_tool() {
-  return invoke<void>('invoke_uwp_tool').catch((err) =>
-    showNotice.error(err, 1500),
-  )
-}
-
-export async function openDevTools() {
-  return invoke('open_devtools')
-}
-
-export async function exitApp() {
-  return invoke('exit_app')
 }
 
 export async function exportDiagnosticInfo() {
@@ -428,36 +316,18 @@ export const isServiceAvailable = async () => {
   try {
     return await invoke<boolean>('is_service_available')
   } catch (error) {
-    console.error('Service check failed:', error)
+    reportSafeClientFailure('service-availability-check', error)
     return false
   }
 }
-export const entry_lightweight_mode = async () => {
-  return invoke<void>('entry_lightweight_mode')
-}
-
 export const exit_lightweight_mode = async () => {
   return invoke<void>('exit_lightweight_mode')
 }
-
 export const isAdmin = async () => {
   try {
     return await invoke<boolean>('app_is_admin')
   } catch (error) {
-    console.error('检查管理员权限失败:', error)
-    return false
-  }
-}
-
-export async function getNextUpdateTime(uid: string) {
-  return invoke<number | null>('get_next_update_time', { uid })
-}
-
-export const isPortInUse = async (port: number) => {
-  try {
-    return await invoke<boolean>('is_port_in_use', { port })
-  } catch (error) {
-    console.error('检查端口使用状态失败:', error)
+    reportSafeClientFailure('admin-check', error)
     return false
   }
 }

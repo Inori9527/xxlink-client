@@ -270,6 +270,8 @@ function runRustfmt({ base, head } = {}) {
       '2024',
       '--config-path',
       'rustfmt.toml',
+      '--config',
+      'skip_children=true',
       ...selection.selected,
     ],
     {

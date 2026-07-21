@@ -1,6 +1,7 @@
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
+import { reportSafeClientFailure } from '@/services/safe-client-error'
 import debounce from '@/utils/debounce'
 
 import { WindowContext } from './window-context'
@@ -47,7 +48,7 @@ export const WindowProvider: React.FC<{ children: React.ReactNode }> = ({
       isUnmounted = true
       unlistenPromise
         .then((unlisten) => unlisten())
-        .catch((err) => console.warn('[WindowProvider] 清理监听器失败:', err))
+        .catch((err) => reportSafeClientFailure('window-listener-cleanup', err))
     }
   }, [currentWindow])
 

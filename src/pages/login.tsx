@@ -11,39 +11,34 @@ import {
   Paper,
 } from '@mui/material'
 import { useState, type FormEvent, type ReactNode, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, Link as RouterLink } from 'react-router'
 
 import { apiLogin, AuthError } from '@/services/auth'
 import { useAuth } from '@/services/auth-store'
+import {
+  classifyClientError,
+  reportSafeClientFailure,
+  toSafeClientErrorMessage,
+} from '@/services/safe-client-error'
 import { SESSION_EXPIRED_MESSAGE_KEY } from '@/services/session'
 import { syncSubscription } from '@/services/subscription-sync'
 
-const getLoginErrorMessage = (err: unknown): string => {
-  const code = (err as { code?: string } | null)?.code
-  if (code === 'NETWORK_TIMEOUT') {
-    return '网络连接超时，请稍后重试'
-  }
-
+const getLoginErrorMessage = (
+  err: unknown,
+  t: (key: string) => string,
+): string => {
   if (err instanceof AuthError) {
     if (err.status === 401 || err.status === 403) {
-      return '邮箱或密码不正确'
+      return t('shared.auth.errors.invalidCredentials')
     }
-    if (err.status !== undefined && err.status >= 500) {
-      return '服务暂时不可用，请稍后重试'
-    }
-    if (
-      err.message.includes('non-JSON') ||
-      err.message.includes('missing data')
-    ) {
-      return '服务响应异常，请稍后重试'
-    }
-    return '登录失败，请稍后重试'
   }
 
-  return '登录失败，请稍后重试'
+  return toSafeClientErrorMessage(classifyClientError(err).kind, t)
 }
 
 export default function LoginPage(): ReactNode {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { setAuth, isAuthenticated } = useAuth()
 
@@ -55,7 +50,7 @@ export default function LoginPage(): ReactNode {
       const message = localStorage.getItem(SESSION_EXPIRED_MESSAGE_KEY)
       if (!message) return ''
       localStorage.removeItem(SESSION_EXPIRED_MESSAGE_KEY)
-      return message
+      return toSafeClientErrorMessage('auth', t)
     } catch {
       return ''
     }
@@ -76,10 +71,13 @@ export default function LoginPage(): ReactNode {
     try {
       const result = await apiLogin(email, password)
       setAuth(result.user, result.accessToken, result.refreshToken)
-      syncSubscription({ force: true, timeoutMs: 10_000 }).catch(console.error)
+      syncSubscription({ force: true, timeoutMs: 10_000 }).catch((error) =>
+        reportSafeClientFailure('login-subscription-sync', error),
+      )
       void navigate('/')
     } catch (err) {
-      setError(getLoginErrorMessage(err))
+      reportSafeClientFailure('login-submit', err)
+      setError(getLoginErrorMessage(err, t))
     } finally {
       setLoading(false)
     }

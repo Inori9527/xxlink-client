@@ -1,3 +1,6 @@
+import { reportSafeClientFailure } from '@/services/safe-client-error'
+import { debugLog } from '@/utils/debug'
+
 /**
  * 流量统计诊断工具
  * 用于帮助开发者和用户诊断流量统计系统的性能和状态
@@ -26,12 +29,9 @@ let globalErrorCount = 0
 /**
  * 记录错误
  */
-export function recordTrafficError(error: Error, component: string) {
+export function recordTrafficError(error: Error, _component: string) {
   globalErrorCount++
-  console.error(
-    `[TrafficDiagnostics] ${component} 错误 (#${globalErrorCount}):`,
-    error,
-  )
+  reportSafeClientFailure('traffic-diagnostics', error)
 }
 
 /**
@@ -158,7 +158,11 @@ export function runTrafficDiagnostics(
     samplerStats,
     isDataFresh,
   )
-  console.log(formatDiagnosticReport(report))
+  debugLog('traffic-diagnostics-report', {
+    referenceCount: report.referenceCount,
+    errorCount: report.performance.errorCount,
+    lastDataFreshness: report.performance.lastDataFreshness,
+  })
 }
 
 /**
@@ -166,7 +170,7 @@ export function runTrafficDiagnostics(
  */
 export function resetErrorCount(): void {
   globalErrorCount = 0
-  console.log('[TrafficDiagnostics] 错误计数器已重置')
+  debugLog('traffic-diagnostics-reset')
 }
 
 // 导出到全局对象，方便在控制台调试

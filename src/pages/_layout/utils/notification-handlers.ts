@@ -1,4 +1,8 @@
-import { showNotice } from '@/services/notice-service'
+import {
+  showNotice,
+  showSafeClientFailureNotice,
+} from '@/services/notice-service'
+import { reportSafeClientFailure } from '@/services/safe-client-error'
 
 type NavigateFunction = (path: string, options?: any) => void
 type TranslateFunction = (key: string) => string
@@ -9,6 +13,15 @@ export const handleNoticeMessage = (
   t: TranslateFunction,
   navigate: NavigateFunction,
 ) => {
+  const noticeError = () => new Error(msg || 'Backend notice failed')
+  const showGenericFailure = () => {
+    showSafeClientFailureNotice('layout-notice-error', noticeError())
+  }
+  const showTranslatedFailure = (key: string) => {
+    reportSafeClientFailure('layout-notice-error', noticeError())
+    showNotice.error(key)
+  }
+
   const handlers: Record<string, () => void> = {
     'import_sub_url::ok': () => {
       // 空 msg 传入，我们不希望导致 后端-前端-后端 死循环，这里只做提醒。
@@ -21,74 +34,68 @@ export const handleNoticeMessage = (
     },
     'import_sub_url::error': () => {
       navigate('/profile')
-      showNotice.error(msg)
+      showGenericFailure()
     },
-    'set_config::error': () => showNotice.error(msg),
+    'set_config::error': showGenericFailure,
     update_with_clash_proxy: () =>
       showNotice.success(
         'settings.feedback.notifications.updater.withClashProxySuccess',
-        msg,
       ),
     update_failed_even_with_clash: () =>
-      showNotice.error(
+      showTranslatedFailure(
         'settings.feedback.notifications.updater.withClashProxyFailed',
-        msg,
       ),
-    'reactivate_profiles::error': () => showNotice.error(msg),
-    update_failed: () => showNotice.error(msg),
+    'reactivate_profiles::error': showGenericFailure,
+    update_failed: showGenericFailure,
     'config_validate::boot_error': () =>
-      showNotice.error('shared.feedback.validation.config.bootFailed', msg),
+      showTranslatedFailure('shared.feedback.validation.config.bootFailed'),
     'config_validate::core_arch_mismatch': () =>
-      showNotice.error(
+      showTranslatedFailure(
         'shared.feedback.validation.config.coreArchMismatch',
-        msg,
       ),
     'config_validate::core_change': () =>
-      showNotice.error(
+      showTranslatedFailure(
         'shared.feedback.validation.config.coreChangeFailed',
-        msg,
       ),
     'config_validate::error': () =>
-      showNotice.error('shared.feedback.validation.config.failed', msg),
+      showTranslatedFailure('shared.feedback.validation.config.failed'),
     'config_validate::process_terminated': () =>
-      showNotice.error('shared.feedback.validation.config.processTerminated'),
-    'config_validate::stdout_error': () =>
-      showNotice.error('shared.feedback.validation.config.failed', msg),
-    'config_validate::script_error': () =>
-      showNotice.error('shared.feedback.validation.script.fileError', msg),
-    'config_validate::script_syntax_error': () =>
-      showNotice.error('shared.feedback.validation.script.syntaxError', msg),
-    'config_validate::script_missing_main': () =>
-      showNotice.error('shared.feedback.validation.script.missingMain', msg),
-    'config_validate::file_not_found': () =>
-      showNotice.error('shared.feedback.validation.script.fileNotFound', msg),
-    'config_validate::yaml_syntax_error': () =>
-      showNotice.error('shared.feedback.validation.yaml.syntaxError', msg),
-    'config_validate::yaml_read_error': () =>
-      showNotice.error('shared.feedback.validation.yaml.readError', msg),
-    'config_validate::yaml_mapping_error': () =>
-      showNotice.error('shared.feedback.validation.yaml.mappingError', msg),
-    'config_validate::yaml_key_error': () =>
-      showNotice.error('shared.feedback.validation.yaml.keyError', msg),
-    'config_validate::yaml_error': () =>
-      showNotice.error('shared.feedback.validation.yaml.generalError', msg),
-    'config_validate::merge_syntax_error': () =>
-      showNotice.error('shared.feedback.validation.merge.syntaxError', msg),
-    'config_validate::merge_mapping_error': () =>
-      showNotice.error('shared.feedback.validation.merge.mappingError', msg),
-    'config_validate::merge_key_error': () =>
-      showNotice.error('shared.feedback.validation.merge.keyError', msg),
-    'config_validate::merge_error': () =>
-      showNotice.error('shared.feedback.validation.merge.generalError', msg),
-    'config_core::change_success': () =>
-      showNotice.success(
-        'settings.feedback.notifications.clash.changeSuccess',
-        msg,
+      showTranslatedFailure(
+        'shared.feedback.validation.config.processTerminated',
       ),
+    'config_validate::stdout_error': () =>
+      showTranslatedFailure('shared.feedback.validation.config.failed'),
+    'config_validate::script_error': () =>
+      showTranslatedFailure('shared.feedback.validation.script.fileError'),
+    'config_validate::script_syntax_error': () =>
+      showTranslatedFailure('shared.feedback.validation.script.syntaxError'),
+    'config_validate::script_missing_main': () =>
+      showTranslatedFailure('shared.feedback.validation.script.missingMain'),
+    'config_validate::file_not_found': () =>
+      showTranslatedFailure('shared.feedback.validation.script.fileNotFound'),
+    'config_validate::yaml_syntax_error': () =>
+      showTranslatedFailure('shared.feedback.validation.yaml.syntaxError'),
+    'config_validate::yaml_read_error': () =>
+      showTranslatedFailure('shared.feedback.validation.yaml.readError'),
+    'config_validate::yaml_mapping_error': () =>
+      showTranslatedFailure('shared.feedback.validation.yaml.mappingError'),
+    'config_validate::yaml_key_error': () =>
+      showTranslatedFailure('shared.feedback.validation.yaml.keyError'),
+    'config_validate::yaml_error': () =>
+      showTranslatedFailure('shared.feedback.validation.yaml.generalError'),
+    'config_validate::merge_syntax_error': () =>
+      showTranslatedFailure('shared.feedback.validation.merge.syntaxError'),
+    'config_validate::merge_mapping_error': () =>
+      showTranslatedFailure('shared.feedback.validation.merge.mappingError'),
+    'config_validate::merge_key_error': () =>
+      showTranslatedFailure('shared.feedback.validation.merge.keyError'),
+    'config_validate::merge_error': () =>
+      showTranslatedFailure('shared.feedback.validation.merge.generalError'),
+    'config_core::change_success': () =>
+      showNotice.success('settings.feedback.notifications.clash.changeSuccess'),
     'config_core::change_error': () =>
-      showNotice.error(
+      showTranslatedFailure(
         'settings.feedback.notifications.clash.changeFailed',
-        msg,
       ),
   }
 
@@ -96,6 +103,9 @@ export const handleNoticeMessage = (
   if (handler) {
     handler()
   } else {
-    console.warn(`未处理的通知状态: ${status}`)
+    reportSafeClientFailure(
+      'layout-notice-unhandled',
+      new Error('Unhandled backend notice status'),
+    )
   }
 }

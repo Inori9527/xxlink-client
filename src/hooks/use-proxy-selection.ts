@@ -5,10 +5,13 @@ import {
   selectNodeForGroup,
 } from 'tauri-plugin-mihomo-api'
 
-import { useProfiles } from '@/hooks/use-profiles'
 import { useVerge } from '@/hooks/use-verge'
-import { syncTrayProxySelection } from '@/services/cmds'
-import { debugLog } from '@/utils/debug'
+import {
+  getProfiles,
+  patchProfile,
+  syncTrayProxySelection,
+} from '@/services/cmds'
+import { reportSafeClientFailure } from '@/services/safe-client-error'
 
 // 缓存连接清理
 const cleanupConnections = async (previousProxy: string) => {
@@ -20,10 +23,9 @@ const cleanupConnections = async (previousProxy: string) => {
 
     if (cleanupPromises.length > 0) {
       await Promise.allSettled(cleanupPromises)
-      debugLog(`[ProxySelection] 清理了 ${cleanupPromises.length} 个连接`)
     }
   } catch (error) {
-    console.warn('[ProxySelection] 连接清理失败:', error)
+    reportSafeClientFailure('proxy-selection-cleanup', error)
   }
 }
 
@@ -43,7 +45,6 @@ interface ProxyChangeRequest {
 
 // 代理选择 Hook
 export const useProxySelection = (options: ProxySelectionOptions = {}) => {
-  const { current, patchCurrent } = useProfiles()
   const { verge } = useVerge()
   const pendingRequestRef = useRef<ProxyChangeRequest | null>(null)
   const isProcessingRef = useRef(false)
@@ -72,13 +73,22 @@ export const useProxySelection = (options: ProxySelectionOptions = {}) => {
   // 切换节点
   const syncTraySelection = useCallback(() => {
     syncTrayProxySelection().catch((error) => {
-      console.error('[ProxySelection] 托盘状态同步失败:', error)
+      reportSafeClientFailure('proxy-selection-tray-sync', error)
     })
   }, [])
 
   const persistSelection = useCallback(
-    (groupName: string, proxyName: string, skipConfigSave: boolean) => {
-      if (!current || skipConfigSave) return
+    async (groupName: string, proxyName: string, skipConfigSave: boolean) => {
+      if (skipConfigSave) return
+
+      const profiles = await getProfiles()
+      const current = profiles.items?.find(
+        (profile) => profile?.uid === profiles.current,
+      )
+      if (!current) return
+
+      const patchCurrent = (value: Partial<IProfileItem>) =>
+        patchProfile(current.uid, value)
 
       const selected = current.selected ? [...current.selected] : []
       const index = selected.findIndex((item) => item.name === groupName)
@@ -89,27 +99,24 @@ export const useProxySelection = (options: ProxySelectionOptions = {}) => {
         selected[index] = { name: groupName, now: proxyName }
       }
 
-      patchCurrent({ selected }).catch((error) => {
-        console.error('[ProxySelection] 保存代理选择失败:', error)
-      })
+      await patchCurrent({ selected })
     },
-    [current, patchCurrent],
+    [],
   )
 
   const executeChange = useCallback(
     async (request: ProxyChangeRequest) => {
       const { groupName, proxyName, previousProxy, skipConfigSave } = request
-      debugLog(`[ProxySelection] 代理切换: ${groupName} -> ${proxyName}`)
 
       try {
         await selectNodeForGroup(groupName, proxyName)
         onSuccess?.()
         syncTraySelection()
-        persistSelection(groupName, proxyName, skipConfigSave)
-        debugLog(
-          `[ProxySelection] 代理和状态同步完成: ${groupName} -> ${proxyName}`,
-        )
-
+        try {
+          await persistSelection(groupName, proxyName, skipConfigSave)
+        } catch (error) {
+          reportSafeClientFailure('proxy-selection-persist', error)
+        }
         if (
           config.enableConnectionCleanup &&
           (config.forceConnectionCleanup || config.autoCloseConnection) &&
@@ -118,24 +125,19 @@ export const useProxySelection = (options: ProxySelectionOptions = {}) => {
           setTimeout(() => cleanupConnections(previousProxy), 0)
         }
       } catch (error) {
-        console.error(
-          `[ProxySelection] 代理切换失败: ${groupName} -> ${proxyName}`,
-          error,
-        )
+        reportSafeClientFailure('proxy-selection-change', error)
 
         try {
           await selectNodeForGroup(groupName, proxyName)
           onSuccess?.()
           syncTraySelection()
-          persistSelection(groupName, proxyName, skipConfigSave)
-          debugLog(
-            `[ProxySelection] 代理切换回退成功: ${groupName} -> ${proxyName}`,
-          )
+          try {
+            await persistSelection(groupName, proxyName, skipConfigSave)
+          } catch (error) {
+            reportSafeClientFailure('proxy-selection-persist', error)
+          }
         } catch (fallbackError) {
-          console.error(
-            `[ProxySelection] 代理切换回退也失败: ${groupName} -> ${proxyName}`,
-            fallbackError,
-          )
+          reportSafeClientFailure('proxy-selection-fallback', fallbackError)
           onError?.(fallbackError)
         }
       }

@@ -8,6 +8,7 @@ import { useEffect, useMemo } from 'react'
 
 import { useVerge } from '@/hooks/use-verge'
 import { defaultDarkTheme, defaultTheme } from '@/pages/_theme'
+import { reportSafeClientFailure } from '@/services/safe-client-error'
 import { useSetThemeMode, useThemeMode } from '@/services/states'
 
 /**
@@ -39,11 +40,11 @@ export const useCustomTheme = () => {
   useEffect(() => {
     if (theme_mode === undefined || theme_mode === 'system') {
       appWindow.setTheme('light' as TauriOsTheme).catch((err) => {
-        console.error('Failed to set window theme to light:', err)
+        reportSafeClientFailure('theme-window-set', err)
       })
     } else if (mode) {
       appWindow.setTheme(mode as TauriOsTheme).catch((err) => {
-        console.error(`Failed to set window theme to ${mode}:`, err)
+        reportSafeClientFailure('theme-window-set', err)
       })
     }
   }, [mode, appWindow, theme_mode])
@@ -79,8 +80,8 @@ export const useCustomTheme = () => {
           fontFamily: dt.font_family,
         },
       })
-    } catch (e) {
-      console.error('Error creating MUI theme, falling back to defaults:', e)
+    } catch (error) {
+      reportSafeClientFailure('theme-create', error)
       muiTheme = createTheme({
         breakpoints: {
           values: { xs: 0, sm: 650, md: 900, lg: 1200, xl: 1536 },

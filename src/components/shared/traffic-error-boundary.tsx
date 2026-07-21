@@ -7,6 +7,12 @@ import { Box, Typography, Button, Alert, Collapse } from '@mui/material'
 import React, { Component, ErrorInfo, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import {
+  reportSafeClientFailure,
+  toSafeClientErrorMessage,
+  toSafeClientFailureRecord,
+} from '@/services/safe-client-error'
+
 interface Props {
   children: ReactNode
   fallbackComponent?: ReactNode
@@ -44,7 +50,7 @@ export class TrafficErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('[TrafficErrorBoundary] 捕获到组件错误:', error, errorInfo)
+    reportSafeClientFailure('traffic-error-boundary', error)
 
     this.setState({
       error,
@@ -55,33 +61,11 @@ export class TrafficErrorBoundary extends Component<Props, State> {
     if (this.props.onError) {
       this.props.onError(error, errorInfo)
     }
-
-    // 发送错误到监控系统（如果有的话）
-    this.reportError(error, errorInfo)
-  }
-
-  private reportError = (error: Error, errorInfo: ErrorInfo) => {
-    // 这里可以集成错误监控服务
-    const errorReport = {
-      message: error.message,
-      stack: error.stack,
-      componentStack: errorInfo.componentStack,
-      timestamp: new Date().toISOString(),
-      userAgent: navigator.userAgent,
-      url: window.location.href,
-    }
-
-    console.error('[TrafficErrorBoundary] 错误报告:', errorReport)
-    // TODO: 发送到错误监控服务
-    // sendErrorReport(errorReport);
   }
 
   private handleRetry = () => {
     if (this.retryCount < this.maxRetries) {
       this.retryCount++
-      console.log(
-        `[TrafficErrorBoundary] 尝试重试 (${this.retryCount}/${this.maxRetries})`,
-      )
 
       this.setState({
         hasError: false,
@@ -89,8 +73,6 @@ export class TrafficErrorBoundary extends Component<Props, State> {
         errorInfo: null,
         showDetails: false,
       })
-    } else {
-      console.warn('[TrafficErrorBoundary] 已达到最大重试次数')
     }
   }
 
@@ -156,6 +138,9 @@ const TrafficErrorFallback: React.FC<TrafficErrorFallbackProps> = ({
   onToggleDetails,
 }) => {
   const { t } = useTranslation()
+  const failure = toSafeClientFailureRecord('traffic-error-boundary', error)
+  const safeErrorMessage = toSafeClientErrorMessage(failure.kind, t)
+  const safeErrorDetails = JSON.stringify(failure, null, 2)
 
   return (
     <Box
@@ -190,8 +175,7 @@ const TrafficErrorFallback: React.FC<TrafficErrorFallbackProps> = ({
 
       <Alert severity="error" sx={{ mb: 2, maxWidth: 400 }}>
         <Typography variant="body2">
-          <strong>Error:</strong>{' '}
-          {error instanceof Error ? error.message : 'Unknown error'}
+          <strong>Error:</strong> {safeErrorMessage}
         </Typography>
         {retryCount > 0 && (
           <Typography variant="caption" display="block" sx={{ mt: 1 }}>
@@ -253,7 +237,7 @@ const TrafficErrorFallback: React.FC<TrafficErrorFallbackProps> = ({
               color: 'text.secondary',
             }}
           >
-            {error?.stack}
+            {safeErrorDetails}
           </Typography>
 
           {errorInfo?.componentStack && (
@@ -272,7 +256,7 @@ const TrafficErrorFallback: React.FC<TrafficErrorFallbackProps> = ({
                   color: 'text.secondary',
                 }}
               >
-                {errorInfo.componentStack}
+                {safeErrorDetails}
               </Typography>
             </>
           )}

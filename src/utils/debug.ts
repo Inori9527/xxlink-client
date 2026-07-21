@@ -56,11 +56,59 @@ export const isDebugLoggingEnabled = () =>
   cachedDebugEnabled ??
   (cachedDebugEnabled = computeDebugEnabled())
 
-/**
- * Logs to the console only when debug logging is enabled.
- * Forwards all arguments to `console.log`; does nothing otherwise.
- */
-export const debugLog = (...args: any[]) => {
+export const SAFE_DEBUG_EVENTS = [
+  'delay-test-complete',
+  'traffic-diagnostics-report',
+  'traffic-diagnostics-reset',
+] as const
+
+export type SafeDebugEvent = (typeof SAFE_DEBUG_EVENTS)[number]
+type SafeDebugMetadataKey =
+  | 'count'
+  | 'enabled'
+  | 'errorCount'
+  | 'lastDataFreshness'
+  | 'referenceCount'
+export type SafeDebugMetadata = Readonly<
+  Partial<Record<SafeDebugMetadataKey, number | boolean | null>>
+>
+
+const SAFE_DEBUG_EVENT_SET = new Set<string>(SAFE_DEBUG_EVENTS)
+const SAFE_DEBUG_METADATA_KEY_SET = new Set<string>([
+  'count',
+  'enabled',
+  'errorCount',
+  'lastDataFreshness',
+  'referenceCount',
+])
+
+export function toSafeDebugRecord(
+  event: string,
+  metadata?: Readonly<Record<string, unknown>>,
+): Record<string, string | number | boolean | null> {
+  const record: Record<string, string | number | boolean | null> = {
+    event: SAFE_DEBUG_EVENT_SET.has(event) ? event : 'client-debug',
+  }
+
+  for (const [key, value] of Object.entries(metadata ?? {})) {
+    if (!SAFE_DEBUG_METADATA_KEY_SET.has(key)) continue
+    if (
+      typeof value === 'boolean' ||
+      (typeof value === 'number' && Number.isFinite(value)) ||
+      value === null
+    ) {
+      record[key] = value
+    }
+  }
+
+  return record
+}
+
+/** Logs only closed event categories and bounded non-string metadata. */
+export const debugLog = (
+  event: SafeDebugEvent,
+  metadata?: SafeDebugMetadata,
+) => {
   if (!isDebugLoggingEnabled()) return
-  console.log(...args)
+  console.info(toSafeDebugRecord(event, metadata))
 }

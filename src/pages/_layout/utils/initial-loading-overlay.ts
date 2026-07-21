@@ -1,3 +1,5 @@
+import { reportSafeClientFailure } from '@/services/safe-client-error'
+
 const OVERLAY_ID = 'initial-loading-overlay'
 const REMOVE_DELAY = 300
 
@@ -37,7 +39,7 @@ export const hideInitialOverlay = (
     try {
       overlay.remove()
     } catch (error) {
-      console.warn('[Loading Overlay] Removal failed:', error)
+      reportSafeClientFailure('loading-overlay-remove', error)
     }
   }, REMOVE_DELAY)
 

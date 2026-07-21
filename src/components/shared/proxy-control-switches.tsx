@@ -8,7 +8,7 @@ import {
 } from '@mui/icons-material'
 import { Box, Typography, alpha, useTheme } from '@mui/material'
 import { useLockFn } from 'ahooks'
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { DialogRef, Switch, TooltipIcon } from '@/components/base'
@@ -19,11 +19,14 @@ import { useServiceUninstaller } from '@/hooks/use-service-uninstaller'
 import { useSystemProxyState } from '@/hooks/use-system-proxy-state'
 import { useSystemState } from '@/hooks/use-system-state'
 import { useVerge } from '@/hooks/use-verge'
-import { showNotice } from '@/services/notice-service'
+type ProxyControlKind = 'systemProxy' | 'tun'
 
-interface ProxySwitchProps {
-  label?: string
-  onError?: (err: Error) => void
+interface ProxyControlProps {
+  onError: (error: unknown) => void
+}
+
+interface ProxySwitchProps extends ProxyControlProps {
+  kind: ProxyControlKind
   noRightPadding?: boolean
 }
 
@@ -35,7 +38,7 @@ interface SwitchRowProps {
   onInfoClick?: () => void
   extraIcons?: React.ReactNode
   onToggle: (value: boolean) => Promise<void>
-  onError?: (err: Error) => void
+  onError: (error: unknown) => void
   highlight?: boolean
 }
 
@@ -68,9 +71,9 @@ const SwitchRow = ({
     pendingRef.current = true
     setChecked(value)
     onToggle(value)
-      .catch((err: any) => {
+      .catch((error: unknown) => {
         setChecked(active)
-        onError?.(err)
+        onError(error)
       })
       .finally(() => {
         pendingRef.current = false
@@ -124,34 +127,42 @@ const SwitchRow = ({
   )
 }
 
-const ProxyControlSwitches = ({
-  label,
-  onError,
-  noRightPadding = false,
-}: ProxySwitchProps) => {
+const SystemProxyControl = ({ onError }: ProxyControlProps) => {
+  const { t } = useTranslation()
+  const { indicator: systemProxyIndicator, toggleSystemProxy } =
+    useSystemProxyState()
+  const sysproxyRef = useRef<DialogRef>(null)
+
+  return (
+    <>
+      <SwitchRow
+        label={t('settings.sections.proxyControl.fields.systemProxy')}
+        active={systemProxyIndicator}
+        infoTitle={t('settings.sections.proxyControl.tooltips.systemProxy')}
+        onInfoClick={() => sysproxyRef.current?.open()}
+        onToggle={(value) => toggleSystemProxy(value)}
+        onError={onError}
+        highlight={systemProxyIndicator}
+      />
+      <SysproxyViewer ref={sysproxyRef} />
+    </>
+  )
+}
+
+const TunControl = ({ onError }: ProxyControlProps) => {
   const { t } = useTranslation()
   const { verge, mutateVerge, patchVerge } = useVerge()
   const { installServiceAndRestartCore } = useServiceInstaller()
   const { uninstallServiceAndRestartCore } = useServiceUninstaller()
-  const { indicator: systemProxyIndicator, toggleSystemProxy } =
-    useSystemProxyState()
   const { isServiceOk, isTunModeAvailable, mutateSystemState } =
     useSystemState()
-
-  const sysproxyRef = useRef<DialogRef>(null)
   const tunRef = useRef<DialogRef>(null)
 
   const { enable_tun_mode } = verge ?? {}
 
-  const showErrorNotice = useCallback(
-    (msg: string) => showNotice.error(msg),
-    [],
-  )
-
   const handleTunToggle = async (value: boolean) => {
     if (!isTunModeAvailable) {
       const msgKey = 'settings.sections.proxyControl.tooltips.tunUnavailable'
-      showErrorNotice(msgKey)
       throw new Error(t(msgKey))
     }
     mutateVerge({ ...verge, enable_tun_mode: value }, false)
@@ -162,8 +173,8 @@ const ProxyControlSwitches = ({
     try {
       await installServiceAndRestartCore()
       await mutateSystemState()
-    } catch (err) {
-      showNotice.error(err)
+    } catch (error) {
+      onError(error)
     }
   })
 
@@ -174,81 +185,75 @@ const ProxyControlSwitches = ({
       }
       await uninstallServiceAndRestartCore()
       await mutateSystemState()
-    } catch (err) {
-      showNotice.error(err)
+    } catch (error) {
+      onError(error)
     }
   })
 
-  const isSystemProxyMode =
-    label === t('settings.sections.system.toggles.systemProxy') || !label
-  const isTunMode = label === t('settings.sections.system.toggles.tunMode')
-
   return (
-    <Box sx={{ width: '100%', pr: noRightPadding ? 1 : 2 }}>
-      {isSystemProxyMode && (
-        <SwitchRow
-          label={t('settings.sections.proxyControl.fields.systemProxy')}
-          active={systemProxyIndicator}
-          infoTitle={t('settings.sections.proxyControl.tooltips.systemProxy')}
-          onInfoClick={() => sysproxyRef.current?.open()}
-          onToggle={(value) => toggleSystemProxy(value)}
-          onError={onError}
-          highlight={systemProxyIndicator}
-        />
-      )}
-
-      {isTunMode && (
-        <SwitchRow
-          label={t('settings.sections.proxyControl.fields.tunMode')}
-          active={enable_tun_mode || false}
-          infoTitle={t('settings.sections.proxyControl.tooltips.tunMode')}
-          onInfoClick={() => tunRef.current?.open()}
-          onToggle={handleTunToggle}
-          onError={onError}
-          disabled={!isTunModeAvailable}
-          highlight={enable_tun_mode || false}
-          extraIcons={
-            <>
-              {!isTunModeAvailable && (
-                <>
-                  <TooltipIcon
-                    title={t(
-                      'settings.sections.proxyControl.tooltips.tunUnavailable',
-                    )}
-                    icon={WarningRounded}
-                    sx={{ color: 'warning.main', ml: 1 }}
-                  />
-                  <TooltipIcon
-                    title={t(
-                      'settings.sections.proxyControl.actions.installService',
-                    )}
-                    icon={BuildRounded}
-                    color="primary"
-                    onClick={onInstallService}
-                    sx={{ ml: 1 }}
-                  />
-                </>
-              )}
-              {isServiceOk && (
+    <>
+      <SwitchRow
+        label={t('settings.sections.proxyControl.fields.tunMode')}
+        active={enable_tun_mode || false}
+        infoTitle={t('settings.sections.proxyControl.tooltips.tunMode')}
+        onInfoClick={() => tunRef.current?.open()}
+        onToggle={handleTunToggle}
+        onError={onError}
+        disabled={!isTunModeAvailable}
+        highlight={enable_tun_mode || false}
+        extraIcons={
+          <>
+            {!isTunModeAvailable && (
+              <>
                 <TooltipIcon
                   title={t(
-                    'settings.sections.proxyControl.actions.uninstallService',
+                    'settings.sections.proxyControl.tooltips.tunUnavailable',
                   )}
-                  icon={DeleteForeverRounded}
-                  color="secondary"
-                  onClick={onUninstallService}
+                  icon={WarningRounded}
+                  sx={{ color: 'warning.main', ml: 1 }}
+                />
+                <TooltipIcon
+                  title={t(
+                    'settings.sections.proxyControl.actions.installService',
+                  )}
+                  icon={BuildRounded}
+                  color="primary"
+                  onClick={onInstallService}
                   sx={{ ml: 1 }}
                 />
-              )}
-            </>
-          }
-        />
-      )}
-
-      <SysproxyViewer ref={sysproxyRef} />
+              </>
+            )}
+            {isServiceOk && (
+              <TooltipIcon
+                title={t(
+                  'settings.sections.proxyControl.actions.uninstallService',
+                )}
+                icon={DeleteForeverRounded}
+                color="secondary"
+                onClick={onUninstallService}
+                sx={{ ml: 1 }}
+              />
+            )}
+          </>
+        }
+      />
       <TunViewer ref={tunRef} />
-    </Box>
+    </>
   )
 }
+
+const ProxyControlSwitches = ({
+  kind,
+  onError,
+  noRightPadding = false,
+}: ProxySwitchProps) => (
+  <Box sx={{ width: '100%', pr: noRightPadding ? 1 : 2 }}>
+    {kind === 'systemProxy' ? (
+      <SystemProxyControl onError={onError} />
+    ) : (
+      <TunControl onError={onError} />
+    )}
+  </Box>
+)
 
 export default ProxyControlSwitches

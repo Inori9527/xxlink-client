@@ -75,7 +75,13 @@
   "feedback": {
     "errors": {
       "trafficStats": "流量统计错误",
-      "trafficStatsDescription": "流量统计组件发生错误，为防止崩溃已暂时停用。"
+      "trafficStatsDescription": "流量统计组件发生错误，为防止崩溃已暂时停用。",
+      "safeClient": {
+        "network": "网络连接失败，请重试。",
+        "auth": "登录状态已失效，请重新登录。",
+        "service": "服务暂时无法完成请求，请稍后重试。",
+        "unknown": "发生了未知错误，请重试。"
+      }
     },
     "notices": {
       "raw": "{{message}}",
@@ -179,6 +185,8 @@
       "loginFailed": "Google 登录失败: {{error}}"
     },
     "errors": {
+      "accountExists": "该邮箱已注册，请直接登录。",
+      "invalidCredentials": "邮箱或密码不正确。",
       "openBrowser": "无法打开浏览器: {{error}}",
       "loginFailed": "登录失败: {{error}}",
       "registerFailed": "注册失败: {{error}}"

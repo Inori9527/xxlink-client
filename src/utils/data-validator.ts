@@ -1,3 +1,5 @@
+import { reportSafeClientFailure } from '@/services/safe-client-error'
+
 /**
  * 类型安全的数据验证器
  * 确保从后端接收的数据符合预期的接口定义
@@ -27,28 +29,21 @@ export class SystemMonitorValidator implements ISystemMonitorOverviewValidator {
    */
   validate(data: any): data is ISystemMonitorOverview {
     if (!data || typeof data !== 'object') {
-      console.warn('[DataValidator] 数据不是对象:', data)
       return false
     }
 
     // 验证traffic字段
     if (!this.validateTrafficData(data.traffic)) {
-      console.warn('[DataValidator] traffic字段验证失败:', data.traffic)
       return false
     }
 
     // 验证memory字段
     if (!this.validateMemoryData(data.memory)) {
-      console.warn('[DataValidator] memory字段验证失败:', data.memory)
       return false
     }
 
     // 验证overall_status字段
     if (!this.validateOverallStatus(data.overall_status)) {
-      console.warn(
-        '[DataValidator] overall_status字段验证失败:',
-        data.overall_status,
-      )
       return false
     }
 
@@ -59,15 +54,12 @@ export class SystemMonitorValidator implements ISystemMonitorOverviewValidator {
    * 清理和修复数据，确保返回有效的ISystemMonitorOverview
    */
   sanitize(data: any): ISystemMonitorOverview {
-    // debugLog("[DataValidator] 开始数据清理:", data);
-
     const sanitized: ISystemMonitorOverview = {
       traffic: this.sanitizeTrafficData(data?.traffic),
       memory: this.sanitizeMemoryData(data?.memory),
       overall_status: this.sanitizeOverallStatus(data?.overall_status),
     }
 
-    // debugLog("[DataValidator] 数据清理完成:", sanitized);
     return sanitized
   }
 
@@ -218,11 +210,10 @@ export function withDataValidation<T extends (...args: any[]) => Promise<any>>(
       if (validator.validate(result)) {
         return result
       } else {
-        console.warn('[DataValidator] API返回数据验证失败，尝试修复:', result)
         return validator.sanitize(result)
       }
     } catch (error) {
-      console.error('[DataValidator] API调用失败:', error)
+      reportSafeClientFailure('data-validation-api', error)
       // 返回安全的默认值
       return validator.sanitize(null)
     }

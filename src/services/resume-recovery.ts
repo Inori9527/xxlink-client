@@ -1,6 +1,7 @@
 import { writeAccountLkgCache } from '@/services/account-lkg-cache'
 import { api } from '@/services/api'
 import { authStore } from '@/services/auth-store'
+import { toSafeClientFailureRecord } from '@/services/safe-client-error'
 import { syncSubscription } from '@/services/subscription-sync'
 
 const RESUME_RECOVERY_MIN_INTERVAL_MS = 30_000
@@ -36,7 +37,7 @@ function rememberResumeSyncError(error: unknown, reason: ResumeReason): void {
     localStorage.setItem(
       STARTUP_SYNC_ERROR_KEY,
       JSON.stringify({
-        message: error instanceof Error ? error.message : String(error),
+        ...toSafeClientFailureRecord('resume-recovery', error),
         reason,
         ts: Date.now(),
       }),

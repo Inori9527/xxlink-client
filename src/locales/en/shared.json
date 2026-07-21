@@ -75,7 +75,13 @@
   "feedback": {
     "errors": {
       "trafficStats": "Traffic Statistics Error",
-      "trafficStatsDescription": "The traffic statistics component encountered an error and has been disabled to prevent crashes."
+      "trafficStatsDescription": "The traffic statistics component encountered an error and has been disabled to prevent crashes.",
+      "safeClient": {
+        "network": "Network connection failed. Please try again.",
+        "auth": "Your session is no longer valid. Please sign in again.",
+        "service": "The service could not complete the request. Please try again later.",
+        "unknown": "Something went wrong. Please try again."
+      }
     },
     "notices": {
       "raw": "{{message}}",
@@ -179,6 +185,8 @@
       "loginFailed": "Google sign-in failed: {{error}}"
     },
     "errors": {
+      "accountExists": "An account already exists for this email. Sign in instead.",
+      "invalidCredentials": "The email or password is incorrect.",
       "openBrowser": "Unable to open browser: {{error}}",
       "loginFailed": "Sign-in failed: {{error}}",
       "registerFailed": "Registration failed: {{error}}"

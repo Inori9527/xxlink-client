@@ -11,7 +11,6 @@ import { isServiceAccessBlockedResponse } from '@/services/auth-session-boundary
 import { authStore } from '@/services/auth-store'
 import { BASE_URL } from '@/services/config'
 import { fetchWithTimeout } from '@/services/http'
-import { debugLog } from '@/utils/debug'
 
 // ---------------------------------------------------------------------------
 // Shared type definitions
@@ -241,7 +240,7 @@ export function isAuthFatalError(error: unknown): boolean {
   )
 }
 
-function getServiceBlockedMessage(code?: string, message?: string): string {
+function getServiceBlockedMessage(code?: string): string {
   if (
     code === 'USER_NOT_FOUND' ||
     code === 'USER_DELETED' ||
@@ -257,18 +256,11 @@ function getServiceBlockedMessage(code?: string, message?: string): string {
   ) {
     return 'Account access is blocked. Please contact support.'
   }
-  return (
-    message ||
-    'Service access was rejected by the server. Please check your account status.'
-  )
+  return 'Service access was rejected by the server. Please check your account status.'
 }
 
-function handleAuthFatal(
-  status: number,
-  code?: string,
-  message?: string,
-): never {
-  const friendlyMessage = getServiceBlockedMessage(code, message)
+function handleAuthFatal(status: number, code?: string): never {
+  const friendlyMessage = getServiceBlockedMessage(code)
   throw new ApiError(friendlyMessage, status, code || 'SERVICE_ACCESS_BLOCKED')
 }
 
@@ -338,7 +330,6 @@ async function request<T>(
               handleAuthFatal(
                 error.status,
                 error.code || 'REFRESH_TOKEN_INVALID',
-                error.message,
               )
             }
             throw error
@@ -370,7 +361,7 @@ async function request<T>(
 
   if (!res.ok || !json.success) {
     if (isServiceBlockedResponseForRequest(res.status, code, path)) {
-      handleAuthFatal(res.status, code, message)
+      handleAuthFatal(res.status, code)
     }
     throw new ApiError(
       message ?? `Request failed (${res.status})`,
@@ -548,8 +539,7 @@ const getUserAgentPromise = once(async () => {
   try {
     const [name, version] = await Promise.all([getName(), getVersion()])
     return `${name}/${version}`
-  } catch (error) {
-    console.debug('Failed to build User-Agent, fallback to default', error)
+  } catch {
     return 'xxlink-client'
   }
 })
@@ -576,12 +566,9 @@ export const getIpInfo = async (): Promise<
   IpInfo & { lastFetchTs: number }
 > => {
   const userAgent = await getUserAgentPromise()
-  console.debug('User-Agent for IP detection:', userAgent)
 
   return asyncRetry(
     async (bail) => {
-      debugLog(`尝试IP检测服务: ${IP_CHECK_URL}`)
-
       const timeoutController = new AbortController()
       const timeoutId = setTimeout(
         () => timeoutController.abort(),
@@ -612,7 +599,6 @@ export const getIpInfo = async (): Promise<
         }
 
         if (data && data.ip) {
-          debugLog('IP检测成功')
           return {
             ip: data.ip || '',
             country_code: data.country_code || '',

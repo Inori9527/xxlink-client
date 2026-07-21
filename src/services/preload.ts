@@ -5,6 +5,7 @@ import {
   initializeLanguage,
   resolveLanguage,
 } from './i18n'
+import { reportSafeClientFailure } from './safe-client-error'
 
 let vergeConfigCache: IVergeConfig | null | undefined
 
@@ -43,7 +44,7 @@ export const preloadConfig = async () => {
     setPreloadConfig(config)
     return config
   } catch (error) {
-    console.warn('[preload.ts] Failed to read Verge config:', error)
+    reportSafeClientFailure('preload-config', error)
     setPreloadConfig(null)
     return null
   }
@@ -64,10 +65,7 @@ export const preloadLanguage = async (
     try {
       resolvedConfig = await loadConfig()
     } catch (error) {
-      console.warn(
-        '[preload.ts] Failed to read language from Verge config:',
-        error,
-      )
+      reportSafeClientFailure('preload-language', error)
       resolvedConfig = null
     }
   }

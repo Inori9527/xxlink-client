@@ -1,28 +1,14 @@
-import {
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core'
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-import { Box, List, Menu, MenuItem, Paper, ThemeProvider } from '@mui/material'
+import KeyboardDoubleArrowLeftRoundedIcon from '@mui/icons-material/KeyboardDoubleArrowLeftRounded'
+import KeyboardDoubleArrowRightRoundedIcon from '@mui/icons-material/KeyboardDoubleArrowRightRounded'
+import { Box, IconButton, List, Paper, ThemeProvider } from '@mui/material'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
-import type { CSSProperties } from 'react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Outlet, useLocation, useNavigate } from 'react-router'
+import { Outlet, useNavigate } from 'react-router'
 
 import brandIcon from '@/assets/image/brand-icon.png'
 import { BaseErrorBoundary } from '@/components/base'
-import { AnnouncementPrompt } from '@/components/layout/announcement-prompt'
 import { LayoutItem } from '@/components/layout/layout-item'
 import { LayoutTraffic } from '@/components/layout/layout-traffic'
 import { NoticeManager } from '@/components/layout/notice-manager'
@@ -32,6 +18,7 @@ import { WindowControls } from '@/components/layout/window-controller'
 import { useI18n } from '@/hooks/use-i18n'
 import { useVerge } from '@/hooks/use-verge'
 import { useWindowDecorations } from '@/hooks/use-window'
+import { reportSafeClientFailure } from '@/services/safe-client-error'
 import { useThemeMode } from '@/services/states'
 import getSystem from '@/utils/get-system'
 
@@ -40,61 +27,12 @@ import {
   useCustomTheme,
   useLayoutEvents,
   useLoadingOverlay,
-  useNavMenuOrder,
 } from './_layout/hooks'
 import { handleNoticeMessage } from './_layout/utils'
 import { navItems } from './_routers'
-import LogsPage from './logs'
 
 import 'dayjs/locale/ru'
 import 'dayjs/locale/zh-cn'
-
-type NavItem = (typeof navItems)[number]
-
-type MenuContextPosition = { top: number; left: number }
-
-interface SortableNavMenuItemProps {
-  item: NavItem
-  label: string
-}
-
-const SortableNavMenuItem = ({ item, label }: SortableNavMenuItemProps) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: item.path,
-  })
-
-  const style: CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  }
-
-  if (isDragging) {
-    style.zIndex = 100
-  }
-
-  return (
-    <LayoutItem
-      to={item.path}
-      icon={item.icon}
-      sortable={{
-        setNodeRef,
-        attributes,
-        listeners,
-        style,
-        isDragging,
-      }}
-    >
-      {label}
-    </LayoutItem>
-  )
-}
 
 dayjs.extend(relativeTime)
 
@@ -104,94 +42,20 @@ const Layout = () => {
   const mode = useThemeMode()
   const { t } = useTranslation()
   const { theme } = useCustomTheme()
-  const { verge, mutateVerge, patchVerge } = useVerge()
+  const { verge, patchVerge } = useVerge()
   const { language } = verge ?? {}
   const navCollapsed = verge?.collapse_navbar ?? false
+  const navToggleLabel = navCollapsed
+    ? t('layout.components.navigation.menu.expandNavBar')
+    : t('layout.components.navigation.menu.collapseNavBar')
   const { switchLanguage } = useI18n()
   const navigate = useNavigate()
-  const { pathname } = useLocation()
-  const isLogsPage = pathname === '/logs'
-  const logsPageMountedRef = useRef(false)
-  if (isLogsPage) logsPageMountedRef.current = true
   const themeReady = useMemo(() => Boolean(theme), [theme])
-
-  const [menuUnlocked, setMenuUnlocked] = useState(false)
-  const [menuContextPosition, setMenuContextPosition] =
-    useState<MenuContextPosition | null>(null)
 
   const windowControlsRef = useRef<any>(null)
   const { decorated } = useWindowDecorations()
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 6,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    }),
-  )
-
-  const handleMenuOrderOptimisticUpdate = useCallback(
-    (order: string[]) => {
-      mutateVerge(
-        (prev) => (prev ? { ...prev, menu_order: order } : prev),
-        false,
-      )
-    },
-    [mutateVerge],
-  )
-
-  const handleMenuOrderPersist = useCallback(
-    (order: string[]) => patchVerge({ menu_order: order }),
-    [patchVerge],
-  )
-
-  const {
-    menuOrder,
-    navItemMap,
-    handleMenuDragEnd,
-    isDefaultOrder,
-    resetMenuOrder,
-  } = useNavMenuOrder({
-    enabled: menuUnlocked,
-    items: navItems,
-    storedOrder: verge?.menu_order,
-    onOptimisticUpdate: handleMenuOrderOptimisticUpdate,
-    onPersist: handleMenuOrderPersist,
-  })
-
-  const handleMenuContextMenu = useCallback(
-    (event: React.MouseEvent<HTMLElement>) => {
-      event.preventDefault()
-      event.stopPropagation()
-      setMenuContextPosition({ top: event.clientY, left: event.clientX })
-    },
-    [],
-  )
-
-  const handleMenuContextClose = useCallback(() => {
-    setMenuContextPosition(null)
-  }, [])
-
-  const handleResetMenuOrder = useCallback(() => {
-    setMenuContextPosition(null)
-    void resetMenuOrder()
-  }, [resetMenuOrder])
-
-  const handleUnlockMenu = useCallback(() => {
-    setMenuUnlocked(true)
-    setMenuContextPosition(null)
-  }, [])
-
-  const handleLockMenu = useCallback(() => {
-    setMenuUnlocked(false)
-    setMenuContextPosition(null)
-  }, [])
-
   const handleToggleNavCollapsed = useCallback(() => {
-    setMenuContextPosition(null)
     void patchVerge({ collapse_navbar: !navCollapsed })
   }, [navCollapsed, patchVerge])
 
@@ -214,7 +78,7 @@ const Layout = () => {
       try {
         handleNoticeMessage(status, msg, t, navigate)
       } catch (error) {
-        console.error('[通知处理] 失败:', error)
+        reportSafeClientFailure('layout-notice-handler', error)
       }
     },
     [t, navigate],
@@ -251,7 +115,6 @@ const Layout = () => {
       {/* 左侧底部窗口控制按钮 */}
       <NoticeManager position={verge?.notice_position} />
       <UpdatePrompt />
-      <AnnouncementPrompt />
       <Paper
         square
         elevation={0}
@@ -323,114 +186,29 @@ const Layout = () => {
                 </Box>
               </div>
               <UpdateButton className="the-newbtn" />
+              <IconButton
+                size="small"
+                data-tauri-drag-region="false"
+                title={navToggleLabel}
+                aria-label={navToggleLabel}
+                onClick={handleToggleNavCollapsed}
+                sx={{ alignSelf: 'center', ml: 'auto' }}
+              >
+                {navCollapsed ? (
+                  <KeyboardDoubleArrowRightRoundedIcon />
+                ) : (
+                  <KeyboardDoubleArrowLeftRoundedIcon />
+                )}
+              </IconButton>
             </div>
 
-            {menuUnlocked && (
-              <Box
-                sx={(theme) => ({
-                  px: 1.5,
-                  py: 0.75,
-                  mx: 'auto',
-                  mb: 1,
-                  maxWidth: 250,
-                  borderRadius: 1.5,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  textAlign: 'center',
-                  color: theme.palette.warning.contrastText,
-                  bgcolor:
-                    theme.palette.mode === 'light'
-                      ? theme.palette.warning.main
-                      : theme.palette.warning.dark,
-                })}
-              >
-                {t('layout.components.navigation.menu.reorderMode')}
-              </Box>
-            )}
-
-            {menuUnlocked ? (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleMenuDragEnd}
-              >
-                <SortableContext items={menuOrder}>
-                  <List
-                    className="the-menu"
-                    onContextMenu={handleMenuContextMenu}
-                  >
-                    {menuOrder.map((path) => {
-                      const item = navItemMap.get(path)
-                      if (!item) {
-                        return null
-                      }
-                      return (
-                        <SortableNavMenuItem
-                          key={item.path}
-                          item={item}
-                          label={t(item.label)}
-                        />
-                      )
-                    })}
-                  </List>
-                </SortableContext>
-              </DndContext>
-            ) : (
-              <List className="the-menu" onContextMenu={handleMenuContextMenu}>
-                {menuOrder.map((path) => {
-                  const item = navItemMap.get(path)
-                  if (!item) {
-                    return null
-                  }
-                  return (
-                    <LayoutItem key={item.path} to={item.path} icon={item.icon}>
-                      {t(item.label)}
-                    </LayoutItem>
-                  )
-                })}
-              </List>
-            )}
-
-            <Menu
-              open={Boolean(menuContextPosition)}
-              onClose={handleMenuContextClose}
-              anchorReference="anchorPosition"
-              anchorPosition={
-                menuContextPosition
-                  ? {
-                      top: menuContextPosition.top,
-                      left: menuContextPosition.left,
-                    }
-                  : undefined
-              }
-              transitionDuration={200}
-              slotProps={{
-                list: {
-                  sx: { py: 0.5 },
-                },
-              }}
-            >
-              <MenuItem onClick={handleToggleNavCollapsed} dense>
-                {navCollapsed
-                  ? t('layout.components.navigation.menu.expandNavBar')
-                  : t('layout.components.navigation.menu.collapseNavBar')}
-              </MenuItem>
-              <MenuItem
-                onClick={menuUnlocked ? handleLockMenu : handleUnlockMenu}
-                dense
-              >
-                {menuUnlocked
-                  ? t('layout.components.navigation.menu.lock')
-                  : t('layout.components.navigation.menu.unlock')}
-              </MenuItem>
-              <MenuItem
-                onClick={handleResetMenuOrder}
-                dense
-                disabled={isDefaultOrder}
-              >
-                {t('layout.components.navigation.menu.restoreDefaultOrder')}
-              </MenuItem>
-            </Menu>
+            <List className="the-menu">
+              {navItems.map((item) => (
+                <LayoutItem key={item.path} to={item.path} icon={item.icon}>
+                  {t(item.label)}
+                </LayoutItem>
+              ))}
+            </List>
 
             <div className="the-traffic">
               <LayoutTraffic />
@@ -443,20 +221,6 @@ const Layout = () => {
               <BaseErrorBoundary>
                 <Outlet />
               </BaseErrorBoundary>
-              {logsPageMountedRef.current && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    display: isLogsPage ? undefined : 'none',
-                  }}
-                >
-                  <LogsPage />
-                </div>
-              )}
             </div>
           </div>
         </div>
