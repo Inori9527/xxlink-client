@@ -360,6 +360,51 @@ test('resume recovery refreshes safe account state without exposing secrets', as
   assert.equal(cached.usage.percentUsed, 50)
 })
 
+test('failed resume recovery persists classification without raw client material', async () => {
+  installMemoryLocalStorage()
+  const rawFailure =
+    'Authorization: Bearer resume-secret https://proxy-user:proxy-pass@example.test:8443/path?token=query-secret'
+  class ApiError extends Error {}
+  const stubs = {
+    '@/services/auth-store': {
+      authStore: {
+        getState: () => ({
+          isAuthenticated: true,
+          user: { id: 'user-id', email: 'user@example.test', role: 'USER' },
+        }),
+      },
+    },
+    '@/services/subscription-sync': { syncSubscription: async () => {} },
+    '@/services/api': {
+      ApiError,
+      api: {
+        user: {
+          profile: async () => {
+            throw new Error(rawFailure)
+          },
+        },
+      },
+    },
+  }
+  const recovery = loadTsModule('src/services/resume-recovery.ts', stubs)
+
+  await recovery.runResumeRecovery('test', { force: true })
+
+  const persisted = localStorage.getItem('xxlink:last-sync-error')
+  assert.ok(persisted)
+  assert.deepEqual(Object.keys(JSON.parse(persisted)).sort(), [
+    'kind',
+    'reason',
+    'retryable',
+    'scope',
+    'ts',
+  ])
+  assert.equal(persisted.includes(rawFailure), false)
+  assert.equal(persisted.includes('resume-secret'), false)
+  assert.equal(persisted.includes('proxy-pass'), false)
+  assert.equal(persisted.includes('query-secret'), false)
+})
+
 test('display helpers distinguish unknown usage and confirmed empty plans', () => {
   const display = loadTsModule('src/services/account-display-state.ts')
 

@@ -165,8 +165,22 @@ const PROFILE_URL_PATTERN =
 const SUBSCRIPTION_URL_PATTERN =
   /https?:\/\/[^\s"'<>]+\/subscription\/[^\s"'<>]+/gi
 
+const HTTP_CREDENTIAL_URL_PATTERN = /(https?:\/\/)[^/\s:@"'<>]+:[^@/\s"'<>]+@/gi
+
+const QUERY_CREDENTIAL_PATTERN =
+  /([?&](?:access_?token|refresh_?token|token|auth|authorization|api_?key|password|passwd|secret|credential|session|sid)=)[^&#\s"'<>]+/gi
+
+const FORBIDDEN_QUERY_CREDENTIAL_PATTERN =
+  /[?&](?:access_?token|refresh_?token|token|auth|authorization|api_?key|password|passwd|secret|credential|session|sid)=(?!\[REDACTED\])[^&#\s"'<>]+/i
+
+const PROFILE_BLOCK_PATTERN =
+  /(?:^|\n)\s*(?:proxies|proxy-groups|proxy-providers|rule-providers|inbounds|outbounds|wireguard|mixed-port|socks-port|redir-port|tproxy-port|allow-lan|external-controller|external-ui|dns|tun|rules)\s*:|["'](?:proxies|proxy-groups|proxy-providers|rule-providers|inbounds|outbounds|wireguard|mixed-port|socks-port|redir-port|tproxy-port|allow-lan|external-controller|external-ui|dns|tun|rules)["']\s*:/i
+
 const KEY_VALUE_SECRET_PATTERN =
   /\b(accessToken|refreshToken|token|authorization|cookie|privateKey|shortId|uuid|password|secret|credential|server|sni)\s*[:=]\s*["']?[^"',\s;}]+/gi
+
+const QUOTED_KEY_VALUE_SECRET_PATTERN =
+  /(["'](?:accessToken|refreshToken|token|authorization|cookie|privateKey|shortId|uuid|password|secret|credential|server|sni)["']\s*:\s*)["'][^"']*["']/gi
 
 const AUTH_HEADER_PATTERN = /\bAuthorization\s*:\s*Bearer\s+[^\s"',;}]+/gi
 const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/=-]+/gi
@@ -176,15 +190,27 @@ const FORBIDDEN_OUTPUT_PATTERNS = [
   AUTH_HEADER_PATTERN,
   BEARER_PATTERN,
   COOKIE_HEADER_PATTERN,
+  HTTP_CREDENTIAL_URL_PATTERN,
+  FORBIDDEN_QUERY_CREDENTIAL_PATTERN,
+  PROFILE_BLOCK_PATTERN,
   SUBSCRIPTION_URL_PATTERN,
   PROFILE_URL_PATTERN,
   UUID_PATTERN,
   EMAIL_PATTERN,
   /\b(privateKey|shortId|password|secret)\s*[:=]\s*(?!\[REDACTED\])[^"',\s;}]+/i,
+  /["'](?:accessToken|refreshToken)["']\s*:\s*["'](?!(?:present|missing|unknown|\[REDACTED\])["'])[^"']+/i,
+  /["'](?:token|authorization|cookie|privateKey|shortId|uuid|password|secret|credential|server|sni)["']\s*:\s*["'](?!\[REDACTED\])[^"']+/i,
 ]
 
 export function redactText(value: string): string {
+  PROFILE_BLOCK_PATTERN.lastIndex = 0
+  if (PROFILE_BLOCK_PATTERN.test(value)) {
+    return '[REDACTED_PROFILE_BLOCK]'
+  }
+
   return value
+    .replace(HTTP_CREDENTIAL_URL_PATTERN, '$1[REDACTED_CREDENTIALS]@')
+    .replace(QUERY_CREDENTIAL_PATTERN, '$1[REDACTED]')
     .replace(SUBSCRIPTION_URL_PATTERN, '[REDACTED_SUBSCRIPTION_URL]')
     .replace(PROFILE_URL_PATTERN, '[REDACTED_PROFILE_URL]')
     .replace(AUTH_HEADER_PATTERN, `Authorization: Bearer ${REDACTION_MARKER}`)
@@ -198,6 +224,7 @@ export function redactText(value: string): string {
     .replace(KEY_VALUE_SECRET_PATTERN, (_match, key: string) => {
       return `${key}=${REDACTION_MARKER}`
     })
+    .replace(QUOTED_KEY_VALUE_SECRET_PATTERN, `$1"${REDACTION_MARKER}"`)
     .replace(UUID_PATTERN, '[REDACTED_UUID]')
     .replace(EMAIL_PATTERN, '[REDACTED_EMAIL]')
 }

@@ -1,6 +1,13 @@
 import i18n from 'i18next'
 import { ReactNode, isValidElement } from 'react'
 
+import {
+  classifyClientError,
+  reportSafeClientFailure,
+  toSafeClientErrorMessage,
+  type SafeClientFailureScope,
+} from '@/services/safe-client-error'
+
 type NoticeType = 'success' | 'error' | 'info'
 
 export interface NoticeTranslationDescriptor {
@@ -8,7 +15,7 @@ export interface NoticeTranslationDescriptor {
   params?: Record<string, unknown>
 }
 
-interface NoticeItem {
+export interface NoticeItem {
   readonly id: number
   readonly type: NoticeType
   readonly duration: number
@@ -331,6 +338,54 @@ export const showNotice: ShowNotice = Object.assign(baseShowNotice, {
   info: (message: NoticeContent, ...extras: NoticeExtra[]) =>
     baseShowNotice('info', message, ...extras),
 })
+
+export function showSafeClientFailureNotice(
+  scope: SafeClientFailureScope,
+  error: unknown,
+): number {
+  const { kind } = classifyClientError(error)
+  reportSafeClientFailure(scope, error)
+  return showNotice.error(toSafeClientErrorMessage(kind, (key) => key))
+}
+
+export function resolveNoticeCopyText(
+  notice: NoticeItem,
+  resolvedMessage: unknown,
+  safeErrorText: string,
+): string | undefined {
+  if (notice.type === 'error') {
+    const isSafeClientNotice = notice.i18n?.key.startsWith(
+      'shared.feedback.errors.safeClient.',
+    )
+    return isSafeClientNotice
+      ? extractDisplayText(resolvedMessage)
+      : safeErrorText
+  }
+
+  if (
+    notice.i18n?.key === 'shared.feedback.notices.prefixedRaw' ||
+    notice.i18n?.key === 'shared.feedback.notices.raw'
+  ) {
+    const rawText = extractDisplayText(notice.i18n?.params?.message)
+    if (rawText) return rawText
+  }
+
+  return (
+    extractDisplayText(resolvedMessage) ?? extractDisplayText(notice.message)
+  )
+}
+
+export async function copyNoticeToClipboard(
+  notice: NoticeItem,
+  resolvedMessage: unknown,
+  safeErrorText: string,
+  writeText: (text: string) => Promise<void>,
+): Promise<boolean> {
+  const text = resolveNoticeCopyText(notice, resolvedMessage, safeErrorText)
+  if (!text) return false
+  await writeText(text)
+  return true
+}
 
 export function hideNotice(id: number) {
   const notice = notices.find((candidate) => candidate.id === id)

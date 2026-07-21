@@ -1,6 +1,8 @@
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 
+import { reportSafeClientFailure } from '@/services/safe-client-error'
+
 export const supportedLanguages = ['zh', 'en']
 
 export const FALLBACK_LANGUAGE = 'zh'
@@ -42,7 +44,7 @@ export const cacheLanguage = (language: string) => {
   try {
     storage.setItem(LANGUAGE_STORAGE_KEY, resolveLanguage(language))
   } catch (error) {
-    console.warn('[i18n] Failed to cache language:', error)
+    reportSafeClientFailure('i18n-cache-language', error)
   }
 }
 
@@ -54,7 +56,7 @@ export const getCachedLanguage = () => {
     const cached = storage.getItem(LANGUAGE_STORAGE_KEY)
     return cached ? resolveLanguage(cached) : undefined
   } catch (error) {
-    console.warn('[i18n] Failed to read cached language:', error)
+    reportSafeClientFailure('i18n-read-language', error)
     return undefined
   }
 }
@@ -93,9 +95,7 @@ export const loadLanguage = async (language: string) => {
     return module.default
   } catch (error) {
     if (language !== FALLBACK_LANGUAGE) {
-      console.warn(
-        `Failed to load language ${language}, fallback to ${FALLBACK_LANGUAGE}, ${error}`,
-      )
+      reportSafeClientFailure('i18n-load-language', error)
       const fallbackLoader = localeLoaders[FALLBACK_LANGUAGE]
       if (!fallbackLoader) {
         throw new Error(

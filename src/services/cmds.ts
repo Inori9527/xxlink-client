@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import dayjs from 'dayjs'
 import { getProxies, getProxyProviders } from 'tauri-plugin-mihomo-api'
 
+import { reportSafeClientFailure } from '@/services/safe-client-error'
 import { debugLog } from '@/utils/debug'
 
 export async function getProfiles() {
@@ -230,7 +231,7 @@ export async function getAutotemProxy() {
     debugLog('[API] get_auto_proxy 调用成功:', result)
     return result
   } catch (error) {
-    console.error('[API] get_auto_proxy 调用失败:', error)
+    reportSafeClientFailure('auto-proxy-read', error)
     return {
       enable: false,
       url: '',
@@ -242,7 +243,7 @@ export async function getAutoLaunchStatus() {
   try {
     return await invoke<boolean>('get_auto_launch_status')
   } catch (error) {
-    console.error('获取自启动状态失败:', error)
+    reportSafeClientFailure('auto-launch-read', error)
     return false
   }
 }
@@ -330,7 +331,7 @@ export const isServiceAvailable = async () => {
   try {
     return await invoke<boolean>('is_service_available')
   } catch (error) {
-    console.error('Service check failed:', error)
+    reportSafeClientFailure('service-availability-check', error)
     return false
   }
 }
@@ -341,7 +342,7 @@ export const isAdmin = async () => {
   try {
     return await invoke<boolean>('app_is_admin')
   } catch (error) {
-    console.error('检查管理员权限失败:', error)
+    reportSafeClientFailure('admin-check', error)
     return false
   }
 }

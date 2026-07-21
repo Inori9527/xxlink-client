@@ -6,6 +6,7 @@ import {
   reportSafeClientFailure,
   toSafeClientErrorMessage,
   toSafeClientFailureRecord,
+  writeSafeClientFailureToClipboard,
 } from '@/services/safe-client-error'
 
 function ErrorFallback({ error }: FallbackProps) {
@@ -19,11 +20,12 @@ function ErrorFallback({ error }: FallbackProps) {
   }
 
   const handleExport = () => {
-    void navigator.clipboard
-      ?.writeText(errorDetails)
-      .catch((clipboardError) =>
-        reportSafeClientFailure('base-error-copy', clipboardError),
-      )
+    if (!navigator.clipboard) return
+    void writeSafeClientFailureToClipboard('base-error-copy', error, (text) =>
+      navigator.clipboard.writeText(text),
+    ).catch((clipboardError) =>
+      reportSafeClientFailure('base-error-copy', clipboardError),
+    )
   }
 
   return (

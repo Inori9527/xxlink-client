@@ -14,7 +14,9 @@ import {
   hideNotice,
   getSnapshotNotices,
   showNotice,
+  copyNoticeToClipboard,
 } from '@/services/notice-service'
+import { reportSafeClientFailure } from '@/services/safe-client-error'
 import type { TranslationKey } from '@/types/generated/i18n-keys'
 
 type NoticePosition = NonNullable<IVergeConfig['notice_position']>
@@ -86,45 +88,6 @@ const resolveNoticeMessage = (
   })
 }
 
-const extractNoticeCopyText = (input: unknown): string | undefined => {
-  if (input === null || input === undefined) return undefined
-  if (typeof input === 'string') return input
-  if (typeof input === 'number' || typeof input === 'boolean') {
-    return String(input)
-  }
-  if (input instanceof Error) {
-    return input.message || input.name
-  }
-  if (React.isValidElement(input)) return undefined
-  if (typeof input === 'object') {
-    const maybeMessage = (input as { message?: unknown }).message
-    if (typeof maybeMessage === 'string') return maybeMessage
-  }
-  try {
-    return JSON.stringify(input)
-  } catch {
-    return String(input)
-  }
-}
-
-const resolveNoticeCopyText = (
-  notice: NoticeItem,
-  t: TranslationFn,
-): string | undefined => {
-  if (
-    notice.i18n?.key === 'shared.feedback.notices.prefixedRaw' ||
-    notice.i18n?.key === 'shared.feedback.notices.raw'
-  ) {
-    const rawText = extractNoticeCopyText(notice.i18n?.params?.message)
-    if (rawText) return rawText
-  }
-
-  return (
-    extractNoticeCopyText(resolveNoticeMessage(notice, t)) ??
-    extractNoticeCopyText(notice.message)
-  )
-}
-
 interface NoticeManagerProps {
   position?: NoticePosition | null
 }
@@ -147,16 +110,20 @@ export const NoticeManager: React.FC<NoticeManagerProps> = ({ position }) => {
 
   const handleNoticeCopy = useCallback(
     async (notice: NoticeItem) => {
-      const text = resolveNoticeCopyText(notice, t)
-      if (!text) return
       try {
-        await navigator.clipboard.writeText(text)
+        const copied = await copyNoticeToClipboard(
+          notice,
+          resolveNoticeMessage(notice, t),
+          t('shared.feedback.errors.safeClient.unknown'),
+          (text) => navigator.clipboard.writeText(text),
+        )
+        if (!copied) return
         showNotice.success(
           'shared.feedback.notifications.common.copySuccess',
           1000,
         )
       } catch (error) {
-        console.warn('[NoticeManager] copy to clipboard failed:', error)
+        reportSafeClientFailure('notice-copy', error)
       }
     },
     [t],

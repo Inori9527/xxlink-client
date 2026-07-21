@@ -31,8 +31,11 @@ import {
   startResumeRecoveryListeners,
 } from './services/resume-recovery'
 import {
+  handleGlobalErrorEvent,
+  handleGlobalPromiseRejection,
   reportSafeClientFailure,
   toSafeClientFailureRecord,
+  writeSafeClientFailureToClipboard,
 } from './services/safe-client-error'
 import { SESSION_EXPIRED_EVENT } from './services/session'
 import {
@@ -154,15 +157,12 @@ const renderSplashTimeoutFallback = (error: unknown) => {
   exportBtn.style.cssText =
     'padding:8px 16px;border-radius:6px;border:1px solid #d1d5db;background:transparent;color:inherit;font-size:14px;cursor:pointer;'
   exportBtn.addEventListener('click', () => {
-    const payload = {
-      ...toSafeClientFailureRecord('startup-timeout', error),
-      time: new Date().toISOString(),
-    }
-    void navigator.clipboard
-      ?.writeText(JSON.stringify(payload, null, 2))
-      .catch((clipboardError) =>
-        reportSafeClientFailure('startup-timeout-copy', clipboardError),
-      )
+    if (!navigator.clipboard) return
+    void writeSafeClientFailureToClipboard('startup-timeout', error, (text) =>
+      navigator.clipboard.writeText(text),
+    ).catch((clipboardError) =>
+      reportSafeClientFailure('startup-timeout-copy', clipboardError),
+    )
   })
 
   btnRow.appendChild(reloadBtn)
@@ -234,13 +234,9 @@ bootstrap().catch((error) => {
     })
 })
 
-window.addEventListener('error', (event) => {
-  reportSafeClientFailure('global-window-error', event.error)
-})
+window.addEventListener('error', handleGlobalErrorEvent)
 
-window.addEventListener('unhandledrejection', (event) => {
-  reportSafeClientFailure('unhandled-rejection', event.reason)
-})
+window.addEventListener('unhandledrejection', handleGlobalPromiseRejection)
 
 window.addEventListener('beforeunload', () => {
   MihomoWebSocket.cleanupAll()

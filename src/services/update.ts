@@ -4,6 +4,7 @@ import {
   type Update,
 } from '@tauri-apps/plugin-updater'
 
+import { reportSafeClientFailure } from '@/services/safe-client-error'
 import { version as appVersion } from '@root/package.json'
 
 export type VersionParts = {
@@ -163,7 +164,7 @@ export const checkUpdateSafe = async (
     try {
       await result.close()
     } catch (err) {
-      console.warn('[updater] failed to close stale update resource', err)
+      reportSafeClientFailure('update-stale-close', err)
     }
     return null
   }

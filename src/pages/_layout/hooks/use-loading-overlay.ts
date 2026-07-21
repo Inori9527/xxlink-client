@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
 
+import { reportSafeClientFailure } from '@/services/safe-client-error'
+
 import { hideInitialOverlay } from '../utils'
 
 export const useLoadingOverlay = (themeReady: boolean) => {
@@ -33,7 +35,10 @@ export const useLoadingOverlay = (themeReady: boolean) => {
         attempts += 1
         retryTimer = window.setTimeout(tryRemoveOverlay, 100)
       } else {
-        console.warn('[Loading Overlay] Element not found')
+        reportSafeClientFailure(
+          'loading-overlay-remove',
+          new Error('Loading overlay element not found'),
+        )
       }
     }
 

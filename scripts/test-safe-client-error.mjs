@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import test from 'node:test'
 import vm from 'node:vm'
@@ -37,6 +37,77 @@ function loadSafeClientErrorModule(consoleImpl = console) {
     require: (specifier) => {
       if (specifier === '@/services/api') return { ApiError }
       throw new Error(`Unexpected runtime import in focused test: ${specifier}`)
+    },
+  })
+
+  return module.exports
+}
+
+function loadNoticeServiceModule(consoleImpl = console) {
+  const sourcePath = resolve(repoRoot, 'src/services/notice-service.ts')
+  const source = readFileSync(sourcePath, 'utf8')
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: {
+      esModuleInterop: true,
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+    fileName: sourcePath,
+  })
+  const module = { exports: {} }
+
+  vm.runInNewContext(outputText, {
+    console: consoleImpl,
+    exports: module.exports,
+    module,
+    require: (specifier) => {
+      if (specifier === 'i18next') {
+        return {
+          __esModule: true,
+          default: { exists: () => false, isInitialized: false },
+        }
+      }
+      if (specifier === 'react') return { isValidElement: () => false }
+      if (specifier === '@/services/safe-client-error') {
+        return loadSafeClientErrorModule(consoleImpl)
+      }
+      throw new Error(`Unexpected runtime import in notice test: ${specifier}`)
+    },
+    setTimeout: () => 1,
+    clearTimeout: () => {},
+  })
+
+  return module.exports
+}
+
+function loadNotificationHandlersModule(consoleImpl, noticeService) {
+  const sourcePath = resolve(
+    repoRoot,
+    'src/pages/_layout/utils/notification-handlers.ts',
+  )
+  const source = readFileSync(sourcePath, 'utf8')
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: {
+      esModuleInterop: true,
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+    fileName: sourcePath,
+  })
+  const module = { exports: {} }
+
+  vm.runInNewContext(outputText, {
+    console: consoleImpl,
+    exports: module.exports,
+    module,
+    require: (specifier) => {
+      if (specifier === '@/services/notice-service') return noticeService
+      if (specifier === '@/services/safe-client-error') {
+        return loadSafeClientErrorModule(consoleImpl)
+      }
+      throw new Error(
+        `Unexpected runtime import in notification test: ${specifier}`,
+      )
     },
   })
 
@@ -184,17 +255,17 @@ test('safe failure records exclude hostile client material from logs, copies, an
       config: { headers: { Authorization: fragment } },
       response: { data: fragment },
     })
-    const record = toSafeClientFailureRecord('startup-recovery', hostileError)
+    const record = toSafeClientFailureRecord('resume-recovery', hostileError)
 
     assert.deepEqual(Object.keys(record).sort(), ['kind', 'retryable', 'scope'])
     assert.deepEqual(asPlainValue(record), {
-      scope: 'startup-recovery',
+      scope: 'resume-recovery',
       kind: 'unknown',
       retryable: false,
     })
     assert.equal(JSON.stringify(record).includes(fragment), false)
 
-    reportSafeClientFailure('startup-recovery', hostileError)
+    reportSafeClientFailure('resume-recovery', hostileError)
   }
 
   assert.equal(calls.length, HOSTILE_ERROR_FRAGMENTS.length)
@@ -210,6 +281,155 @@ test('safe failure records exclude hostile client material from logs, copies, an
   )
 })
 
+test('global browser failure handlers suppress raw WebView defaults after safe reporting', () => {
+  const calls = []
+  const consoleImpl = { warn: (...args) => calls.push(args) }
+  const { handleGlobalErrorEvent, handleGlobalPromiseRejection } =
+    loadSafeClientErrorModule(consoleImpl)
+  const raw = HOSTILE_ERROR_FRAGMENTS.join('\n')
+  let errorPrevented = 0
+  let rejectionPrevented = 0
+
+  handleGlobalErrorEvent({
+    error: new Error(raw),
+    preventDefault: () => {
+      errorPrevented += 1
+    },
+  })
+  handleGlobalPromiseRejection({
+    reason: new Error(raw),
+    preventDefault: () => {
+      rejectionPrevented += 1
+    },
+  })
+
+  assert.equal(errorPrevented, 1)
+  assert.equal(rejectionPrevented, 1)
+  assert.deepEqual(
+    calls.map(([record]) => asPlainValue(record)),
+    [
+      {
+        scope: 'global-window-error',
+        kind: 'unknown',
+        retryable: false,
+      },
+      {
+        scope: 'unhandled-rejection',
+        kind: 'unknown',
+        retryable: false,
+      },
+    ],
+  )
+  assert.equal(JSON.stringify(calls).includes(raw), false)
+})
+
+test('safe clipboard and notice sinks receive generic material only', async () => {
+  const calls = []
+  const consoleImpl = { warn: (...args) => calls.push(args) }
+  const safe = loadSafeClientErrorModule(consoleImpl)
+  const notices = loadNoticeServiceModule(consoleImpl)
+  const raw = HOSTILE_ERROR_FRAGMENTS.join('\n')
+  let failureClipboardText = ''
+  let noticeClipboardText = ''
+
+  await safe.writeSafeClientFailureToClipboard(
+    'base-error-copy',
+    new Error(raw),
+    async (text) => {
+      failureClipboardText = text
+    },
+  )
+  notices.showSafeClientFailureNotice('service-install', new Error(raw))
+  const [notice] = notices.getSnapshotNotices()
+  const copied = await notices.copyNoticeToClipboard(
+    notice,
+    'Something went wrong. Please try again.',
+    'Something went wrong. Please try again.',
+    async (text) => {
+      noticeClipboardText = text
+    },
+  )
+
+  assert.equal(copied, true)
+  assert.deepEqual(asPlainValue(notice.i18n), {
+    key: 'shared.feedback.errors.safeClient.unknown',
+  })
+  assert.equal(notice.message, undefined)
+  assert.equal(noticeClipboardText, 'Something went wrong. Please try again.')
+  for (const fragment of HOSTILE_ERROR_FRAGMENTS) {
+    assert.equal(failureClipboardText.includes(fragment), false)
+    assert.equal(JSON.stringify(notice).includes(fragment), false)
+    assert.equal(noticeClipboardText.includes(fragment), false)
+  }
+})
+
+test('backend notification errors preserve actions without forwarding raw message payloads', () => {
+  const calls = []
+  const consoleImpl = { warn: (...args) => calls.push(args) }
+  const notices = loadNoticeServiceModule(consoleImpl)
+  const { handleNoticeMessage } = loadNotificationHandlersModule(
+    consoleImpl,
+    notices,
+  )
+  const navigations = []
+  const raw = HOSTILE_ERROR_FRAGMENTS.join('\n')
+  const navigate = (...args) => navigations.push(args)
+
+  handleNoticeMessage('import_sub_url::error', raw, (key) => key, navigate)
+  handleNoticeMessage(
+    'config_validate::yaml_error',
+    raw,
+    (key) => key,
+    navigate,
+  )
+
+  assert.deepEqual(navigations, [['/profile']])
+  const snapshot = notices.getSnapshotNotices()
+  assert.equal(snapshot.length, 2)
+  assert.equal(
+    snapshot[0].i18n.key,
+    'shared.feedback.errors.safeClient.unknown',
+  )
+  assert.equal(
+    snapshot[1].i18n.key,
+    'shared.feedback.validation.yaml.generalError',
+  )
+  const serialized = JSON.stringify({ calls, snapshot })
+  for (const fragment of HOSTILE_ERROR_FRAGMENTS) {
+    assert.equal(serialized.includes(fragment), false)
+  }
+})
+
+test('reporter scopes are a closed runtime allowlist covering every literal call site', () => {
+  const calls = []
+  const consoleImpl = { warn: (...args) => calls.push(args) }
+  const { SAFE_CLIENT_FAILURE_SCOPES, reportSafeClientFailure } =
+    loadSafeClientErrorModule(consoleImpl)
+  const allowlist = new Set(SAFE_CLIENT_FAILURE_SCOPES)
+  const sourceRoot = resolve(repoRoot, 'src')
+  const sourcePaths = readdirSync(sourceRoot, { recursive: true })
+    .map(String)
+    .filter((path) => /\.(?:ts|tsx)$/.test(path))
+  const usedScopes = new Set()
+
+  for (const relativePath of sourcePaths) {
+    const source = readFileSync(resolve(sourceRoot, relativePath), 'utf8')
+    for (const match of source.matchAll(
+      /(?:reportSafeClientFailure|showSafeClientFailureNotice)\(\s*['"]([^'"]+)['"]/g,
+    )) {
+      usedScopes.add(match[1])
+    }
+  }
+
+  assert.equal(usedScopes.size > 0, true)
+  for (const scope of usedScopes) {
+    assert.equal(allowlist.has(scope), true, `missing safe scope: ${scope}`)
+  }
+
+  reportSafeClientFailure('attacker-controlled-scope', new Error('fixture'))
+  assert.equal(calls.at(-1)[0].scope, 'client-failure')
+})
+
 test('reachable safety-tail sinks never display, persist, copy, or log raw errors', () => {
   const paths = [
     'src/pages/login.tsx',
@@ -221,13 +441,31 @@ test('reachable safety-tail sinks never display, persist, copy, or log raw error
     'src/components/setting/mods/update-viewer.tsx',
     'src/components/setting/mods/tun-viewer.tsx',
     'src/providers/app-data-provider.tsx',
+    'src/hooks/use-service-installer.ts',
+    'src/hooks/use-service-uninstaller.ts',
+    'src/services/preload.ts',
+    'src/services/update.ts',
+    'src/hooks/use-system-state.ts',
+    'src/pages/_layout/hooks/use-app-initialization.ts',
+    'src/pages/_layout/hooks/use-layout-events.ts',
+    'src/pages/_layout/utils/initial-loading-overlay.ts',
+    'src/pages/_layout/utils/notification-handlers.ts',
+    'src/hooks/use-listen.ts',
+    'src/hooks/use-i18n.ts',
+    'src/hooks/use-editor-document.ts',
+    'src/providers/window/window-provider.tsx',
+    'src/pages/_layout.tsx',
+    'src/pages/_layout/hooks/use-custom-theme.ts',
+    'src/services/i18n.ts',
+    'src/services/cmds.ts',
+    'src/components/layout/notice-manager.tsx',
   ]
 
   for (const relativePath of paths) {
     const source = readFileSync(resolve(repoRoot, relativePath), 'utf8')
     assert.match(
       source,
-      /safe-client-error/,
+      /safe-client-error|showSafeClientFailureNotice/,
       `${relativePath} must use the shared client error boundary`,
     )
     assert.doesNotMatch(

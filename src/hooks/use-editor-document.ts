@@ -2,7 +2,7 @@
 import { useEffect } from 'foxact/use-abortable-effect'
 import { useCallback, useState } from 'react'
 
-import { showNotice } from '@/services/notice-service'
+import { showSafeClientFailureNotice } from '@/services/notice-service'
 
 interface UseEditorDocumentOptions {
   open: boolean
@@ -35,7 +35,9 @@ export const useEditorDocument = ({ open, load }: UseEditorDocumentOptions) => {
           setSavedValue(normalized)
         })
         .catch((error) => {
-          if (!signal.aborted) showNotice.error(error)
+          if (!signal.aborted) {
+            showSafeClientFailureNotice('editor-document-load', error)
+          }
         })
         .finally(() => {
           if (!signal.aborted) setLoading(false)

@@ -1,6 +1,8 @@
 import { invoke } from '@tauri-apps/api/core'
 import { useEffect, useRef } from 'react'
 
+import { reportSafeClientFailure } from '@/services/safe-client-error'
+
 import { hideInitialOverlay } from '../utils'
 
 export const useAppInitialization = () => {
@@ -36,7 +38,7 @@ export const useAppInitialization = () => {
           await invoke('notify_ui_ready')
         }
       } catch (err) {
-        console.error(`[Initialization] Failed to notify backend:`, err)
+        reportSafeClientFailure('app-init-backend-notify', err)
       }
     }
 
@@ -71,9 +73,9 @@ export const useAppInitialization = () => {
         await notifyBackend()
       } catch (error) {
         if (!isCancelled) {
-          console.error('[Initialization] Failed:', error)
+          reportSafeClientFailure('app-initialization', error)
           removeLoadingOverlay()
-          notifyBackend().catch(console.error)
+          void notifyBackend()
         }
       }
     }
@@ -93,7 +95,7 @@ export const useAppInitialization = () => {
     scheduleTimeout(() => {
       if (!isInitialized) {
         removeLoadingOverlay()
-        notifyBackend().catch(console.error)
+        void notifyBackend()
       }
     }, 5000)
 
@@ -103,7 +105,7 @@ export const useAppInitialization = () => {
         try {
           window.clearTimeout(id)
         } catch (error) {
-          console.warn('[Initialization] Failed to clear timer:', error)
+          reportSafeClientFailure('app-init-timer-cleanup', error)
         }
       })
       timers.clear()

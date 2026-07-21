@@ -10,6 +10,49 @@ import ts from 'typescript'
 const repoRoot = path.resolve(import.meta.dirname, '..')
 const require = createRequire(import.meta.url)
 
+const HOSTILE_DIAGNOSTIC_SAMPLES = [
+  {
+    value:
+      'proxy https://proxy-user:proxy-password@proxy.example.test:8443/path',
+    fragments: ['proxy-user', 'proxy-password'],
+  },
+  {
+    value:
+      'request https://api.example.test/path?token=query-token&api_key=query-api-key&safe=metadata',
+    fragments: ['query-token', 'query-api-key'],
+  },
+  {
+    value:
+      'proxies:\n  - name: private-profile\n    server: secret.example.test\n    port: 443\n    uuid: 11111111-2222-4333-8444-555555555555\n    password: profile-password\nproxy-groups:\n  - name: private-group',
+    fragments: [
+      'private-profile',
+      'secret.example.test',
+      'profile-password',
+      'private-group',
+    ],
+  },
+  {
+    value:
+      '{"inbounds":[{"listen":"127.0.0.1","port":1080}],"outbounds":[{"server":"json-secret.example.test","password":"json-profile-password"}]}',
+    fragments: ['json-secret.example.test', 'json-profile-password'],
+  },
+  {
+    value:
+      'mixed-port: 7890\nallow-lan: true\nexternal-controller: 127.0.0.1:9090\nsecret: controller-secret\ndns:\n  enable: true\nrules:\n  - MATCH,DIRECT',
+    fragments: ['127.0.0.1:9090', 'controller-secret', 'MATCH,DIRECT'],
+  },
+  {
+    value:
+      'Authorization: Bearer bearer-token Cookie: sid=cookie-secret vless://11111111-2222-4333-8444-555555555555@node.example.test:443?shortId=abcdef12',
+    fragments: [
+      'bearer-token',
+      'cookie-secret',
+      '11111111-2222-4333-8444-555555555555',
+      'abcdef12',
+    ],
+  },
+]
+
 function loadDiagnosticsModule(extraContext = {}) {
   const sourcePath = path.join(repoRoot, 'src/services/diagnostics-bundle.ts')
   const source = fs.readFileSync(sourcePath, 'utf8')
@@ -42,6 +85,7 @@ function loadDiagnosticsModule(extraContext = {}) {
           'profile vless://11111111-2222-4333-8444-555555555555@node.example:443?shortId=abcdef12',
       },
     ],
+    ...(extraContext.tauriMocks ?? {}),
   }
 
   const mocks = {
@@ -144,6 +188,49 @@ test('redaction removes forbidden diagnostics material from strings and objects'
   assert.equal(json.includes('authenticated'), true)
   assert.equal(diagnosticsJsonHasForbiddenMaterial(json), false)
   assert.equal(diagnosticsJsonHasForbiddenMaterial(unsafe), true)
+
+  for (const sample of HOSTILE_DIAGNOSTIC_SAMPLES) {
+    const sanitized = redactText(sample.value)
+    assert.equal(
+      diagnosticsJsonHasForbiddenMaterial(sample.value),
+      true,
+      `forbidden gate missed: ${sample.value.slice(0, 40)}`,
+    )
+    assert.equal(diagnosticsJsonHasForbiddenMaterial(sanitized), false)
+    for (const fragment of sample.fragments) {
+      assert.equal(sanitized.includes(fragment), false)
+    }
+  }
+})
+
+test('diagnostics serialization drops complete hostile profiles while retaining metadata', () => {
+  const { buildDiagnosticsBundle, diagnosticsJsonHasForbiddenMaterial } =
+    loadDiagnosticsModule()
+  const runtimeEntries = HOSTILE_DIAGNOSTIC_SAMPLES.map((sample, index) => [
+    index === 0 ? 'WARN' : 'INFO',
+    sample.value,
+  ])
+  runtimeEntries.push(['INFO', 'safe lifecycle metadata: retryable=false'])
+
+  const bundle = buildDiagnosticsBundle({
+    appVersion: '2.4.15',
+    runningMode: 'rule',
+    logs: { runtime: { default: runtimeEntries }, clash: [] },
+  })
+  const serialized = JSON.stringify(bundle)
+
+  assert.equal(bundle.runtimeCore.runningMode, 'rule')
+  assert.equal(bundle.logs.runtime.default.at(-1)?.[0], 'INFO')
+  assert.equal(
+    bundle.logs.runtime.default.at(-1)?.[1],
+    'safe lifecycle metadata: retryable=false',
+  )
+  assert.equal(diagnosticsJsonHasForbiddenMaterial(serialized), false)
+  for (const sample of HOSTILE_DIAGNOSTIC_SAMPLES) {
+    for (const fragment of sample.fragments) {
+      assert.equal(serialized.includes(fragment), false)
+    }
+  }
 })
 
 test('bundle shape contains only safe class/status fields', () => {
@@ -251,6 +338,14 @@ test('runtime collector copies a serializable redacted bundle to clipboard', asy
         return values[key] ?? null
       },
     },
+    tauriMocks: {
+      getRuntimeLogs: async () => ({
+        default: HOSTILE_DIAGNOSTIC_SAMPLES.map((sample) => [
+          'WARN',
+          sample.value,
+        ]),
+      }),
+    },
   }
   const {
     copyDiagnosticsBundleToClipboard,
@@ -279,4 +374,9 @@ test('runtime collector copies a serializable redacted bundle to clipboard', asy
     diagnosticsJsonHasForbiddenMaterial(extraContext.clipboardText),
     false,
   )
+  for (const sample of HOSTILE_DIAGNOSTIC_SAMPLES) {
+    for (const fragment of sample.fragments) {
+      assert.equal(extraContext.clipboardText.includes(fragment), false)
+    }
+  }
 })

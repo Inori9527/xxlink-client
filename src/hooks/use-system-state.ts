@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { getRunningMode, isAdmin, isServiceAvailable } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
+import { reportSafeClientFailure } from '@/services/safe-client-error'
 
 import { useVerge } from './use-verge'
 
@@ -77,7 +78,7 @@ export function useSystemState() {
           )
         })
         .catch((err) => {
-          console.error('[useVerge] 自动关闭TUN模式失败:', err)
+          reportSafeClientFailure('system-tun-disable', err)
           showNotice.error(
             'settings.sections.system.notifications.tunMode.autoDisableFailed',
           )
