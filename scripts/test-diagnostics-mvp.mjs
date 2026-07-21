@@ -51,8 +51,38 @@ const HOSTILE_DIAGNOSTIC_SAMPLES = [
   },
   {
     value:
+      '{name: flow-private-proxy, type: socks5, server: flow.example.test, port: 1080, user: flow-user-sentinel, pass: flow-pass-sentinel}',
+    fragments: [
+      'flow-private-proxy',
+      'flow.example.test',
+      'flow-user-sentinel',
+      'flow-pass-sentinel',
+    ],
+  },
+  {
+    value:
+      "{'name': 'quoted-flow-private-proxy', 'type': 'http', 'server': 'quoted-flow.example.test', 'port': 8080, 'user': 'quoted-flow-user-sentinel', 'pass': 'quoted-flow-pass-sentinel'}",
+    fragments: [
+      'quoted-flow-private-proxy',
+      'quoted-flow.example.test',
+      'quoted-flow-user-sentinel',
+      'quoted-flow-pass-sentinel',
+    ],
+  },
+  {
+    value:
       'request https://api.example.test/path?token=query-token&api_key=query-api-key&safe=metadata',
     fragments: ['query-token', 'query-api-key'],
+  },
+  {
+    value:
+      'request https://api.example.test/path?user=query-user-sentinel&pass=query-pass-sentinel&UsEr=query-case-user-sentinel&PaSs=query-case-pass-sentinel&safe=metadata',
+    fragments: [
+      'query-user-sentinel',
+      'query-pass-sentinel',
+      'query-case-user-sentinel',
+      'query-case-pass-sentinel',
+    ],
   },
   {
     value:
@@ -221,6 +251,15 @@ test('redaction removes forbidden diagnostics material from strings and objects'
   assert.equal(json.includes('authenticated'), true)
   assert.equal(diagnosticsJsonHasForbiddenMaterial(json), false)
   assert.equal(diagnosticsJsonHasForbiddenMaterial(unsafe), true)
+
+  const safeFlowMetadata =
+    '{status: healthy, retryable: false, count: 3, mode: rule}'
+  assert.equal(redactText(safeFlowMetadata), safeFlowMetadata)
+  assert.equal(
+    diagnosticsJsonHasForbiddenMaterial(JSON.stringify({ safeFlowMetadata })),
+    false,
+  )
+
   for (const sample of HOSTILE_DIAGNOSTIC_SAMPLES) {
     const sanitized = redactText(sample.value)
     assert.equal(
@@ -413,19 +452,25 @@ test('runtime collector copies a serializable redacted bundle to clipboard', asy
   }
 })
 
-test('clipboard final gate rejects unsafe serialization before invoking writer', async () => {
+test('clipboard final gate rejects every unsafe serialization before invoking writer', async () => {
   const { writeDiagnosticsJsonToClipboard } = loadDiagnosticsModule()
   let writes = 0
-  const hostile = JSON.stringify({
-    proxy: 'socks://user:password@standalone.example.test:1080',
-  })
+  const hostileValues = [
+    'socks://user:password@standalone.example.test:1080',
+    ...HOSTILE_DIAGNOSTIC_SAMPLES.slice(5, 9).map((sample) => sample.value),
+  ]
 
-  await assert.rejects(
-    () =>
-      writeDiagnosticsJsonToClipboard(hostile, async () => {
-        writes++
-      }),
-    /forbidden material/i,
-  )
+  for (const hostile of hostileValues) {
+    await assert.rejects(
+      () =>
+        writeDiagnosticsJsonToClipboard(
+          JSON.stringify({ diagnostic: hostile }),
+          async () => {
+            writes++
+          },
+        ),
+      /forbidden material/i,
+    )
+  }
   assert.equal(writes, 0)
 })

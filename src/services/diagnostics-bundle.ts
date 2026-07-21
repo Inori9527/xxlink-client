@@ -1,4 +1,5 @@
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
+import { load as parseYaml } from 'js-yaml'
 
 import { readAccountLkgCache } from '@/services/account-lkg-cache'
 import { authStore } from '@/services/auth-store'
@@ -13,6 +14,7 @@ import { version as appVersion } from '@root/package.json'
 
 const DIAGNOSTICS_SCHEMA_VERSION = 1
 const DEFAULT_MAX_LOG_ITEMS = 50
+const MAX_STRUCTURED_DIAGNOSTIC_TEXT_LENGTH = 32_768
 
 type Presence = 'present' | 'missing' | 'unknown'
 type AuthStatus = 'authenticated' | 'anonymous' | 'unknown'
@@ -169,10 +171,10 @@ const CREDENTIAL_PROXY_URL_PATTERN =
   /\b(?:https?|socks4a?|socks5h?|socks):\/\/[^\s"'<>@]+@[^\s"'<>]+/gi
 
 const QUERY_CREDENTIAL_PATTERN =
-  /([?&](?:access_?token|refresh_?token|token|auth|authorization|api_?key|password|passwd|secret|credential|session|sid)=)[^&#\s"'<>]+/gi
+  /([?&](?:access_?token|refresh_?token|token|auth|authorization|api_?key|user(?:name)?|pass(?:word|wd)?|secret|credential|session|sid)=)[^&#\s"'<>]+/gi
 
 const FORBIDDEN_QUERY_CREDENTIAL_PATTERN =
-  /[?&](?:access_?token|refresh_?token|token|auth|authorization|api_?key|password|passwd|secret|credential|session|sid)=(?!\[REDACTED\])[^&#\s"'<>]+/i
+  /[?&](?:access_?token|refresh_?token|token|auth|authorization|api_?key|user(?:name)?|pass(?:word|wd)?|secret|credential|session|sid)=(?!\[REDACTED\])[^&#\s"'<>]+/i
 
 const PROFILE_BLOCK_PATTERN =
   /(?:^|\n)\s*(?:proxies|proxy-groups|proxy-providers|rule-providers|inbounds|outbounds|wireguard|mixed-port|socks-port|redir-port|tproxy-port|allow-lan|external-controller|external-ui|dns|tun|rules)\s*:|["'](?:proxies|proxy-groups|proxy-providers|rule-providers|inbounds|outbounds|wireguard|mixed-port|socks-port|redir-port|tproxy-port|allow-lan|external-controller|external-ui|dns|tun|rules)["']\s*:/i
@@ -181,6 +183,21 @@ const PROFILE_ENTRY_KEY_PATTERN =
   /(?:^|\n)\s*-?\s*(name|type|server|port|username|password|uuid|cipher|plugin)\s*:|["'](name|type|server|port|username|password|uuid|cipher|plugin)["']\s*:/gi
 
 function hasStandaloneProfileEntry(value: string): boolean {
+  const trimmed = value.trim()
+  if (
+    trimmed.length <= MAX_STRUCTURED_DIAGNOSTIC_TEXT_LENGTH &&
+    (trimmed.startsWith('{') ||
+      trimmed.startsWith('[') ||
+      trimmed.startsWith('-'))
+  ) {
+    try {
+      const parsed = parseYaml(trimmed)
+      if (parsed !== value && hasProfileEntryValue(parsed)) return true
+    } catch {
+      // Fall through to the embedded-fragment key inventory.
+    }
+  }
+
   const keys = new Set<string>()
   for (const match of value.matchAll(PROFILE_ENTRY_KEY_PATTERN)) {
     keys.add((match[1] ?? match[2]).toLowerCase())
