@@ -11,12 +11,40 @@ import {
   Paper,
 } from '@mui/material'
 import { useState, type FormEvent, type ReactNode, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, Link as RouterLink } from 'react-router'
 
 import { apiRegister, AuthError } from '@/services/auth'
 import { useAuth } from '@/services/auth-store'
+import {
+  classifyClientError,
+  reportSafeClientFailure,
+  toSafeClientErrorMessage,
+} from '@/services/safe-client-error'
+
+const REGISTERED_ACCOUNT_CODES = new Set([
+  'ACCOUNT_EXISTS',
+  'EMAIL_ALREADY_EXISTS',
+  'EMAIL_EXISTS',
+])
+
+const getRegisterErrorMessage = (
+  err: unknown,
+  t: (key: string) => string,
+): string => {
+  if (
+    err instanceof AuthError &&
+    (err.status === 409 ||
+      (!!err.code && REGISTERED_ACCOUNT_CODES.has(err.code)))
+  ) {
+    return t('shared.auth.errors.accountExists')
+  }
+
+  return toSafeClientErrorMessage(classifyClientError(err).kind, t)
+}
 
 export default function RegisterPage(): ReactNode {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { isAuthenticated } = useAuth()
 
@@ -54,11 +82,8 @@ export default function RegisterPage(): ReactNode {
       // After registration redirect to login so the user can sign in
       void navigate('/login', { state: { registered: true } })
     } catch (err) {
-      setError(
-        err instanceof AuthError
-          ? err.message
-          : `注册失败: ${err instanceof Error ? err.message : String(err)}`,
-      )
+      reportSafeClientFailure('register-submit', err)
+      setError(getRegisterErrorMessage(err, t))
     } finally {
       setLoading(false)
     }

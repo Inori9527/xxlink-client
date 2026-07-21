@@ -15,6 +15,7 @@ import {
   getRunningMode,
   getSystemProxy,
 } from '@/services/cmds'
+import { reportSafeClientFailure } from '@/services/safe-client-error'
 
 import { AppDataContext, AppDataContextType } from './app-data-context'
 
@@ -132,7 +133,7 @@ export const AppDataProvider = ({
         try {
           fn()
         } catch (error) {
-          console.error('[DataProvider] Immediate cleanup failed:', error)
+          reportSafeClientFailure('app-data-immediate-cleanup', error)
         }
       } else {
         cleanupFns.push(fn)
@@ -185,10 +186,10 @@ export const AppDataProvider = ({
 
       scheduleTimeout(() => {
         refreshRules().catch((error) =>
-          console.warn('[DataProvider] Rules refresh failed:', error),
+          reportSafeClientFailure('app-data-rules-refresh', error),
         )
         refreshRuleProviders().catch((error) =>
-          console.warn('[DataProvider] Rule providers refresh failed:', error),
+          reportSafeClientFailure('app-data-rule-providers-refresh', error),
         )
       }, 200)
     }
@@ -201,10 +202,10 @@ export const AppDataProvider = ({
       scheduleTimeout(async () => {
         await Promise.all([
           refreshProxy().catch((error) =>
-            console.error('[DataProvider] Proxy refresh failed:', error),
+            reportSafeClientFailure('app-data-proxy-refresh', error),
           ),
           refreshClashConfig().catch((error) =>
-            console.error('[DataProvider] Clash config refresh failed:', error),
+            reportSafeClientFailure('app-data-clash-refresh', error),
           ),
         ])
       }, 200)
@@ -217,7 +218,7 @@ export const AppDataProvider = ({
       lastUpdateTime = now
       scheduleTimeout(() => {
         refreshProxy().catch((error) =>
-          console.warn('[DataProvider] Proxy refresh failed:', error),
+          reportSafeClientFailure('app-data-proxy-refresh', error),
         )
       }, 200)
     }
@@ -230,7 +231,7 @@ export const AppDataProvider = ({
         )
         registerCleanup(unlistenProfile)
       } catch (error) {
-        console.error('[AppDataProvider] 监听 Profile 事件失败:', error)
+        reportSafeClientFailure('app-data-profile-listener', error)
       }
 
       try {
@@ -248,7 +249,7 @@ export const AppDataProvider = ({
           unlistenProxy()
         })
       } catch (error) {
-        console.warn('[AppDataProvider] 设置 Tauri 事件监听器失败:', error)
+        reportSafeClientFailure('app-data-event-listeners', error)
 
         const fallbackHandlers: Array<[string, EventListener]> = [
           ['verge://refresh-clash-config', handleRefreshClash],
@@ -267,21 +268,13 @@ export const AppDataProvider = ({
       isUnmounted = true
       clearAllTimeouts()
 
-      const errors: Error[] = []
       cleanupFns.splice(0).forEach((fn) => {
         try {
           fn()
         } catch (error) {
-          errors.push(error instanceof Error ? error : new Error(String(error)))
+          reportSafeClientFailure('app-data-cleanup', error)
         }
       })
-
-      if (errors.length > 0) {
-        console.error(
-          `[DataProvider] ${errors.length} errors during cleanup:`,
-          errors,
-        )
-      }
     }
   }, [
     refreshProxy,

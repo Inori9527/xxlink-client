@@ -2,22 +2,28 @@ import { ReactNode } from 'react'
 import { ErrorBoundary, FallbackProps } from 'react-error-boundary'
 import { useTranslation } from 'react-i18next'
 
+import {
+  reportSafeClientFailure,
+  toSafeClientErrorMessage,
+  toSafeClientFailureRecord,
+} from '@/services/safe-client-error'
+
 function ErrorFallback({ error }: FallbackProps) {
   const { t } = useTranslation()
-  const errorMessage = error instanceof Error ? error.message : String(error)
-  const errorStack = error instanceof Error ? error.stack : undefined
+  const failure = toSafeClientFailureRecord('base-error-boundary', error)
+  const errorMessage = toSafeClientErrorMessage(failure.kind, t)
+  const errorDetails = JSON.stringify(failure, null, 2)
 
   const handleReload = () => {
     window.location.reload()
   }
 
   const handleExport = () => {
-    const payload = [
-      errorMessage,
-      '',
-      errorStack ?? '(no stack available)',
-    ].join('\n')
-    void navigator.clipboard?.writeText(payload).catch(console.error)
+    void navigator.clipboard
+      ?.writeText(errorDetails)
+      .catch((clipboardError) =>
+        reportSafeClientFailure('base-error-copy', clipboardError),
+      )
   }
 
   return (
@@ -75,7 +81,7 @@ function ErrorFallback({ error }: FallbackProps) {
           {t('shared.errorBoundary.detailsSummary')}
         </summary>
         <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-          {errorStack}
+          {errorDetails}
         </pre>
       </details>
     </div>

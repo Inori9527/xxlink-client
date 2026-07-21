@@ -185,6 +185,8 @@
       "loginFailed": "Google sign-in failed: {{error}}"
     },
     "errors": {
+      "accountExists": "An account already exists for this email. Sign in instead.",
+      "invalidCredentials": "The email or password is incorrect.",
       "openBrowser": "Unable to open browser: {{error}}",
       "loginFailed": "Sign-in failed: {{error}}",
       "registerFailed": "Registration failed: {{error}}"

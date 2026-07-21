@@ -7,6 +7,10 @@ type SafeClientErrorClassification = {
   retryable: boolean
 }
 
+export type SafeClientFailureRecord = SafeClientErrorClassification & {
+  scope: string
+}
+
 type Translate = (key: string) => string
 
 const TRANSPORT_CODES = new Set([
@@ -20,6 +24,7 @@ const TRANSPORT_CODES = new Set([
   'ERR_CONNECTION_RESET',
   'ERR_INTERNET_DISCONNECTED',
   'ERR_NETWORK',
+  'NETWORK_TIMEOUT',
 ])
 
 const TRANSPORT_NAMES = new Set(['AbortError', 'NetworkError', 'TimeoutError'])
@@ -54,6 +59,21 @@ function readStringProperty(error: unknown, key: string): string | undefined {
   }
 }
 
+function readNumberProperty(error: unknown, key: string): number | undefined {
+  if ((typeof error !== 'object' && typeof error !== 'function') || !error) {
+    return undefined
+  }
+
+  try {
+    const value = (error as Record<string, unknown>)[key]
+    return typeof value === 'number' && Number.isFinite(value)
+      ? value
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
 function isTransportFailure(error: unknown): boolean {
   const name = readStringProperty(error, 'name')
   if (name && TRANSPORT_NAMES.has(name)) return true
@@ -71,14 +91,18 @@ function isTransportFailure(error: unknown): boolean {
 export function classifyClientError(
   error: unknown,
 ): SafeClientErrorClassification {
-  if (error instanceof ApiError) {
-    if (error.status === 401 || error.status === 403) {
+  const status =
+    error instanceof ApiError
+      ? error.status
+      : readNumberProperty(error, 'status')
+  if (status !== undefined) {
+    if (status === 401 || status === 403) {
       return { kind: 'auth', retryable: false }
     }
-    if (error.status === 429 || error.status >= 500) {
+    if (status === 429 || status >= 500) {
       return { kind: 'service', retryable: true }
     }
-    if (error.status >= 400 && error.status < 500) {
+    if (status >= 400 && status < 500) {
       return { kind: 'service', retryable: false }
     }
   }
@@ -97,7 +121,17 @@ export function toSafeClientErrorMessage(
   return t(SAFE_MESSAGE_KEYS[kind])
 }
 
+export function toSafeClientFailureRecord(
+  scope: string,
+  error: unknown,
+): SafeClientFailureRecord {
+  const stableScope =
+    scope.length <= 64 && /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(scope)
+      ? scope.slice(0, 64)
+      : 'client-failure'
+  return { scope: stableScope, ...classifyClientError(error) }
+}
+
 export function reportSafeClientFailure(scope: string, error: unknown): void {
-  const { kind, retryable } = classifyClientError(error)
-  console.warn({ scope, kind, retryable })
+  console.warn(toSafeClientFailureRecord(scope, error))
 }

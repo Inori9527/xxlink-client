@@ -47,6 +47,14 @@ function asPlainValue(value) {
   return JSON.parse(JSON.stringify(value))
 }
 
+const HOSTILE_ERROR_FRAGMENTS = [
+  'https://api.example.invalid/subscription/profile?token=query-token-fixture',
+  'Authorization: Bearer bearer-token-fixture',
+  '11111111-2222-4333-8444-555555555555',
+  'http://proxy-user:proxy-password@127.0.0.1:7890',
+  'proxies:\n  - name: private-profile\n    password: profile-password-fixture',
+]
+
 test('classifies ApiError status and transport code-like shapes without exposing details', () => {
   const { classifyClientError } = loadSafeClientErrorModule()
 
@@ -94,6 +102,13 @@ test('classifies ApiError status and transport code-like shapes without exposing
     kind: 'network',
     retryable: true,
   })
+  assert.deepEqual(
+    asPlainValue(classifyClientError({ code: 'NETWORK_TIMEOUT' })),
+    {
+      kind: 'network',
+      retryable: true,
+    },
+  )
   assert.deepEqual(asPlainValue(classifyClientError(new Error('fixture'))), {
     kind: 'unknown',
     retryable: false,
@@ -153,6 +168,149 @@ test('safe messages and reports contain only localized copy and classification',
     retryable: false,
   })
   assert.equal(JSON.stringify(calls[0]).includes(rawFixture), false)
+})
+
+test('safe failure records exclude hostile client material from logs, copies, and persistence payloads', () => {
+  const calls = []
+  const consoleImpl = {
+    warn: (...args) => calls.push(args),
+  }
+  const { reportSafeClientFailure, toSafeClientFailureRecord } =
+    loadSafeClientErrorModule(consoleImpl)
+
+  for (const fragment of HOSTILE_ERROR_FRAGMENTS) {
+    const hostileError = Object.assign(new Error(fragment), {
+      code: fragment,
+      config: { headers: { Authorization: fragment } },
+      response: { data: fragment },
+    })
+    const record = toSafeClientFailureRecord('startup-recovery', hostileError)
+
+    assert.deepEqual(Object.keys(record).sort(), ['kind', 'retryable', 'scope'])
+    assert.deepEqual(asPlainValue(record), {
+      scope: 'startup-recovery',
+      kind: 'unknown',
+      retryable: false,
+    })
+    assert.equal(JSON.stringify(record).includes(fragment), false)
+
+    reportSafeClientFailure('startup-recovery', hostileError)
+  }
+
+  assert.equal(calls.length, HOSTILE_ERROR_FRAGMENTS.length)
+  const serializedCalls = JSON.stringify(calls)
+  for (const fragment of HOSTILE_ERROR_FRAGMENTS) {
+    assert.equal(serializedCalls.includes(fragment), false)
+  }
+
+  assert.equal(
+    toSafeClientFailureRecord(HOSTILE_ERROR_FRAGMENTS[0], new Error('x')).scope,
+    'client-failure',
+    'dynamic or sensitive scope values must collapse to a stable fallback',
+  )
+})
+
+test('reachable safety-tail sinks never display, persist, copy, or log raw errors', () => {
+  const paths = [
+    'src/pages/login.tsx',
+    'src/pages/register.tsx',
+    'src/services/resume-recovery.ts',
+    'src/main.tsx',
+    'src/components/base/base-error-boundary.tsx',
+    'src/components/shared/traffic-error-boundary.tsx',
+    'src/components/setting/mods/update-viewer.tsx',
+    'src/components/setting/mods/tun-viewer.tsx',
+    'src/providers/app-data-provider.tsx',
+  ]
+
+  for (const relativePath of paths) {
+    const source = readFileSync(resolve(repoRoot, relativePath), 'utf8')
+    assert.match(
+      source,
+      /safe-client-error/,
+      `${relativePath} must use the shared client error boundary`,
+    )
+    assert.doesNotMatch(
+      source,
+      /\b(?:err|error|fallbackError|syncError|timeoutError)\.(?:message|stack)\b/,
+      `${relativePath} reads raw error text`,
+    )
+    assert.doesNotMatch(
+      source,
+      /\bString\s*\(\s*(?:err|error|fallbackError|syncError|timeoutError)\s*\)/,
+      `${relativePath} stringifies a raw error`,
+    )
+    assert.doesNotMatch(
+      source,
+      /showNotice\.error\s*\(\s*(?:err|error|fallbackError|syncError|timeoutError)\s*\)/,
+      `${relativePath} displays a raw error notice`,
+    )
+    assert.equal(
+      source.includes('catch(console.error)'),
+      false,
+      `${relativePath} retains a raw fire-and-forget logger`,
+    )
+  }
+
+  const loginSource = readFileSync(resolve(repoRoot, paths[0]), 'utf8')
+  assert.match(loginSource, /toSafeClientErrorMessage/)
+  assert.doesNotMatch(loginSource, /return\s+message\s*\n/)
+  assert.match(
+    loginSource,
+    /syncSubscription\(\{ force: true, timeoutMs: 10_000 \}\)/,
+  )
+
+  const registerSource = readFileSync(resolve(repoRoot, paths[1]), 'utf8')
+  assert.match(registerSource, /toSafeClientErrorMessage/)
+  assert.match(registerSource, /apiRegister\(email, password\)/)
+
+  const resumeSource = readFileSync(resolve(repoRoot, paths[2]), 'utf8')
+  assert.match(resumeSource, /toSafeClientFailureRecord/)
+  assert.doesNotMatch(resumeSource, /message:\s*(?:error|String\()/)
+  assert.match(resumeSource, /lastFailureAt = Date\.now\(\)/)
+  assert.doesNotMatch(resumeSource, /clearAuth\(/)
+
+  const mainSource = readFileSync(resolve(repoRoot, paths[3]), 'utf8')
+  assert.match(mainSource, /toSafeClientFailureRecord/)
+  assert.doesNotMatch(mainSource, /navigator\.userAgent|window\.location\.href/)
+  assert.match(mainSource, /navigator\.clipboard[\s\S]*?writeText/)
+  assert.match(mainSource, /window\.location\.reload\(\)/)
+
+  const baseBoundarySource = readFileSync(resolve(repoRoot, paths[4]), 'utf8')
+  assert.match(baseBoundarySource, /toSafeClientErrorMessage/)
+  assert.match(
+    baseBoundarySource,
+    /navigator\.clipboard[\s\S]{0,40}?\.writeText/,
+  )
+  assert.match(baseBoundarySource, /window\.location\.reload\(\)/)
+
+  const trafficBoundarySource = readFileSync(
+    resolve(repoRoot, paths[5]),
+    'utf8',
+  )
+  assert.match(trafficBoundarySource, /toSafeClientErrorMessage/)
+  assert.doesNotMatch(
+    trafficBoundarySource,
+    /navigator\.userAgent|window\.location\.href|\{error\?\.stack\}|\{errorInfo\.componentStack\}/,
+  )
+  assert.match(trafficBoundarySource, /this\.retryCount\+\+/)
+  assert.match(
+    trafficBoundarySource,
+    /this\.props\.onError\(error, errorInfo\)/,
+  )
+
+  for (const relativePath of paths.slice(6, 8)) {
+    const source = readFileSync(resolve(repoRoot, relativePath), 'utf8')
+    assert.match(source, /toSafeClientErrorMessage/)
+    assert.match(source, /showNotice\.error/)
+  }
+
+  const providerSource = readFileSync(resolve(repoRoot, paths[8]), 'utf8')
+  assert.match(providerSource, /reportSafeClientFailure/)
+  assert.doesNotMatch(
+    providerSource,
+    /console\.(?:warn|error)\s*\([\s\S]{0,160}?\b(?:err|error|errors)\b/,
+  )
 })
 
 test('subscription and active promo paths do not send caught errors to console or notices', () => {

@@ -22,6 +22,11 @@ import {
 import { useClash } from '@/hooks/use-clash'
 import { enhanceProfiles } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
+import {
+  classifyClientError,
+  reportSafeClientFailure,
+  toSafeClientErrorMessage,
+} from '@/services/safe-client-error'
 import getSystem from '@/utils/get-system'
 import { areValidIpCidrs } from '@/utils/network'
 
@@ -129,11 +134,17 @@ export function TunViewer({ ref }: { ref?: Ref<DialogRef> }) {
       )
       setOpen(false)
       showNotice.success('settings.modals.tun.messages.applied')
-      void enhanceProfiles().catch((err: any) => {
-        showNotice.error(err)
+      void enhanceProfiles().catch((err: unknown) => {
+        reportSafeClientFailure('tun-profile-enhance', err)
+        showNotice.error(
+          toSafeClientErrorMessage(classifyClientError(err).kind, t),
+        )
       })
-    } catch (err: any) {
-      showNotice.error(err)
+    } catch (err: unknown) {
+      reportSafeClientFailure('tun-save', err)
+      showNotice.error(
+        toSafeClientErrorMessage(classifyClientError(err).kind, t),
+      )
     }
   })
 

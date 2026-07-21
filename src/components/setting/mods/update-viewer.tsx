@@ -12,6 +12,11 @@ import rehypeRaw from 'rehype-raw'
 import { BaseDialog, DialogRef } from '@/components/base'
 import { useUpdate } from '@/hooks/use-update'
 import { showNotice } from '@/services/notice-service'
+import {
+  classifyClientError,
+  reportSafeClientFailure,
+  toSafeClientErrorMessage,
+} from '@/services/safe-client-error'
 import { useSetUpdateState, useUpdateState } from '@/services/states'
 
 export function UpdateViewer({
@@ -98,8 +103,11 @@ export function UpdateViewer({
     try {
       await updateInfo.downloadAndInstall(onDownloadEvent)
       await relaunch()
-    } catch (err: any) {
-      showNotice.error(err)
+    } catch (err: unknown) {
+      reportSafeClientFailure('update-install', err)
+      showNotice.error(
+        toSafeClientErrorMessage(classifyClientError(err).kind, t),
+      )
     } finally {
       setUpdateState(false)
       setDownloaded(0)

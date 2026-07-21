@@ -185,6 +185,8 @@
       "loginFailed": "Google 登录失败: {{error}}"
     },
     "errors": {
+      "accountExists": "该邮箱已注册，请直接登录。",
+      "invalidCredentials": "邮箱或密码不正确。",
       "openBrowser": "无法打开浏览器: {{error}}",
       "loginFailed": "登录失败: {{error}}",
       "registerFailed": "注册失败: {{error}}"
