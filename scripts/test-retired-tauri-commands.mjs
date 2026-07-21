@@ -197,6 +197,48 @@ test('retired command modules are absent', () => {
   )
 })
 
+test('command-adjacent dead code and empty modules remain retired', () => {
+  const coreModSource = readSource('src-tauri/src/core/mod.rs')
+  const timerSource = readSource('src-tauri/src/core/timer.rs')
+  const validatorSource = readSource('src-tauri/src/core/validate.rs')
+  const clashFeatureSource = readSource('src-tauri/src/feat/clash.rs')
+
+  assert.doesNotMatch(cmdModSource, /\bstringify_err_log\b/)
+  assert.doesNotMatch(timerSource, /\bfn\s+get_next_update_time\b/)
+  assert.doesNotMatch(validatorSource, /\bfn\s+validate_file_syntax\b/)
+  assert.doesNotMatch(validatorSource, /\bfn\s+validate_config_file\b/)
+  assert.doesNotMatch(clashFeatureSource, /\bfn\s+after_change_clash_mode\b/)
+  assert.doesNotMatch(clashFeatureSource, /\bfn\s+change_clash_mode\b/)
+
+  assert.doesNotMatch(cmdModSource, /\bpub\s+mod\s+validate\s*;/)
+  assert.equal(
+    existsSync(resolve(repoRoot, 'src-tauri/src/cmd/validate.rs')),
+    false,
+    'empty command validation module must remain retired',
+  )
+  assert.doesNotMatch(coreModSource, /\bpub\s+mod\s+win_uwp\s*;/)
+  assert.equal(
+    existsSync(resolve(repoRoot, 'src-tauri/src/core/win_uwp.rs')),
+    false,
+    'empty Windows UWP helper module must remain retired',
+  )
+})
+
+test('live error conversion, timer, validation, and Clash helpers remain', () => {
+  const timerSource = readSource('src-tauri/src/core/timer.rs')
+  const validatorSource = readSource('src-tauri/src/core/validate.rs')
+  const clashFeatureSource = readSource('src-tauri/src/feat/clash.rs')
+
+  assert.match(cmdModSource, /\bfn\s+stringify_err\b/)
+  assert.match(timerSource, /pub\s+async\s+fn\s+init\b/)
+  assert.match(timerSource, /pub\s+async\s+fn\s+refresh\b/)
+  assert.match(validatorSource, /async\s+fn\s+validate_config_internal\b/)
+  assert.match(validatorSource, /pub\s+async\s+fn\s+validate_config\b/)
+  assert.match(clashFeatureSource, /pub\s+async\s+fn\s+restart_clash_core\b/)
+  assert.match(clashFeatureSource, /pub\s+async\s+fn\s+restart_app\b/)
+  assert.match(clashFeatureSource, /pub\s+async\s+fn\s+test_delay\b/)
+})
+
 test('managed profile, current-selection, and tray commands remain registered', () => {
   for (const command of [
     'get_profiles',
@@ -265,10 +307,9 @@ test('internal runtime-chain and DNS generation capabilities remain', () => {
   assert.match(initSource, /constants::files::DNS_CONFIG/)
 })
 
-test('internal current-profile, lightweight, and timer capabilities remain', () => {
+test('internal current-profile and lightweight capabilities remain', () => {
   const profileSource = readSource('src-tauri/src/cmd/profile.rs')
   const lightweightSource = readSource('src-tauri/src/module/lightweight.rs')
-  const timerSource = readSource('src-tauri/src/core/timer.rs')
 
   assert.match(
     profileSource,
@@ -276,7 +317,6 @@ test('internal current-profile, lightweight, and timer capabilities remain', () 
   )
   assert.match(lightweightSource, /pub\s+async\s+fn\s+entry_lightweight_mode\b/)
   assert.match(lightweightSource, /pub\s+async\s+fn\s+exit_lightweight_mode\b/)
-  assert.match(timerSource, /pub\s+async\s+fn\s+get_next_update_time\b/)
 })
 
 test('deep-link handling remains wired to the redacting resolver', () => {

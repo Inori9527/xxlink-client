@@ -1,6 +1,5 @@
 use crate::{config::Config, feat, singleton, utils::resolve::is_resolve_done};
 use anyhow::{Context as _, Result};
-use xxlink_logging::{Type, logging, logging_error};
 use delay_timer::prelude::{DelayTimer, DelayTimerBuilder, TaskBuilder};
 use parking_lot::RwLock;
 use smartstring::alias::String;
@@ -14,6 +13,7 @@ use std::{
     time::Duration,
 };
 use tokio::time::{sleep, timeout};
+use xxlink_logging::{Type, logging, logging_error};
 
 type TaskID = u64;
 
@@ -350,62 +350,6 @@ impl Timer {
         delay_timer.add_task(task).context("failed to add timer task")?;
 
         Ok(())
-    }
-
-    /// Get next update time for a profile
-    pub async fn get_next_update_time(&self, uid: &str) -> Option<i64> {
-        logging!(info, Type::Timer, "获取下次更新时间，uid={}", uid);
-
-        // First extract timer task data without holding the lock across await
-        let task_interval = {
-            let timer_map = self.timer_map.read();
-            match timer_map.get(uid) {
-                Some(t) => t.interval_minutes,
-                None => {
-                    logging!(warn, Type::Timer, "找不到对应的定时任务，uid={}", uid);
-                    return None;
-                }
-            }
-        };
-
-        // Get the profile updated timestamp - now safe to await
-        let items = {
-            let profiles = Config::profiles().await;
-            let profiles_guard = profiles.latest_arc();
-            match profiles_guard.get_items() {
-                Some(i) => i.clone(),
-                None => {
-                    logging!(warn, Type::Timer, "获取配置列表失败");
-                    return None;
-                }
-            }
-        };
-
-        let profile = match items.iter().find(|item| item.uid.as_deref() == Some(uid)) {
-            Some(p) => p,
-            None => {
-                logging!(warn, Type::Timer, "找不到对应的配置，uid={}", uid);
-                return None;
-            }
-        };
-
-        let updated = profile.updated.unwrap_or(0) as i64;
-
-        // Calculate next update time
-        if updated > 0 && task_interval > 0 {
-            let next_time = updated + (task_interval as i64 * 60);
-            logging!(info, Type::Timer, "计算得到下次更新时间: {}, uid={}", next_time, uid);
-            Some(next_time)
-        } else {
-            logging!(
-                warn,
-                Type::Timer,
-                "更新时间或间隔无效，updated={}, interval={}",
-                updated,
-                task_interval
-            );
-            None
-        }
     }
 
     /// Emit update events for frontend notification

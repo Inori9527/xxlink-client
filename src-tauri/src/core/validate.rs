@@ -3,7 +3,6 @@ use scopeguard::defer;
 use smartstring::alias::String;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri_plugin_shell::ShellExt as _;
-use tokio::fs;
 
 use crate::config::{Config, ConfigType};
 use crate::core::handle;
@@ -38,60 +37,6 @@ impl CoreConfigValidator {
 }
 
 impl CoreConfigValidator {
-    /// 只进行文件语法检查，不进行完整验证
-    async fn validate_file_syntax(config_path: &str) -> Result<(bool, String)> {
-        logging!(info, Type::Validate, "开始检查文件: {}", config_path);
-
-        // 读取文件内容
-        let content = match fs::read_to_string(config_path).await {
-            Ok(content) => content,
-            Err(err) => {
-                let error_msg = format!("Failed to read file: {err}").into();
-                logging!(error, Type::Validate, "无法读取文件: {}", error_msg);
-                return Ok((false, error_msg));
-            }
-        };
-        // 对YAML文件尝试解析，只检查语法正确性
-        logging!(info, Type::Validate, "进行YAML语法检查");
-        match serde_yaml_ng::from_str::<serde_yaml_ng::Value>(&content) {
-            Ok(_) => {
-                logging!(info, Type::Validate, "YAML语法检查通过");
-                Ok((true, String::new()))
-            }
-            Err(err) => {
-                // 使用标准化的前缀，以便错误处理函数能正确识别
-                let error_msg = format!("YAML syntax error: {err}").into();
-                logging!(error, Type::Validate, "YAML语法错误: {}", error_msg);
-                Ok((false, error_msg))
-            }
-        }
-    }
-
-    /// 验证指定的配置文件
-    pub async fn validate_config_file(config_path: &str, is_merge_file: Option<bool>) -> Result<(bool, String)> {
-        // 检查程序是否正在退出，如果是则跳过验证
-        if handle::Handle::global().is_exiting() {
-            logging!(info, Type::Core, "应用正在退出，跳过验证");
-            return Ok((true, String::new()));
-        }
-
-        // 检查文件是否存在
-        if !std::path::Path::new(config_path).exists() {
-            let error_msg = format!("File not found: {config_path}").into();
-            return Ok((false, error_msg));
-        }
-
-        // 如果是合并文件且不是强制验证，执行语法检查但不进行完整验证
-        if is_merge_file.unwrap_or(false) {
-            logging!(info, Type::Validate, "检测到Merge文件，仅进行语法检查: {}", config_path);
-            return Self::validate_file_syntax(config_path).await;
-        }
-
-        // 对YAML配置文件使用Clash内核验证
-        logging!(info, Type::Validate, "使用Clash内核验证配置文件: {}", config_path);
-        Self::validate_config_internal(config_path).await
-    }
-
     /// 内部验证配置文件的实现
     async fn validate_config_internal(config_path: &str) -> Result<(bool, String)> {
         // 检查程序是否正在退出，如果是则跳过验证
