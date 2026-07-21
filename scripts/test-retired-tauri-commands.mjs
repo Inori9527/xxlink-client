@@ -33,6 +33,16 @@ const retiredDeletedConsumerCommands = [
   ['viewProfile', 'view_profile'],
 ]
 
+const retiredRawConfigCommands = [
+  ['getRuntimeProxyChainConfig', 'get_runtime_proxy_chain_config'],
+  ['updateProxyChainConfigInRuntime', 'update_proxy_chain_config_in_runtime'],
+  [null, 'save_dns_config'],
+  [null, 'apply_dns_config'],
+  [null, 'check_dns_config_exists'],
+  [null, 'get_dns_config_content'],
+  [null, 'validate_dns_config'],
+]
+
 const readFrontendRuntimeSources = (relativeDir) =>
   readdirSync(resolve(repoRoot, relativeDir), { withFileTypes: true }).flatMap(
     (entry) => {
@@ -50,6 +60,7 @@ test('retired frontend command wrappers are absent', () => {
     'cmdGetProxyDelay',
     'reorderProfile',
     ...retiredDeletedConsumerCommands.map(([name]) => name),
+    ...retiredRawConfigCommands.flatMap(([name]) => (name ? [name] : [])),
   ]) {
     assert.doesNotMatch(
       cmdSource,
@@ -65,6 +76,7 @@ test('retired frontend command wrappers are absent', () => {
     'clash_api_get_proxy_delay',
     'reorder_profile',
     ...retiredDeletedConsumerCommands.map(([, name]) => name),
+    ...retiredRawConfigCommands.map(([, name]) => name),
   ]) {
     assert.equal(
       cmdSource.includes(`'${command}'`),
@@ -77,13 +89,18 @@ test('retired frontend command wrappers are absent', () => {
 test('commands orphaned by deleted consumers have no frontend runtime use', () => {
   const frontendSources = readFrontendRuntimeSources('src')
 
-  for (const [wrapper, command] of retiredDeletedConsumerCommands) {
+  for (const [wrapper, command] of [
+    ...retiredDeletedConsumerCommands,
+    ...retiredRawConfigCommands,
+  ]) {
     for (const [relativePath, source] of frontendSources) {
-      assert.doesNotMatch(
-        source,
-        new RegExp(`\\b${wrapper}\\s*\\(`),
-        `${wrapper} must not have a runtime call site in ${relativePath}`,
-      )
+      if (wrapper) {
+        assert.doesNotMatch(
+          source,
+          new RegExp(`\\b${wrapper}\\s*\\(`),
+          `${wrapper} must not have a runtime call site in ${relativePath}`,
+        )
+      }
       assert.equal(
         source.includes(`'${command}'`) || source.includes(`"${command}"`),
         false,
@@ -102,6 +119,7 @@ test('retired Rust commands and registrations are absent', () => {
     'open_core_log',
     'open_oauth_window',
     ...retiredDeletedConsumerCommands.map(([, name]) => name),
+    ...retiredRawConfigCommands.map(([, name]) => name),
   ]
   const retiredHandlerSources = [
     readSource('src-tauri/src/cmd/app.rs'),
@@ -199,6 +217,54 @@ test('managed profile, current-selection, and tray commands remain registered', 
   }
 })
 
+test('approved runtime reads and Clash actions remain registered', () => {
+  for (const [wrapper, command] of [
+    ['getRuntimeConfig', 'get_runtime_config'],
+    ['getRuntimeExists', 'get_runtime_exists'],
+    ['getRuntimeLogs', 'get_runtime_logs'],
+    ['getClashInfo', 'get_clash_info'],
+    ['patchClashConfig', 'patch_clash_config'],
+    ['changeClashCore', 'change_clash_core'],
+    ['startCore', 'start_core'],
+    ['stopCore', 'stop_core'],
+    ['restartCore', 'restart_core'],
+    ['cmdTestDelay', 'test_delay'],
+    ['getClashLogs', 'get_clash_logs'],
+  ]) {
+    assert.match(
+      cmdSource,
+      new RegExp(`export\\s+(?:async\\s+)?function\\s+${wrapper}\\b`),
+      `${wrapper} wrapper must remain available`,
+    )
+    assert.equal(
+      cmdSource.includes(`'${command}'`),
+      true,
+      `${command} frontend invoke must remain available`,
+    )
+    assert.match(
+      libSource,
+      new RegExp(`\\bcmd::${command}\\b`),
+      `${command} must remain registered`,
+    )
+  }
+})
+
+test('internal runtime-chain and DNS generation capabilities remain', () => {
+  const runtimeConfigSource = readSource('src-tauri/src/config/runtime.rs')
+  const clashFeatureSource = readSource('src-tauri/src/feat/config.rs')
+  const enhanceSource = readSource('src-tauri/src/enhance/mod.rs')
+  const initSource = readSource('src-tauri/src/utils/init.rs')
+
+  assert.match(runtimeConfigSource, /pub\s+fn\s+patch_config\b/)
+  assert.match(runtimeConfigSource, /pub\s+fn\s+update_proxy_chain_config\b/)
+  assert.match(
+    clashFeatureSource,
+    /Config::runtime\(\)\.await\.edit_draft\(\|d\| d\.patch_config\(patch\)\)/,
+  )
+  assert.match(enhanceSource, /async\s+fn\s+apply_dns_settings\b/)
+  assert.match(initSource, /constants::files::DNS_CONFIG/)
+})
+
 test('internal current-profile, lightweight, and timer capabilities remain', () => {
   const profileSource = readSource('src-tauri/src/cmd/profile.rs')
   const lightweightSource = readSource('src-tauri/src/module/lightweight.rs')
@@ -208,14 +274,8 @@ test('internal current-profile, lightweight, and timer capabilities remain', () 
     profileSource,
     /pub\s+async\s+fn\s+patch_profiles_config_by_profile_index\b/,
   )
-  assert.match(
-    lightweightSource,
-    /pub\s+async\s+fn\s+entry_lightweight_mode\b/,
-  )
-  assert.match(
-    lightweightSource,
-    /pub\s+async\s+fn\s+exit_lightweight_mode\b/,
-  )
+  assert.match(lightweightSource, /pub\s+async\s+fn\s+entry_lightweight_mode\b/)
+  assert.match(lightweightSource, /pub\s+async\s+fn\s+exit_lightweight_mode\b/)
   assert.match(timerSource, /pub\s+async\s+fn\s+get_next_update_time\b/)
 })
 
