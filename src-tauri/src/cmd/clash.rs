@@ -7,11 +7,11 @@ use crate::{
     constants,
     core::{CoreManager, handle, validate::CoreConfigValidator},
 };
-use xxlink_logging::{Type, logging, logging_error};
 use compact_str::CompactString;
 use serde_yaml_ng::Mapping;
 use smartstring::alias::String;
 use tokio::fs;
+use xxlink_logging::{Type, logging, logging_error};
 
 /// 获取Clash信息
 #[tauri::command]
@@ -23,13 +23,6 @@ pub async fn get_clash_info() -> CmdResult<ClashInfo> {
 #[tauri::command]
 pub async fn patch_clash_config(payload: Mapping) -> CmdResult {
     feat::patch_clash(&payload).await.stringify_err()
-}
-
-/// 修改Clash模式
-#[tauri::command]
-pub async fn patch_clash_mode(payload: String) -> CmdResult {
-    feat::change_clash_mode(payload).await;
-    Ok(())
 }
 
 /// 切换Clash核心

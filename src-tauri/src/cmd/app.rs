@@ -3,69 +3,7 @@ use crate::core::{autostart, handle};
 use crate::utils::resolve::ui::{self, UiReadyStage};
 use crate::{cmd::StringifyErr as _, feat, utils::dirs};
 use smartstring::alias::String;
-use tauri::AppHandle;
-#[cfg(feature = "verge-dev")]
-use tauri::Manager as _;
 use xxlink_logging::{Type, logging};
-
-/// 打开应用程序所在目录
-#[tauri::command]
-pub async fn open_app_dir() -> CmdResult<()> {
-    let app_dir = dirs::app_home_dir().stringify_err()?;
-    open::that(app_dir).stringify_err()
-}
-
-/// 打开核心所在目录
-#[tauri::command]
-pub async fn open_core_dir() -> CmdResult<()> {
-    let core_dir = tauri::utils::platform::current_exe().stringify_err()?;
-    let core_dir = core_dir.parent().ok_or("failed to get core dir")?;
-    open::that(core_dir).stringify_err()
-}
-
-/// 打开日志目录
-#[tauri::command]
-pub async fn open_logs_dir() -> CmdResult<()> {
-    let log_dir = dirs::app_logs_dir().stringify_err()?;
-    open::that(log_dir).stringify_err()
-}
-
-/// 打开网页链接
-#[tauri::command]
-pub fn open_web_url(url: String) -> CmdResult<()> {
-    if !url.starts_with("http://") && !url.starts_with("https://") {
-        return Err("only http:// and https:// URLs are allowed".into());
-    }
-    open::that(url.as_str()).stringify_err()
-}
-
-/// 打开/关闭开发者工具
-///
-/// Devtools are only compiled in when the `verge-dev` feature is enabled —
-/// release builds don't ship them, so this command is a no-op there.
-#[tauri::command]
-#[cfg(feature = "verge-dev")]
-pub fn open_devtools(app_handle: AppHandle) {
-    if let Some(window) = app_handle.get_webview_window("main") {
-        if !window.is_devtools_open() {
-            window.open_devtools();
-        } else {
-            window.close_devtools();
-        }
-    }
-}
-
-#[tauri::command]
-#[cfg(not(feature = "verge-dev"))]
-pub fn open_devtools(_app_handle: AppHandle) {
-    // devtools not compiled in
-}
-
-/// 退出应用
-#[tauri::command]
-pub async fn exit_app() {
-    feat::quit().await;
-}
 
 /// 重启应用
 #[tauri::command]
