@@ -371,6 +371,8 @@ impl Timer {
         match tokio::time::timeout(std::time::Duration::from_secs(40), async {
             Self::emit_update_event(uid, true);
 
+            let _profile_switch_guard = crate::cmd::wait_profile_switch_guard().await;
+
             let is_current = Config::profiles().await.latest_arc().current.as_ref() == Some(uid);
             logging!(info, Type::Timer, "配置 {} 是否为当前激活配置: {}", uid, is_current);
 

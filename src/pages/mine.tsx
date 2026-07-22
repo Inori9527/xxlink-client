@@ -44,8 +44,12 @@ import {
   readAccountLkgCache,
   writeAccountLkgCache,
 } from '@/services/account-lkg-cache'
-import { api, type UsageData } from '@/services/api'
 import { useAuth } from '@/services/auth-store'
+import {
+  backendController,
+  isBackendSubjectCurrent,
+  type UsageView,
+} from '@/services/backend-controller'
 import { copyDiagnosticsBundleToClipboard } from '@/services/diagnostics-bundle'
 import { showNotice } from '@/services/notice-service'
 import {
@@ -178,7 +182,7 @@ const MinePage = () => {
   const updateViewerRef = useRef<DialogRef>(null)
   const { updateInfo, checkUpdate, loading: checkingUpdate } = useUpdate(false)
   const [logoutOpen, setLogoutOpen] = useState(false)
-  const [usage, setUsage] = useState<UsageData | null>(
+  const [usage, setUsage] = useState<UsageView | null>(
     () => readAccountLkgCache(user?.id)?.usage ?? null,
   )
   const [usageRefreshFailed, setUsageRefreshFailed] = useState(false)
@@ -252,16 +256,18 @@ const MinePage = () => {
 
     let cancelled = false
 
-    api.user
+    backendController
       .usage()
       .then((value) => {
-        if (cancelled) return
+        if (cancelled || !isBackendSubjectCurrent(user.id)) return
         setUsage(value)
         setUsageRefreshFailed(false)
         writeAccountLkgCache(user.id, { usage: value })
       })
       .catch(() => {
-        if (!cancelled) setUsageRefreshFailed(true)
+        if (!cancelled && isBackendSubjectCurrent(user.id)) {
+          setUsageRefreshFailed(true)
+        }
       })
 
     return () => {
@@ -271,10 +277,21 @@ const MinePage = () => {
 
   const confirmLogout = useLockFn(async () => {
     try {
-      await manualLogout()
-    } finally {
+      const cleaned = await manualLogout()
+      if (!cleaned) {
+        const error = new Error('logout_cleanup_pending')
+        reportSafeClientFailure('mine-manual-logout', error)
+        showNotice.error(
+          toSafeClientErrorMessage(classifyClientError(error).kind, t),
+        )
+      }
       setLogoutOpen(false)
       navigate('/login')
+    } catch (error) {
+      reportSafeClientFailure('mine-manual-logout', error)
+      showNotice.error(
+        toSafeClientErrorMessage(classifyClientError(error).kind, t),
+      )
     }
   })
 

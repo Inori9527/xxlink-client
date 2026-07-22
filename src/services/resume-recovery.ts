@@ -1,6 +1,9 @@
 import { writeAccountLkgCache } from '@/services/account-lkg-cache'
-import { api } from '@/services/api'
 import { authStore } from '@/services/auth-store'
+import {
+  backendController,
+  isBackendSubjectCurrent,
+} from '@/services/backend-controller'
 import { toSafeClientFailureRecord } from '@/services/safe-client-error'
 import { syncSubscription } from '@/services/subscription-sync'
 
@@ -57,7 +60,7 @@ function clearResumeSyncError(): void {
   }
 }
 
-async function refreshAccountLkg(userId: string): Promise<void> {
+async function refreshAccountLkg(userId: string): Promise<boolean> {
   const [
     plansResult,
     subscriptionResult,
@@ -65,12 +68,14 @@ async function refreshAccountLkg(userId: string): Promise<void> {
     benefitResult,
     nodesResult,
   ] = await Promise.allSettled([
-    api.subscription.plans(),
-    api.subscription.current(),
-    api.user.usage(),
-    api.user.publicBenefit(),
-    api.nodes.list(),
+    backendController.plans(),
+    backendController.subscription(),
+    backendController.usage(),
+    backendController.publicBenefit(),
+    backendController.nodes(),
   ])
+
+  if (!isBackendSubjectCurrent(userId)) return false
 
   writeAccountLkgCache(userId, {
     plans: plansResult.status === 'fulfilled' ? plansResult.value : undefined,
@@ -83,6 +88,7 @@ async function refreshAccountLkg(userId: string): Promise<void> {
       benefitResult.status === 'fulfilled' ? benefitResult.value : undefined,
     nodes: nodesResult.status === 'fulfilled' ? nodesResult.value : undefined,
   })
+  return true
 }
 
 export async function runResumeRecovery(
@@ -109,12 +115,15 @@ export async function runResumeRecovery(
   lastAttemptAt = now
   running = (async () => {
     try {
-      await api.user.profile()
-      await refreshAccountLkg(userId)
+      await backendController.userProfile()
+      if (!isBackendSubjectCurrent(userId)) return
+      if (!(await refreshAccountLkg(userId))) return
       await syncSubscription({ timeoutMs: 10_000 })
+      if (!isBackendSubjectCurrent(userId)) return
       lastFailureAt = 0
       clearResumeSyncError()
     } catch (error) {
+      if (!isBackendSubjectCurrent(userId)) return
       lastFailureAt = Date.now()
       rememberResumeSyncError(error, reason)
     }

@@ -98,6 +98,66 @@ test('auth terminal codes include backend revoked and suspended states', () => {
   assert.equal(authErrors.isRefreshTerminalCode('NETWORK_TIMEOUT'), false)
 })
 
+test('typed backend replies and failures are rejected after account replacement', async () => {
+  let userId = 'user-a'
+  let statusMutationCount = 0
+  let mode = 'success'
+  const authStore = {
+    getState: () => ({ user: { id: userId } }),
+    preserveCachedShell: () => {
+      statusMutationCount += 1
+    },
+    setSessionStatus: () => {
+      statusMutationCount += 1
+    },
+  }
+  const invoke = async () => {
+    userId = 'user-b'
+    if (mode === 'success') return { subjectId: 'user-a', data: [] }
+    throw { subjectId: 'user-a', kind: 'service_blocked' }
+  }
+  const controller = loadTsModule('src/services/backend-controller.ts', {
+    '@tauri-apps/api/core': { invoke },
+    '@/services/auth-store': { authStore },
+  })
+
+  await assert.rejects(controller.backendController.plans())
+  assert.equal(statusMutationCount, 0)
+
+  userId = 'user-a'
+  mode = 'failure'
+  await assert.rejects(controller.backendController.plans())
+  assert.equal(statusMutationCount, 0)
+})
+
+test('business forbidden errors do not mutate an operational session', async () => {
+  let kind = 'unknown'
+  let sessionStatus = 'operational'
+  const authStore = {
+    getState: () => ({ user: { id: 'user-a' } }),
+    preserveCachedShell: () => {
+      sessionStatus = 'recovery_required'
+    },
+    setSessionStatus: (nextStatus) => {
+      sessionStatus = nextStatus
+    },
+  }
+  const invoke = async () => {
+    throw { subjectId: 'user-a', kind }
+  }
+  const controller = loadTsModule('src/services/backend-controller.ts', {
+    '@tauri-apps/api/core': { invoke },
+    '@/services/auth-store': { authStore },
+  })
+
+  await assert.rejects(controller.backendController.plans())
+  assert.equal(sessionStatus, 'operational')
+
+  kind = 'service_blocked'
+  await assert.rejects(controller.backendController.plans())
+  assert.equal(sessionStatus, 'service_blocked')
+})
+
 test('account LKG cache is user scoped and strips subscription URLs', () => {
   installMemoryLocalStorage()
   const lkg = loadTsModule('src/services/account-lkg-cache.ts')
@@ -269,75 +329,76 @@ test('resume recovery refreshes safe account state without exposing secrets', as
   }
   const stubs = {
     '@/services/auth-store': { authStore },
+    '@/services/backend-controller': {
+      isBackendSubjectCurrent: (subjectId) =>
+        subjectId === authStore.getState().user?.id,
+      backendController: {
+        userProfile: async () => {
+          calls.profile += 1
+          return {
+            id: 'user@example.test',
+            email: 'user@example.test',
+            role: 'USER',
+          }
+        },
+        usage: async () => {
+          calls.usage += 1
+          return {
+            trafficUsed: 1,
+            trafficLimit: 2,
+            trafficRemaining: 1,
+            percentUsed: 50,
+            plan: { id: 'plan_1', name: 'Flagship', duration: 30 },
+            status: 'ACTIVE',
+            expireAt: '2026-07-01T00:00:00Z',
+            startAt: '2026-06-01T00:00:00Z',
+          }
+        },
+        publicBenefit: async () => {
+          calls.publicBenefit += 1
+          return {
+            visible: false,
+            isTrial: false,
+            hasPaidPlan: true,
+            canClaim: false,
+            emailVerified: true,
+            claimBytes: 0,
+            activeBonusBytes: 0,
+          }
+        },
+        plans: async () => {
+          calls.plans += 1
+          return []
+        },
+        subscription: async () => {
+          calls.current += 1
+          return null
+        },
+        nodes: async () => {
+          calls.nodes += 1
+          return [
+            {
+              id: 'node_1',
+              name: 'Tokyo',
+              protocol: 'vless',
+              region: 'JP',
+              isActive: true,
+              host: 'hidden.example.test',
+              port: 443,
+              subscriptionUrl:
+                'https://api.example.test/subscription/secret-fixture',
+            },
+          ]
+        },
+      },
+    },
     '@/services/subscription-sync': {
       syncSubscription: async () => {
         calls.sync += 1
       },
     },
     '@/services/api': {
-      api: {
-        user: {
-          profile: async () => {
-            calls.profile += 1
-            return {
-              id: 'user@example.test',
-              email: 'user@example.test',
-              role: 'USER',
-            }
-          },
-          usage: async () => {
-            calls.usage += 1
-            return {
-              trafficUsed: 1,
-              trafficLimit: 2,
-              trafficRemaining: 1,
-              percentUsed: 50,
-              plan: { id: 'plan_1', name: 'Flagship', duration: 30 },
-              status: 'ACTIVE',
-              expireAt: '2026-07-01T00:00:00Z',
-              startAt: '2026-06-01T00:00:00Z',
-            }
-          },
-          publicBenefit: async () => {
-            calls.publicBenefit += 1
-            return {
-              visible: false,
-              isTrial: false,
-              hasPaidPlan: true,
-              canClaim: false,
-              emailVerified: true,
-              claimBytes: 0,
-              activeBonusBytes: 0,
-            }
-          },
-        },
-        subscription: {
-          plans: async () => {
-            calls.plans += 1
-            return []
-          },
-          current: async () => {
-            calls.current += 1
-            return null
-          },
-        },
-        nodes: {
-          list: async () => {
-            calls.nodes += 1
-            return [
-              {
-                id: 'node_1',
-                name: 'Tokyo',
-                protocol: 'vless',
-                region: 'JP',
-                isActive: true,
-                host: 'hidden.example',
-                port: 443,
-              },
-            ]
-          },
-        },
-      },
+      ApiError: class ApiError extends Error {},
       isAuthFatalError: () => false,
     },
   }
@@ -358,7 +419,55 @@ test('resume recovery refreshes safe account state without exposing secrets', as
   const lkg = loadTsModule('src/services/account-lkg-cache.ts')
   const cached = lkg.readAccountLkgCache('user@example.test')
   assert.equal(cached.nodes[0].host, undefined)
+  assert.equal(cached.nodes[0].port, undefined)
+  assert.equal(cached.nodes[0].subscriptionUrl, undefined)
+  assert.equal(JSON.stringify(cached).includes('secret-fixture'), false)
   assert.equal(cached.usage.percentUsed, 50)
+})
+
+test('resume recovery discards a batch after the active account changes', async () => {
+  installMemoryLocalStorage()
+  let userId = 'user-a'
+  let plansCalls = 0
+  const authStore = {
+    getState: () => ({
+      isAuthenticated: true,
+      isOperational: true,
+      user: { id: userId, email: `${userId}@example.test`, role: 'USER' },
+    }),
+  }
+  const stubs = {
+    '@/services/auth-store': { authStore },
+    '@/services/backend-controller': {
+      isBackendSubjectCurrent: (subjectId) => subjectId === userId,
+      backendController: {
+        userProfile: async () => {
+          userId = 'user-b'
+          return { id: 'user-a', email: 'user-a@example.test', role: 'USER' }
+        },
+        plans: async () => {
+          plansCalls += 1
+          return []
+        },
+      },
+    },
+    '@/services/subscription-sync': { syncSubscription: async () => {} },
+    '@/services/safe-client-error': {
+      toSafeClientFailureRecord: () => ({
+        scope: 'resume-recovery',
+        kind: 'unknown',
+        retryable: false,
+      }),
+    },
+  }
+  const recovery = loadTsModule('src/services/resume-recovery.ts', stubs)
+
+  await recovery.runResumeRecovery('test', { force: true })
+
+  assert.equal(plansCalls, 0)
+  const lkg = loadTsModule('src/services/account-lkg-cache.ts')
+  assert.equal(lkg.readAccountLkgCache('user-a'), null)
+  assert.equal(lkg.readAccountLkgCache('user-b'), null)
 })
 
 test('failed resume recovery persists classification without raw client material', async () => {
@@ -377,15 +486,24 @@ test('failed resume recovery persists classification without raw client material
       },
     },
     '@/services/subscription-sync': { syncSubscription: async () => {} },
-    '@/services/api': {
-      ApiError,
-      api: {
-        user: {
-          profile: async () => {
-            throw new Error(rawFailure)
-          },
+    '@/services/backend-controller': {
+      isBackendSubjectCurrent: (subjectId) => subjectId === 'user-id',
+      backendController: {
+        plans: async () => [],
+        subscription: async () => null,
+        usage: async () => {
+          throw new Error(rawFailure)
+        },
+        publicBenefit: async () => null,
+        nodes: async () => [],
+        userProfile: async () => {
+          throw new Error(rawFailure)
         },
       },
+      BackendControllerError: class BackendControllerError extends Error {},
+    },
+    '@/services/api': {
+      ApiError,
     },
   }
   const recovery = loadTsModule('src/services/resume-recovery.ts', stubs)
@@ -514,9 +632,18 @@ test('mine page uses LKG usage and does not render transient failures as false z
     mineSource,
     /writeAccountLkgCache\(user\.id, \{ usage: value \}\)/,
   )
+  const mineUsageRefreshStart = mineSource.search(
+    /backendController\s*\.usage\(\)/,
+  )
+  const mineUsageRefreshEnd = mineSource.indexOf(
+    'return () =>',
+    mineUsageRefreshStart,
+  )
+  assert.notEqual(mineUsageRefreshStart, -1)
+  assert.notEqual(mineUsageRefreshEnd, -1)
   const mineUsageRefreshBlock = mineSource.slice(
-    mineSource.indexOf('api.user'),
-    mineSource.indexOf('api.announcements'),
+    mineUsageRefreshStart,
+    mineUsageRefreshEnd,
   )
   assert.equal(mineUsageRefreshBlock.includes('setUsage(null)'), false)
   assert.match(

@@ -13,6 +13,8 @@ import {
  *   )
  */
 let inflight: Promise<void> | null = null
+let inflightForced = false
+let forcedFollowup: Promise<void> | null = null
 
 export interface SyncOptions {
   /**
@@ -34,8 +36,22 @@ export class SubscriptionSyncTimeoutError extends Error {
 export async function syncSubscription(options?: SyncOptions): Promise<void> {
   // Share the in-flight promise so concurrent callers observe the actual
   // outcome instead of a spurious early-return success.
-  if (inflight) return inflight
+  if (inflight) {
+    if (!options?.force || inflightForced) return inflight
+    if (!forcedFollowup) {
+      const active = inflight
+      const runForcedFollowup = () =>
+        syncSubscription({ ...options, force: true })
+      forcedFollowup = active
+        .then(runForcedFollowup, runForcedFollowup)
+        .finally(() => {
+          forcedFollowup = null
+        })
+    }
+    return forcedFollowup
+  }
   const timeoutMs = options?.timeoutMs ?? 15_000
+  inflightForced = options?.force === true
   const work = options?.force
     ? rebuildManagedSubscriptionProfile()
     : refreshManagedSubscriptionProfile()
@@ -50,6 +66,7 @@ export async function syncSubscription(options?: SyncOptions): Promise<void> {
   })
   inflight = Promise.race([work, timeout]).finally(() => {
     inflight = null
+    inflightForced = false
   })
   return inflight
 }

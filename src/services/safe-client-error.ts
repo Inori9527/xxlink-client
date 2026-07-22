@@ -1,4 +1,5 @@
 import { ApiError } from '@/services/api'
+import { BackendControllerError } from '@/services/backend-controller'
 
 export type SafeClientErrorKind = 'network' | 'auth' | 'service' | 'unknown'
 
@@ -50,6 +51,7 @@ export const SAFE_CLIENT_FAILURE_SCOPES = [
   'login-submit',
   'login-subscription-sync',
   'mine-copy-diagnostics',
+  'mine-manual-logout',
   'nodes-proxy-selection',
   'notice-copy',
   'plans-claim-public-benefit',
@@ -189,6 +191,21 @@ function isTransportFailure(error: unknown): boolean {
 export function classifyClientError(
   error: unknown,
 ): SafeClientErrorClassification {
+  if (error instanceof BackendControllerError) {
+    if (error.kind === 'network') return { kind: 'network', retryable: true }
+    if (error.kind === 'auth') return { kind: 'auth', retryable: false }
+    if (error.kind === 'service_blocked') {
+      return { kind: 'service', retryable: false }
+    }
+    if (error.kind === 'invalid_response') {
+      return { kind: 'service', retryable: false }
+    }
+    if (error.kind === 'traffic_exceeded') {
+      return { kind: 'service', retryable: false }
+    }
+    return { kind: 'unknown', retryable: false }
+  }
+
   const status =
     error instanceof ApiError
       ? error.status

@@ -1,10 +1,10 @@
 import type {
-  Node,
-  Plan,
-  PublicBenefitStatus,
-  Subscription,
-  UsageData,
-} from '@/services/api'
+  NodeView,
+  PlanView,
+  PublicBenefitView,
+  SubscriptionView,
+  UsageView,
+} from '@/services/backend-controller'
 
 const ACCOUNT_LKG_CACHE_PREFIX = 'xxlink:lkg:account:'
 const ACCOUNT_LKG_CACHE_VERSION = 1
@@ -12,12 +12,12 @@ const ACCOUNT_LKG_CACHE_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000
 export const ACCOUNT_LKG_CHANGED_EVENT = 'xxlink:account-lkg-changed'
 
 export type SafeSubscriptionSnapshot = Pick<
-  Subscription,
+  SubscriptionView,
   'id' | 'planId' | 'trafficUsed' | 'startAt' | 'expireAt' | 'status' | 'plan'
 >
 
 export type SafeNodeSummary = Pick<
-  Node,
+  NodeView,
   'id' | 'name' | 'protocol' | 'region' | 'isActive'
 >
 
@@ -25,19 +25,19 @@ export interface AccountLkgCache {
   version: number
   userKey: string
   updatedAt: number
-  plans: Plan[]
+  plans: PlanView[]
   subscription: SafeSubscriptionSnapshot | null
-  usage: UsageData | null
-  publicBenefit: PublicBenefitStatus | null
+  usage: UsageView | null
+  publicBenefit: PublicBenefitView | null
   nodes: SafeNodeSummary[]
 }
 
 export interface AccountLkgInput {
-  plans?: Plan[]
-  subscription?: Subscription | SafeSubscriptionSnapshot | null
-  usage?: UsageData | null
-  publicBenefit?: PublicBenefitStatus | null
-  nodes?: Node[] | SafeNodeSummary[]
+  plans?: PlanView[]
+  subscription?: SubscriptionView | SafeSubscriptionSnapshot | null
+  usage?: UsageView | null
+  publicBenefit?: PublicBenefitView | null
+  nodes?: NodeView[] | SafeNodeSummary[]
 }
 
 function hashCacheSubject(value: string): string {
@@ -70,7 +70,7 @@ export function getAccountLkgStorageKey(userId: string): string {
 }
 
 function sanitizeSubscription(
-  subscription: Subscription | SafeSubscriptionSnapshot | null | undefined,
+  subscription: SubscriptionView | SafeSubscriptionSnapshot | null | undefined,
 ): SafeSubscriptionSnapshot | null | undefined {
   if (subscription === undefined) return undefined
   if (subscription === null) return null
@@ -86,7 +86,7 @@ function sanitizeSubscription(
 }
 
 export function toSafeNodeSummaries(
-  nodes: Array<Node | SafeNodeSummary> | undefined,
+  nodes: Array<NodeView | SafeNodeSummary> | undefined,
 ): SafeNodeSummary[] | undefined {
   if (!nodes) return undefined
   return nodes.map((node) => ({
