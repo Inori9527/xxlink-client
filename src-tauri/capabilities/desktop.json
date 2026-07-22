@@ -10,7 +10,6 @@
       "allow": [{ "url": "https://api.xxlink.net/**" }]
     },
     "shell:allow-open",
-    "clipboard-manager:allow-write-text",
     "mihomo:allow-get-version",
     "mihomo:allow-get-connections",
     "mihomo:allow-close-connection",

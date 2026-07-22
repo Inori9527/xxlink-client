@@ -1,14 +1,8 @@
-import { writeText } from '@tauri-apps/plugin-clipboard-manager'
+import { invoke } from '@tauri-apps/api/core'
 
 import { readAccountLkgCache } from '@/services/account-lkg-cache'
 import { authStore } from '@/services/auth-store'
-import {
-  getAppUptime,
-  getClashLogs,
-  getRunningMode,
-  getRuntimeLogs,
-  getSystemInfo,
-} from '@/services/cmds'
+import { getAppUptime, getRunningMode, getSystemInfo } from '@/services/cmds'
 import { version as appVersion } from '@root/package.json'
 
 const DIAGNOSTICS_SCHEMA_VERSION = 1
@@ -80,8 +74,8 @@ interface DiagnosticsAccountInput {
 }
 
 interface DiagnosticsLogInput {
-  runtime?: Record<string, Array<[unknown, unknown]>>
-  clash?: unknown[]
+  runtime?: DiagnosticLogSummary
+  clash?: DiagnosticLogSummary
 }
 
 export interface DiagnosticsBundleInput {
@@ -407,15 +401,6 @@ function toErrorFamily(value: unknown): ErrorFamily {
   }
 }
 
-function normalizeLogLevel(value: unknown): LogLevel {
-  if (typeof value !== 'string' || value.length > 16) return 'unknown'
-  const normalized = value.toLowerCase()
-  if (normalized === 'warning') return 'warn'
-  return LOG_LEVELS.includes(normalized as LogLevel)
-    ? (normalized as LogLevel)
-    : 'unknown'
-}
-
 function createLevelCounts(): Record<LogLevel, number> {
   return { debug: 0, info: 0, warn: 0, error: 0, unknown: 0 }
 }
@@ -441,71 +426,16 @@ function normalizeInspectionLimit(value: number | undefined): number {
   return Math.min(Math.max(Math.floor(value), 0), MAX_LOG_ITEMS)
 }
 
-function summarizeEntries(
-  source: 'runtime' | 'clash',
-  componentCount: number,
-  entries: Array<{ level: unknown; message: unknown }>,
-  maxItems: number,
-): DiagnosticLogSummary {
-  const inspected = entries.slice(Math.max(0, entries.length - maxItems))
-  const levels = createLevelCounts()
-  const categories = createCategoryCounts()
-
-  for (const entry of inspected) {
-    levels[normalizeLogLevel(entry.level)]++
-    categories[classifyDiagnosticText(entry.message)]++
-  }
-
+function emptyLogSummary(source: 'runtime' | 'clash'): DiagnosticLogSummary {
   return {
     source,
-    componentCount: boundedCount(componentCount),
-    totalCount: boundedCount(entries.length),
-    inspectedCount: boundedCount(inspected.length),
-    omittedCount: boundedCount(entries.length - inspected.length),
-    levels,
-    categories,
+    componentCount: 0,
+    totalCount: 0,
+    inspectedCount: 0,
+    omittedCount: 0,
+    levels: createLevelCounts(),
+    categories: createCategoryCounts(),
   }
-}
-
-function summarizeRuntimeLogs(
-  logs: Record<string, Array<[unknown, unknown]>> | undefined,
-  maxItems: number,
-): DiagnosticLogSummary {
-  const entries: Array<{ level: unknown; message: unknown }> = []
-  let componentCount = 0
-
-  for (const value of Object.values(logs ?? {})) {
-    if (!Array.isArray(value)) continue
-    componentCount++
-    for (const entry of value) {
-      if (Array.isArray(entry)) {
-        entries.push({ level: entry[0], message: entry[1] })
-      } else {
-        entries.push({ level: 'unknown', message: entry })
-      }
-    }
-  }
-
-  return summarizeEntries('runtime', componentCount, entries, maxItems)
-}
-
-function summarizeClashLogs(
-  logs: unknown[] | undefined,
-  maxItems: number,
-): DiagnosticLogSummary {
-  const entries = (Array.isArray(logs) ? logs : []).map((entry) => {
-    if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
-      const record = entry as Record<string, unknown>
-      return { level: record.type, message: record.payload }
-    }
-    return { level: 'unknown', message: entry }
-  })
-  return summarizeEntries(
-    'clash',
-    entries.length > 0 ? 1 : 0,
-    entries,
-    maxItems,
-  )
 }
 
 function readStorageItem(key: string): string | null {
@@ -570,11 +500,12 @@ export function buildDiagnosticsBundle(
 ): DiagnosticsBundle {
   const now = options.now?.() ?? new Date()
   const nowMs = now.getTime()
-  const maxLogItems = normalizeInspectionLimit(options.maxLogItems)
   const auth = input.authState ?? {}
   const account = input.accountLkg
   const hasLastSyncError = Boolean(input.lastSyncErrorRaw)
   const lastUpdateTimestamp = parseTimestamp(input.lastUpdateCheckRaw)
+  const runtimeLogSummary = input.logs?.runtime
+  const clashLogSummary = input.logs?.clash
 
   return {
     schemaVersion: DIAGNOSTICS_SCHEMA_VERSION,
@@ -636,8 +567,12 @@ export function buildDiagnosticsBundle(
       lastCheckAgeBucket: ageBucket(lastUpdateTimestamp, nowMs),
     },
     logs: {
-      runtime: summarizeRuntimeLogs(input.logs?.runtime, maxLogItems),
-      clash: summarizeClashLogs(input.logs?.clash, maxLogItems),
+      runtime: isSafeLogSummary(runtimeLogSummary, 'runtime')
+        ? runtimeLogSummary
+        : emptyLogSummary('runtime'),
+      clash: isSafeLogSummary(clashLogSummary, 'clash')
+        ? clashLogSummary
+        : emptyLogSummary('clash'),
     },
     safety: {
       policy: 'metadata-only',
@@ -649,13 +584,21 @@ export function buildDiagnosticsBundle(
 export async function collectDiagnosticsBundle(
   options: DiagnosticsBuildOptions = {},
 ): Promise<DiagnosticsBundle> {
-  const [systemInfo, appUptimeMs, runningMode, runtimeLogs, clashLogs] =
+  const [systemInfo, appUptimeMs, runningMode, logSummaries] =
     await Promise.all([
       collectWithFallback(getSystemInfo, 'unavailable'),
       collectWithFallback(getAppUptime, null),
       collectWithFallback(getRunningMode, null),
-      collectWithFallback(getRuntimeLogs, {}),
-      collectWithFallback(getClashLogs, []),
+      collectWithFallback(
+        () =>
+          invoke<DiagnosticsLogInput>('runtime_get_diagnostics_log_summaries', {
+            maxItems: normalizeInspectionLimit(options.maxLogItems),
+          }),
+        {
+          runtime: emptyLogSummary('runtime'),
+          clash: emptyLogSummary('clash'),
+        },
+      ),
     ])
 
   return buildDiagnosticsBundle(
@@ -672,10 +615,7 @@ export async function collectDiagnosticsBundle(
       ),
       lastSyncErrorRaw: readStorageItem('xxlink:last-sync-error'),
       lastUpdateCheckRaw: readStorageItem('last_check_update'),
-      logs: {
-        runtime: runtimeLogs,
-        clash: clashLogs,
-      },
+      logs: logSummaries,
     },
     options,
   )
@@ -737,7 +677,7 @@ function isSafeCountRecord(
 function isSafeLogSummary(
   value: unknown,
   expectedSource: 'runtime' | 'clash',
-): boolean {
+): value is DiagnosticLogSummary {
   if (
     !isRecord(value) ||
     !hasExactKeys(value, [
@@ -885,15 +825,12 @@ export async function copyDiagnosticsBundleToClipboard(
   options: DiagnosticsBuildOptions = {},
 ): Promise<DiagnosticsBundle> {
   const bundle = await collectDiagnosticsBundle(options)
-  const json = JSON.stringify(bundle, null, 2)
-
-  await writeDiagnosticsJsonToClipboard(json, writeText)
+  await invoke('runtime_write_diagnostics_bundle', { bundle })
   return bundle
 }
 
 export async function writeDiagnosticsJsonToClipboard(
   json: string,
-  writer: (text: string) => Promise<void>,
 ): Promise<void> {
   let parsed: unknown
   try {
@@ -906,5 +843,5 @@ export async function writeDiagnosticsJsonToClipboard(
     throw new Error('Diagnostics bundle contains forbidden material')
   }
 
-  await writer(JSON.stringify(parsed, null, 2))
+  await invoke('runtime_write_diagnostics_bundle', { bundle: parsed })
 }

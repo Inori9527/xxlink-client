@@ -1,8 +1,7 @@
 use super::CmdResult;
+use super::runtime_action_controller::{DiagnosticLogSource, DiagnosticLogSummary, summarize_diagnostic_entries};
 use crate::config::Config;
 use serde_yaml_ng::Mapping;
-use smartstring::alias::String;
-use std::collections::HashMap;
 
 /// 获取运行时配置
 #[tauri::command]
@@ -11,7 +10,18 @@ pub async fn get_runtime_config() -> CmdResult<Option<Mapping>> {
 }
 
 /// 获取运行时日志
-#[tauri::command]
-pub async fn get_runtime_logs() -> CmdResult<HashMap<String, Vec<(String, String)>>> {
-    Ok(Config::runtime().await.latest_arc().chain_logs.clone())
+pub(super) async fn diagnostics_log_summary(max_items: usize) -> DiagnosticLogSummary {
+    let runtime = Config::runtime().await.latest_arc();
+    let component_count = runtime.chain_logs.len();
+    let entries = runtime
+        .chain_logs
+        .values()
+        .flat_map(|entries| {
+            entries
+                .iter()
+                .map(|(level, message)| (level.as_str(), message.as_str()))
+        })
+        .collect::<Vec<_>>();
+
+    summarize_diagnostic_entries(DiagnosticLogSource::Runtime, component_count, entries, max_items)
 }

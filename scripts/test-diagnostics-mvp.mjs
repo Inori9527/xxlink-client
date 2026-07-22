@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { randomBytes } from 'node:crypto'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
@@ -11,111 +10,36 @@ import ts from 'typescript'
 const repoRoot = path.resolve(import.meta.dirname, '..')
 const require = createRequire(import.meta.url)
 
-const HOSTILE_DIAGNOSTIC_SAMPLES = [
-  {
-    value:
-      'proxy https://proxy-user:proxy-password@proxy.example.test:8443/path',
-    fragments: ['proxy-user', 'proxy-password'],
-  },
-  {
-    value:
-      'proxy socks5://socks-user:socks-password@proxy.example.test:1080/path',
-    fragments: ['socks-user', 'socks-password', 'proxy.example.test'],
-  },
-  {
-    value:
-      '- name: standalone-private-proxy\n  type: socks5\n  server: standalone.example.test\n  port: 1080\n  username: standalone-user\n  password: standalone-password',
-    fragments: [
-      'standalone-private-proxy',
-      'standalone.example.test',
-      'standalone-user',
-      'standalone-password',
-    ],
-  },
-  {
-    value:
-      '- name: credential-free-private-proxy\n  type: trojan\n  server: credential-free.example.test\n  port: 443',
-    fragments: [
-      'credential-free-private-proxy',
-      'credential-free.example.test',
-    ],
-  },
-  {
-    value:
-      '{"name":"json-private-proxy","type":"http","server":"json-standalone.example.test","port":8080,"username":"json-user","password":"json-password"}',
-    fragments: [
-      'json-private-proxy',
-      'json-standalone.example.test',
-      'json-user',
-      'json-password',
-    ],
-  },
-  {
-    value:
-      '{name: flow-private-proxy, type: socks5, server: flow.example.test, port: 1080, user: flow-user-sentinel, pass: flow-pass-sentinel}',
-    fragments: [
-      'flow-private-proxy',
-      'flow.example.test',
-      'flow-user-sentinel',
-      'flow-pass-sentinel',
-    ],
-  },
-  {
-    value:
-      "{'name': 'quoted-flow-private-proxy', 'type': 'http', 'server': 'quoted-flow.example.test', 'port': 8080, 'user': 'quoted-flow-user-sentinel', 'pass': 'quoted-flow-pass-sentinel'}",
-    fragments: [
-      'quoted-flow-private-proxy',
-      'quoted-flow.example.test',
-      'quoted-flow-user-sentinel',
-      'quoted-flow-pass-sentinel',
-    ],
-  },
-  {
-    value:
-      'request https://api.example.test/path?token=query-token&api_key=query-api-key&safe=metadata',
-    fragments: ['query-token', 'query-api-key'],
-  },
-  {
-    value:
-      'request https://api.example.test/path?user=query-user-sentinel&pass=query-pass-sentinel&UsEr=query-case-user-sentinel&PaSs=query-case-pass-sentinel&safe=metadata',
-    fragments: [
-      'query-user-sentinel',
-      'query-pass-sentinel',
-      'query-case-user-sentinel',
-      'query-case-pass-sentinel',
-    ],
-  },
-  {
-    value:
-      'proxies:\n  - name: private-profile\n    server: secret.example.test\n    port: 443\n    uuid: 11111111-2222-4333-8444-555555555555\n    password: profile-password\nproxy-groups:\n  - name: private-group',
-    fragments: [
-      'private-profile',
-      'secret.example.test',
-      'profile-password',
-      'private-group',
-    ],
-  },
-  {
-    value:
-      '{"inbounds":[{"listen":"127.0.0.1","port":1080}],"outbounds":[{"server":"json-secret.example.test","password":"json-profile-password"}]}',
-    fragments: ['json-secret.example.test', 'json-profile-password'],
-  },
-  {
-    value:
-      'mixed-port: 7890\nallow-lan: true\nexternal-controller: 127.0.0.1:9090\nsecret: controller-secret\ndns:\n  enable: true\nrules:\n  - MATCH,DIRECT',
-    fragments: ['127.0.0.1:9090', 'controller-secret', 'MATCH,DIRECT'],
-  },
-  {
-    value:
-      'Authorization: Bearer bearer-token Cookie: sid=cookie-secret vless://11111111-2222-4333-8444-555555555555@node.example.test:443?shortId=abcdef12',
-    fragments: [
-      'bearer-token',
-      'cookie-secret',
-      '11111111-2222-4333-8444-555555555555',
-      'abcdef12',
-    ],
-  },
-]
+const emptyCounts = () => ({
+  debug: 0,
+  info: 0,
+  warn: 0,
+  error: 0,
+  unknown: 0,
+})
+
+const emptyCategories = () => ({
+  'auth-session': 0,
+  network: 0,
+  'profile-sync': 0,
+  timeout: 0,
+  storage: 0,
+  'structured-or-sensitive': 0,
+  oversized: 0,
+  other: 0,
+  unrecognized: 0,
+})
+
+const safeSummary = (source, overrides = {}) => ({
+  source,
+  componentCount: 0,
+  totalCount: 0,
+  inspectedCount: 0,
+  omittedCount: 0,
+  levels: emptyCounts(),
+  categories: emptyCategories(),
+  ...overrides,
+})
 
 function loadDiagnosticsModule(extraContext = {}) {
   const sourcePath = path.join(repoRoot, 'src/services/diagnostics-bundle.ts')
@@ -129,40 +53,39 @@ function loadDiagnosticsModule(extraContext = {}) {
     },
     fileName: sourcePath,
   })
-
+  const calls = []
   const module = { exports: {} }
-  const tauriMocks = {
-    getSystemInfo: async () => 'Windows 11 / XXLink test system',
-    getAppUptime: async () => 42_000,
-    getRunningMode: async () => 'rule',
-    getRuntimeLogs: async () => ({
-      default: [
-        ['INFO', 'Runtime started'],
-        ['WARN', 'Authorization: Bearer runtime-secret-token'],
-      ],
-    }),
-    getClashLogs: async () => [
-      {
-        time: '06-29 12:00:00',
-        type: 'info',
-        payload:
-          'profile vless://11111111-2222-4333-8444-555555555555@node.example:443?shortId=abcdef12',
-      },
-    ],
-    ...(extraContext.tauriMocks ?? {}),
+  const invoke = async (command, payload) => {
+    calls.push({ command, payload })
+    if (command === 'runtime_get_diagnostics_log_summaries') {
+      return (
+        extraContext.logSummaries ?? {
+          runtime: safeSummary('runtime'),
+          clash: safeSummary('clash'),
+        }
+      )
+    }
+    if (command === 'runtime_write_diagnostics_bundle') {
+      extraContext.clipboardText = JSON.stringify(payload.bundle, null, 2)
+      return undefined
+    }
+    throw new Error(`unexpected command: ${command}`)
   }
-
   const mocks = {
-    '@/services/cmds': tauriMocks,
+    '@tauri-apps/api/core': { invoke },
+    '@/services/cmds': {
+      getSystemInfo: async () => 'Windows 11 / XXLink test system',
+      getAppUptime: async () => 42_000,
+      getRunningMode: async () => 'rule',
+    },
     '@/services/auth-store': {
       authStore: {
         getState: () => ({
           isAuthenticated: true,
-          accessToken: 'access-token-fixture',
-          refreshToken: 'refresh-token-fixture',
+          isOperational: true,
           user: {
-            id: '11111111-2222-4333-8444-555555555555',
-            email: 'alice@example.test',
+            id: 'fixture-user',
+            email: 'fixture@example.test',
             role: 'USER',
           },
         }),
@@ -171,89 +94,44 @@ function loadDiagnosticsModule(extraContext = {}) {
     '@/services/account-lkg-cache': {
       readAccountLkgCache: () => ({
         updatedAt: Date.parse('2026-06-29T11:55:00.000Z'),
-        subscription: {
-          status: 'ACTIVE',
-          expireAt: '2026-07-29T00:00:00.000Z',
-        },
-        usage: {
-          status: 'ACTIVE',
-          expireAt: '2026-07-29T00:00:00.000Z',
-          entitlement: {
-            accessTier: 'PAID',
-            nodeTier: 'PAID',
-            speedLimitMbps: 150,
-          },
-        },
-        nodes: [
-          {
-            id: 'node-secret-id',
-            name: 'Tokyo paid node',
-            protocol: 'vless',
-            region: 'JP',
-            isActive: true,
-          },
-        ],
+        subscription: { status: 'ACTIVE' },
+        usage: { status: 'ACTIVE', entitlement: { accessTier: 'PAID' } },
+        nodes: [{ id: 'private-node-id' }],
       }),
     },
-    '@root/package.json': { version: '2.4.15' },
-    '@tauri-apps/plugin-clipboard-manager': {
-      writeText: async (text) => {
-        extraContext.clipboardText = text
-      },
+    '@root/package.json': { version: '2.4.17-dev' },
+  }
+  const localStorage = extraContext.localStorage ?? {
+    getItem(key) {
+      const values = {
+        'clash-verge-selected-proxy': 'private-selected-node',
+        'xxlink:subscription-profile-generation': 'private-generation',
+        'xxlink:last-sync-error':
+          'https://api.example.test/subscription?token=private-token',
+        last_check_update: '1782730800000',
+      }
+      return values[key] ?? null
     },
   }
-
   vm.runInNewContext(outputText, {
     console,
     Date,
     exports: module.exports,
-    localStorage: extraContext.localStorage,
+    localStorage,
     module,
     require: (specifier) => mocks[specifier] ?? require(specifier),
     URL,
-    ...extraContext,
   })
-
-  return module.exports
+  return { ...module.exports, calls }
 }
 
-const RANDOM_SENTINELS = Array.from(
-  { length: 12 },
-  () => `random-sentinel-${randomBytes(12).toString('hex')}`,
-)
-
-const assertOriginalsAbsent = (serialized) => {
-  for (const sample of HOSTILE_DIAGNOSTIC_SAMPLES) {
-    assert.equal(serialized.includes(sample.value), false)
-    for (const fragment of sample.fragments) {
-      assert.equal(serialized.includes(fragment), false)
-    }
-  }
-  for (const sentinel of RANDOM_SENTINELS) {
-    assert.equal(serialized.includes(sentinel), false)
-  }
-}
-
-test('bundle serializes metadata only for arbitrary strings, errors, profiles, and logs', () => {
+test('bundle accepts only closed log summaries and never serializes raw state', () => {
   const { buildDiagnosticsBundle, diagnosticsJsonHasForbiddenMaterial } =
     loadDiagnosticsModule()
-
-  const runtimeEntries = [
-    ...HOSTILE_DIAGNOSTIC_SAMPLES.map((sample, index) => [
-      index === 0 ? 'WARN' : 'INFO',
-      `component wrapper ${sample.value}`,
-    ]),
-    ...RANDOM_SENTINELS.map((sentinel) => [
-      'ERROR',
-      new Error(`prefixed worker failure ${sentinel}`),
-    ]),
-    ['INFO', { arbitrary: { payload: RANDOM_SENTINELS[0] } }],
-  ]
-
   const bundle = buildDiagnosticsBundle(
     {
-      appVersion: '2.4.15',
-      systemInfo: `Windows 11\nUser alice@example.test\n${RANDOM_SENTINELS[0]}`,
+      appVersion: '2.4.17-dev',
+      systemInfo: 'Windows 11 private-hostname',
       appUptimeMs: 123_456,
       runningMode: 'rule',
       authState: {
@@ -269,242 +147,124 @@ test('bundle serializes metadata only for arbitrary strings, errors, profiles, a
         nodeCount: 3,
         entitlementClass: 'PAID',
       },
-      selectedNodeRaw: 'Tokyo paid node 11111111-2222-4333-8444-555555555555',
-      profileGenerationRaw:
-        '{"nodes":"node-secret:host:443","subscription":"https://api.xxlink.net/subscription/raw"}',
-      lastSyncErrorRaw: `worker failed: ${RANDOM_SENTINELS[1]} https://api.xxlink.net/subscription/raw`,
+      selectedNodeRaw: 'private-selected-node',
+      profileGenerationRaw: 'private-generation',
+      lastSyncErrorRaw: 'https://api.example.test/path?token=private-token',
       logs: {
-        runtime: {
-          [RANDOM_SENTINELS[2]]: runtimeEntries,
-        },
-        clash: [
-          {
-            time: '06-29 12:00:00',
-            type: 'warning',
-            payload: `prefixed log ${RANDOM_SENTINELS[3]} socks5://user:pass@host:1080`,
+        runtime: safeSummary('runtime', {
+          componentCount: 1,
+          totalCount: 2,
+          inspectedCount: 2,
+          levels: { ...emptyCounts(), info: 1, warn: 1 },
+          categories: {
+            ...emptyCategories(),
+            other: 1,
+            'structured-or-sensitive': 1,
           },
-          ...HOSTILE_DIAGNOSTIC_SAMPLES.map((sample) => sample.value),
-        ],
+        }),
+        clash: safeSummary('clash'),
       },
     },
     { now: () => new Date('2026-06-29T12:00:00.000Z') },
   )
-
-  assert.equal(bundle.schemaVersion, 1)
-  assert.equal(bundle.exportedAt, '2026-06-29T12:00:00.000Z')
-  assert.equal(bundle.app.version, '2.4.15')
-  assert.equal(bundle.system.platform, 'windows')
-  assert.equal(bundle.authSession.status, 'authenticated')
-  assert.equal(bundle.authSession.accessToken, 'present')
-  assert.equal(bundle.authSession.refreshToken, 'present')
-  assert.equal(bundle.selectedNode.status, 'selected')
-  assert.equal(bundle.profileGeneration.status, 'present')
-  assert.equal(bundle.nodeSync.status, 'error')
-  assert.equal(bundle.runtimeCore.runningMode, 'rule')
-  assert.equal(bundle.dataPlane.status, 'not-tested')
-  assert.equal(bundle.logs.runtime.source, 'runtime')
-  assert.equal(bundle.logs.runtime.componentCount, 1)
-  assert.equal(bundle.logs.runtime.totalCount, runtimeEntries.length)
-  assert.equal(bundle.logs.clash.source, 'clash')
-  assert.equal(
-    bundle.logs.clash.totalCount,
-    HOSTILE_DIAGNOSTIC_SAMPLES.length + 1,
-  )
-
   const serialized = JSON.stringify(bundle)
-  assertOriginalsAbsent(serialized)
-  assert.equal(serialized.includes('alice@example.test'), false)
-  assert.equal(serialized.includes('Tokyo paid node'), false)
-  assert.equal(serialized.includes('node-secret'), false)
-  assert.equal(serialized.includes('api.xxlink.net'), false)
-  assert.equal(serialized.includes('prefixed worker failure'), false)
-  assert.equal(serialized.includes('component wrapper'), false)
+  assert.equal(bundle.logs.runtime.totalCount, 2)
+  assert.equal(bundle.nodeSync.lastErrorFamily, 'other')
+  assert.equal(serialized.includes('private-token'), false)
+  assert.equal(serialized.includes('private-selected-node'), false)
+  assert.equal(serialized.includes('private-generation'), false)
+  assert.equal(serialized.includes('private-hostname'), false)
   assert.equal(diagnosticsJsonHasForbiddenMaterial(serialized), false)
 })
 
-test('log summaries bound inspected entries and count limit plus one without retaining lines', () => {
+test('invalid renderer-provided summaries fail closed to empty counters', () => {
   const { buildDiagnosticsBundle } = loadDiagnosticsModule()
-  const limit = 50
-
-  const clash = Array.from({ length: limit + 1 }, (_, index) => ({
-    time: `06-29 12:${String(index).padStart(2, '0')}:00`,
-    type: 'info',
-    payload: `line-${index}-${RANDOM_SENTINELS[index % RANDOM_SENTINELS.length]}`,
-  }))
-  const runtime = Array.from({ length: limit + 1 }, (_, index) => [
-    index % 2 === 0 ? 'WARN' : 'INFO',
-    `prefixed-${index}-${RANDOM_SENTINELS[index % RANDOM_SENTINELS.length]}`,
-  ])
-
-  const bundle = buildDiagnosticsBundle(
-    {
-      appVersion: '2.4.15',
-      logs: { clash, runtime: { default: runtime } },
-    },
-    {
-      now: () => new Date('2026-06-29T12:00:00.000Z'),
-      maxLogItems: limit,
-    },
-  )
-
-  for (const summary of [bundle.logs.runtime, bundle.logs.clash]) {
-    assert.equal(summary.totalCount, limit + 1)
-    assert.equal(summary.inspectedCount, limit)
-    assert.equal(summary.omittedCount, 1)
-  }
-  const serialized = JSON.stringify(bundle.logs)
-  assert.equal(serialized.includes('line-'), false)
-  assert.equal(serialized.includes('prefixed-'), false)
-  assertOriginalsAbsent(serialized)
-})
-
-test('unrecognized, oversized, structured, and prefixed log inputs become closed counters', () => {
-  const { buildDiagnosticsBundle } = loadDiagnosticsModule()
-  const oversized = `${'x'.repeat(1025)}${RANDOM_SENTINELS[6]}`
-  const flowYaml = HOSTILE_DIAGNOSTIC_SAMPLES[5].value
-  const socksCredential = HOSTILE_DIAGNOSTIC_SAMPLES[1].value
-  const httpCredential = HOSTILE_DIAGNOSTIC_SAMPLES[0].value
-  const prefixed = `worker lifecycle changed ${RANDOM_SENTINELS[7]}`
-
   const bundle = buildDiagnosticsBundle({
-    appVersion: '2.4.15',
     logs: {
-      runtime: {
-        default: [
-          ['INFO', { wrapper: RANDOM_SENTINELS[8] }],
-          ['WARN', oversized],
-          ['WARN', flowYaml],
-          ['ERROR', socksCredential],
-          ['ERROR', httpCredential],
-          ['INFO', prefixed],
-        ],
-      },
+      runtime: safeSummary('runtime', {
+        totalCount: 1,
+        inspectedCount: 1,
+        levels: { ...emptyCounts(), info: 1 },
+      }),
+      clash: safeSummary('runtime'),
     },
   })
-
-  assert.equal(bundle.logs.runtime.categories.unrecognized, 1)
-  assert.equal(bundle.logs.runtime.categories.oversized, 1)
-  assert.equal(bundle.logs.runtime.categories['structured-or-sensitive'], 3)
-  assert.equal(bundle.logs.runtime.categories.other, 1)
-  const serialized = JSON.stringify(bundle)
-  assert.equal(serialized.includes(oversized), false)
-  assert.equal(serialized.includes(flowYaml), false)
-  assert.equal(serialized.includes(socksCredential), false)
-  assert.equal(serialized.includes(httpCredential), false)
-  assert.equal(serialized.includes(prefixed), false)
-  assertOriginalsAbsent(serialized)
+  assert.equal(bundle.logs.runtime.totalCount, 0)
+  assert.equal(bundle.logs.clash.source, 'clash')
+  assert.equal(bundle.logs.clash.totalCount, 0)
 })
 
-test('runtime collector copies only metadata and no hostile sentinel reaches clipboard', async () => {
-  const extraContext = {
+test('collector receives only Rust summaries and writes a typed bundle', async () => {
+  const context = {
     clipboardText: '',
-    localStorage: {
-      getItem(key) {
-        const values = {
-          'clash-verge-selected-proxy':
-            'Selected 11111111-2222-4333-8444-555555555555',
-          'xxlink:subscription-profile-generation':
-            '{"nodes":"raw-node-secret"}',
-          'xxlink:last-sync-error':
-            '{"message":"sync failed for refreshToken=raw-refresh-token","code":"SYNC"}',
-          'xxlink:last-update-check': '2026-06-29T10:00:00.000Z',
-        }
-        return values[key] ?? null
-      },
-    },
-    tauriMocks: {
-      getRuntimeLogs: async () => ({
-        [RANDOM_SENTINELS[4]]: [
-          ...HOSTILE_DIAGNOSTIC_SAMPLES.map((sample) => [
-            'WARN',
-            `runtime prefix ${sample.value}`,
-          ]),
-          ...RANDOM_SENTINELS.map((sentinel) => ['ERROR', new Error(sentinel)]),
-        ],
+    logSummaries: {
+      runtime: safeSummary('runtime', {
+        componentCount: 1,
+        totalCount: 1,
+        inspectedCount: 1,
+        levels: { ...emptyCounts(), warn: 1 },
+        categories: { ...emptyCategories(), network: 1 },
       }),
-      getClashLogs: async () =>
-        HOSTILE_DIAGNOSTIC_SAMPLES.map((sample) => ({
-          time: RANDOM_SENTINELS[5],
-          type: 'warning',
-          payload: sample.value,
-        })),
+      clash: safeSummary('clash'),
     },
   }
-  const {
-    copyDiagnosticsBundleToClipboard,
-    diagnosticsJsonHasForbiddenMaterial,
-  } = loadDiagnosticsModule(extraContext)
-
-  const bundle = await copyDiagnosticsBundleToClipboard({
-    now: () => new Date('2026-06-29T12:00:00.000Z'),
-  })
-
-  assert.equal(bundle.app.version, '2.4.15')
-  assert.equal(bundle.selectedNode.status, 'selected')
-  assert.equal(bundle.profileGeneration.status, 'present')
-  assert.equal(bundle.nodeSync.status, 'error')
-  assert.equal(extraContext.clipboardText.length > 0, true)
-  assert.equal(
-    JSON.stringify(JSON.parse(extraContext.clipboardText)),
-    JSON.stringify(bundle),
+  const { copyDiagnosticsBundleToClipboard, calls } =
+    loadDiagnosticsModule(context)
+  const bundle = await copyDiagnosticsBundleToClipboard({ maxLogItems: 25 })
+  assert.equal(bundle.logs.runtime.categories.network, 1)
+  assert.deepEqual(
+    calls.map(({ command }) => command),
+    [
+      'runtime_get_diagnostics_log_summaries',
+      'runtime_write_diagnostics_bundle',
+    ],
   )
-  assertOriginalsAbsent(extraContext.clipboardText)
-  assert.equal(extraContext.clipboardText.includes('runtime prefix'), false)
-  assert.equal(extraContext.clipboardText.includes('raw-refresh-token'), false)
-  assert.equal(extraContext.clipboardText.includes('raw-node-secret'), false)
+  assert.equal(calls[0].payload.maxItems, 25)
+  assert.equal(context.clipboardText.includes('private-token'), false)
+  assert.equal(context.clipboardText, JSON.stringify(bundle, null, 2))
+})
+
+test('clipboard final gate rejects an invalid schema before IPC', async () => {
+  const { writeDiagnosticsJsonToClipboard, calls } = loadDiagnosticsModule()
+  await assert.rejects(
+    () =>
+      writeDiagnosticsJsonToClipboard(
+        JSON.stringify({ schemaVersion: 1, forced: 'private-token' }),
+      ),
+    /forbidden material/i,
+  )
+  assert.equal(calls.length, 0)
+})
+
+test('clipboard writes canonical parsed JSON without duplicate-key bytes', async () => {
+  const { buildDiagnosticsBundle, writeDiagnosticsJsonToClipboard, calls } =
+    loadDiagnosticsModule()
+  const bundle = buildDiagnosticsBundle(
+    { appVersion: '2.4.17-dev' },
+    { now: () => new Date('2026-06-29T12:00:00.000Z') },
+  )
+  const canonical = JSON.stringify(bundle, null, 2)
+  const duplicateKeyJson = `{"app":{"version":"private-token"},${canonical.slice(1)}`
+  await writeDiagnosticsJsonToClipboard(duplicateKeyJson)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].command, 'runtime_write_diagnostics_bundle')
   assert.equal(
-    diagnosticsJsonHasForbiddenMaterial(extraContext.clipboardText),
+    JSON.stringify(calls[0].payload.bundle).includes('private-token'),
     false,
   )
 })
 
-test('clipboard final gate rejects a forced invalid value before invoking writer', async () => {
-  const { writeDiagnosticsJsonToClipboard } = loadDiagnosticsModule()
-  let writes = 0
-
-  await assert.rejects(
-    () =>
-      writeDiagnosticsJsonToClipboard(
-        JSON.stringify({ schemaVersion: 1, forced: RANDOM_SENTINELS[0] }),
-        async () => {
-          writes++
-        },
-      ),
-    /forbidden material/i,
-  )
-  assert.equal(writes, 0)
-})
-
-test('clipboard writes canonical parsed JSON without bytes from duplicate properties', async () => {
-  const { buildDiagnosticsBundle, writeDiagnosticsJsonToClipboard } =
-    loadDiagnosticsModule()
-  const bundle = buildDiagnosticsBundle(
-    { appVersion: '2.4.15' },
-    { now: () => new Date('2026-06-29T12:00:00.000Z') },
-  )
-  const canonical = JSON.stringify(bundle, null, 2)
-  const sentinel = RANDOM_SENTINELS[9]
-  const duplicateKeyJson = `{"app":{"version":"${sentinel}"},${canonical.slice(1)}`
-  const parsed = JSON.parse(duplicateKeyJson)
-  const parsedCanonical = JSON.stringify(parsed, null, 2)
-  let clipboardText = ''
-
-  assert.equal(parsed.app.version, bundle.app.version)
-  assert.equal(parsedCanonical.includes(sentinel), false)
-  await writeDiagnosticsJsonToClipboard(duplicateKeyJson, async (text) => {
-    clipboardText = text
-  })
-
-  assert.equal(clipboardText, parsedCanonical)
-  assert.equal(clipboardText.includes(sentinel), false)
-  assert.notEqual(clipboardText, duplicateKeyJson)
-})
-
-test('metadata-only diagnostics source has no free-form parser dependency', () => {
-  const source = fs.readFileSync(
+test('renderer source cannot fetch raw logs or use generic clipboard capability', () => {
+  const diagnostics = fs.readFileSync(
     path.join(repoRoot, 'src/services/diagnostics-bundle.ts'),
     'utf8',
   )
-  assert.doesNotMatch(source, /from ['"]js-yaml['"]/)
-  assert.doesNotMatch(source, /redactText|redactDiagnosticsValue|parseYaml/)
+  const commands = fs.readFileSync(
+    path.join(repoRoot, 'src/services/cmds.ts'),
+    'utf8',
+  )
+  assert.doesNotMatch(diagnostics, /getRuntimeLogs|getClashLogs/)
+  assert.doesNotMatch(diagnostics, /plugin-clipboard-manager/)
+  assert.doesNotMatch(diagnostics, /runtime\?: Record|clash\?: unknown\[\]/)
+  assert.doesNotMatch(commands, /getRuntimeLogs|getClashLogs/)
 })
