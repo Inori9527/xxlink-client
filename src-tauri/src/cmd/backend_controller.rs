@@ -1,6 +1,7 @@
 use crate::{
     cmd::secure_session::{
-        SecureSessionSecret, read_secret_internal, replacement_secret, session_operation_guard, write_secret_internal,
+        SecureSessionSecret, read_secret_internal, replacement_secret, session_generation, session_operation_guard,
+        write_secret_internal,
     },
     config::{
         Config, IProfiles, PrfItem, PrfOption,
@@ -82,6 +83,12 @@ impl Serialize for BackendError {
 pub struct SubjectBound<T> {
     subject_id: String,
     data: T,
+}
+
+struct AuthenticatedReply<T> {
+    subject_id: String,
+    data: T,
+    generation: u64,
 }
 
 impl<T> SubjectBound<T> {
@@ -377,6 +384,37 @@ async fn require_session() -> BackendResult<SecureSessionSecret> {
         .ok_or(BackendError::Auth)
 }
 
+struct SessionSnapshot {
+    secret: SecureSessionSecret,
+    generation: u64,
+}
+
+async fn session_snapshot() -> BackendResult<SessionSnapshot> {
+    let _guard = session_operation_guard().await;
+    let secret = require_session().await?;
+    Ok(SessionSnapshot {
+        secret,
+        generation: session_generation(),
+    })
+}
+
+async fn validate_session_snapshot(subject_id: &str, generation: u64) -> BackendResult<()> {
+    let _guard = session_operation_guard().await;
+    validate_session_snapshot_locked(subject_id, generation).await
+}
+
+async fn validate_session_snapshot_locked(subject_id: &str, generation: u64) -> BackendResult<()> {
+    if session_generation() != generation {
+        return Err(BackendError::Auth);
+    }
+    let current = require_session().await?;
+    if current.subject_id() == subject_id {
+        Ok(())
+    } else {
+        Err(BackendError::Auth)
+    }
+}
+
 async fn refresh_session(stale_access_token: &str) -> BackendResult<SecureSessionSecret> {
     let _guard = REFRESH_LOCK.lock().await;
     let current = read_secret_internal()
@@ -408,23 +446,14 @@ async fn refresh_session(stale_access_token: &str) -> BackendResult<SecureSessio
     Ok(replacement)
 }
 
-async fn authenticated_request_locked<T: DeserializeOwned>(
+async fn authenticated_request_with_snapshot<T: DeserializeOwned>(
     method: Method,
     path: &str,
     body: Option<Value>,
-) -> BackendResult<T> {
-    authenticated_request_bound_locked(method, path, body)
-        .await
-        .map(|reply| reply.data)
-        .map_err(|error| error.kind)
-}
-
-async fn authenticated_request_bound_locked<T: DeserializeOwned>(
-    method: Method,
-    path: &str,
-    body: Option<Value>,
-) -> Result<SubjectBound<T>, SubjectBoundError> {
-    let session = require_session().await.map_err(SubjectBoundError::without_subject)?;
+    snapshot: SessionSnapshot,
+) -> Result<AuthenticatedReply<T>, SubjectBoundError> {
+    let session = snapshot.secret;
+    let mut generation = snapshot.generation;
     let subject_id = session.subject_id().to_owned();
     let mut response = send_request(method.clone(), path, session.access_token(), body.as_ref())
         .await
@@ -433,21 +462,35 @@ async fn authenticated_request_bound_locked<T: DeserializeOwned>(
         let refreshed = match refresh_session(session.access_token()).await {
             Ok(refreshed) => refreshed,
             Err(kind) => {
-                let kind = enforce_authoritative_service_block(kind).await;
+                let kind = enforce_authoritative_service_block_for_session(kind, &subject_id, generation)
+                    .await
+                    .map_err(|kind| SubjectBoundError::for_subject(subject_id.clone(), kind))?;
                 return Err(SubjectBoundError::for_subject(subject_id, kind));
             }
         };
         if refreshed.subject_id() != subject_id {
             return Err(SubjectBoundError::for_subject(subject_id, BackendError::Auth));
         }
+        generation = session_generation();
         response = send_request(method, path, refreshed.access_token(), body.as_ref())
             .await
             .map_err(|kind| SubjectBoundError::for_subject(subject_id.clone(), kind))?;
     }
     match parse_response(response, path).await {
-        Ok(data) => Ok(SubjectBound { subject_id, data }),
+        Ok(data) => {
+            validate_session_snapshot(&subject_id, generation)
+                .await
+                .map_err(|kind| SubjectBoundError::for_subject(subject_id.clone(), kind))?;
+            Ok(AuthenticatedReply {
+                subject_id,
+                data,
+                generation,
+            })
+        }
         Err(kind) => {
-            let kind = enforce_authoritative_service_block(kind).await;
+            let kind = enforce_authoritative_service_block_for_session(kind, &subject_id, generation)
+                .await
+                .map_err(|kind| SubjectBoundError::for_subject(subject_id.clone(), kind))?;
             Err(SubjectBoundError::for_subject(subject_id, kind))
         }
     }
@@ -458,8 +501,13 @@ async fn authenticated_request<T: DeserializeOwned>(
     path: &str,
     body: Option<Value>,
 ) -> Result<SubjectBound<T>, SubjectBoundError> {
-    let _session_guard = session_operation_guard().await;
-    authenticated_request_bound_locked(method, path, body).await
+    let snapshot = session_snapshot().await.map_err(SubjectBoundError::without_subject)?;
+    authenticated_request_with_snapshot(method, path, body, snapshot)
+        .await
+        .map(|reply| SubjectBound {
+            subject_id: reply.subject_id,
+            data: reply.data,
+        })
 }
 
 #[tauri::command]
@@ -698,12 +746,31 @@ pub(crate) async fn deactivate_managed_profiles() -> BackendResult<()> {
 }
 
 async fn enforce_authoritative_service_block(kind: BackendError) -> BackendError {
-    if matches!(kind, BackendError::Auth | BackendError::ServiceBlocked) && deactivate_managed_profiles().await.is_err()
+    if matches!(
+        kind,
+        BackendError::Auth | BackendError::ServiceBlocked | BackendError::TrafficExceeded
+    ) && deactivate_managed_profiles().await.is_err()
     {
         BackendError::Unknown
     } else {
         kind
     }
+}
+
+async fn enforce_authoritative_service_block_for_session(
+    kind: BackendError,
+    subject_id: &str,
+    generation: u64,
+) -> BackendResult<BackendError> {
+    let _guard = session_operation_guard().await;
+    validate_session_snapshot_locked(subject_id, generation).await?;
+    Ok(enforce_authoritative_service_block(kind).await)
+}
+
+async fn deactivate_managed_profiles_for_session(subject_id: &str, generation: u64) -> BackendResult<()> {
+    let _guard = session_operation_guard().await;
+    validate_session_snapshot_locked(subject_id, generation).await?;
+    deactivate_managed_profiles().await
 }
 
 fn classify_managed_profile_status(status: StatusCode) -> Option<BackendError> {
@@ -803,22 +870,26 @@ fn has_authoritative_service(subscription: &InternalSubscription, now: DateTime<
             .unwrap_or(false)
 }
 
-async fn reconcile_managed_subscription_locked(_force: bool, subject_id: &str) -> BackendResult<()> {
-    deactivate_foreign_current_managed_profile(subject_id).await?;
-    let subscription =
-        match authenticated_request_locked::<Option<InternalSubscription>>(Method::GET, "/subscription/", None).await {
-            Ok(subscription) => subscription,
-            Err(error @ (BackendError::Auth | BackendError::ServiceBlocked | BackendError::TrafficExceeded)) => {
-                deactivate_managed_profiles().await?;
-                return Err(error);
-            }
-            Err(error) => return Err(error),
-        };
+async fn reconcile_managed_subscription_locked(_force: bool, snapshot: SessionSnapshot) -> BackendResult<()> {
+    let subject_id = snapshot.secret.subject_id().to_owned();
+    let response = match authenticated_request_with_snapshot::<Option<InternalSubscription>>(
+        Method::GET,
+        "/subscription/",
+        None,
+        snapshot,
+    )
+    .await
+    {
+        Ok(response) => response,
+        Err(error) => return Err(error.kind),
+    };
+    let subscription = response.data;
+    let generation = response.generation;
     let Some(subscription) = subscription else {
-        return deactivate_managed_profiles().await;
+        return deactivate_managed_profiles_for_session(&subject_id, generation).await;
     };
     if !has_authoritative_service(&subscription, Utc::now()) {
-        return deactivate_managed_profiles().await;
+        return deactivate_managed_profiles_for_session(&subject_id, generation).await;
     }
 
     let subscription_url = validated_subscription_url(&subscription.sub_url)?;
@@ -828,17 +899,20 @@ async fn reconcile_managed_subscription_locked(_force: bool, subject_id: &str) -
     let body = match download_managed_profile_content(subscription_url).await {
         Ok(body) => body,
         Err(error @ (BackendError::Auth | BackendError::ServiceBlocked | BackendError::TrafficExceeded)) => {
-            deactivate_managed_profiles().await?;
+            deactivate_managed_profiles_for_session(&subject_id, generation).await?;
             return Err(error);
         }
         Err(error) => return Err(error),
     };
-    let mut created = build_managed_items(body, subject_id)?;
+    let mut created = build_managed_items(body, &subject_id)?;
     let staged_uid = created
         .last()
         .and_then(|item| item.uid.clone())
         .ok_or(BackendError::InvalidResponse)?;
 
+    let _session_guard = session_operation_guard().await;
+    validate_session_snapshot_locked(&subject_id, generation).await?;
+    deactivate_foreign_current_managed_profile(&subject_id).await?;
     let Some(_profile_switch_guard) = crate::cmd::try_profile_switch_guard() else {
         return Err(BackendError::Unknown);
     };
@@ -895,10 +969,9 @@ async fn reconcile_managed_subscription_locked(_force: bool, subject_id: &str) -
 }
 
 async fn reconcile_managed_subscription(force: bool) -> Result<SubjectBound<()>, SubjectBoundError> {
-    let _session_guard = session_operation_guard().await;
-    let session = require_session().await.map_err(SubjectBoundError::without_subject)?;
-    let subject_id = session.subject_id().to_owned();
-    match reconcile_managed_subscription_locked(force, &subject_id).await {
+    let snapshot = session_snapshot().await.map_err(SubjectBoundError::without_subject)?;
+    let subject_id = snapshot.secret.subject_id().to_owned();
+    match reconcile_managed_subscription_locked(force, snapshot).await {
         Ok(data) => Ok(SubjectBound { subject_id, data }),
         Err(kind) => Err(SubjectBoundError::for_subject(subject_id, kind)),
     }

@@ -1,6 +1,6 @@
 use keyring::{Entry, Error as KeyringError};
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tokio::sync::{Mutex, MutexGuard};
 
 const VAULT_SERVICE: &str = "com.xxlink.desktop.secure-session";
@@ -9,6 +9,7 @@ const VAULT_VERSION: u8 = 1;
 static SESSION_OPERATION_LOCK: Mutex<()> = Mutex::const_new(());
 static VAULT_IO_LOCK: Mutex<()> = Mutex::const_new(());
 static LOGOUT_REQUESTED: AtomicBool = AtomicBool::new(false);
+static SESSION_GENERATION: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -41,6 +42,14 @@ impl SecureSessionSecret {
 
 pub(crate) async fn session_operation_guard() -> MutexGuard<'static, ()> {
     SESSION_OPERATION_LOCK.lock().await
+}
+
+pub(crate) fn session_generation() -> u64 {
+    SESSION_GENERATION.load(Ordering::Acquire)
+}
+
+fn advance_session_generation() {
+    SESSION_GENERATION.fetch_add(1, Ordering::AcqRel);
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -129,7 +138,9 @@ pub(crate) async fn write_secret_internal(secret: SecureSessionSecret) -> Result
     if LOGOUT_REQUESTED.load(Ordering::Acquire) {
         return Err(());
     }
-    write_secret_without_guard(secret).await
+    write_secret_without_guard(secret).await?;
+    advance_session_generation();
+    Ok(())
 }
 
 async fn write_pending_secret_internal(secret: SecureSessionSecret) -> Result<(), ()> {
@@ -202,12 +213,15 @@ pub async fn secure_session_write(
     })
     .await
     .map_err(|_| VaultErrorKind::WriteFailed.to_string())?
-    .map_err(|error| error.to_string())
+    .map_err(|error| error.to_string())?;
+    advance_session_generation();
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn secure_session_delete() -> Result<(), String> {
     LOGOUT_REQUESTED.store(true, Ordering::Release);
+    advance_session_generation();
     if let Some(mut secret) = read_secret_raw_internal()
         .await
         .map_err(|_| VaultErrorKind::ReadFailed.to_string())?
@@ -259,6 +273,7 @@ pub async fn secure_session_recover_pending_logout() -> Result<PendingLogoutReco
     }
 
     LOGOUT_REQUESTED.store(true, Ordering::Release);
+    advance_session_generation();
     let _guard = session_operation_guard().await;
     let cleaned = crate::cmd::backend_controller::deactivate_managed_profiles()
         .await

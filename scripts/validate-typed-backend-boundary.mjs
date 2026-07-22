@@ -108,9 +108,11 @@ assert(
 )
 
 assert(
-  rustController.includes('session_operation_guard().await') &&
-    secureSession.includes('SESSION_OPERATION_LOCK'),
-  'authenticated operations are not serialized with session replacement',
+  rustController.includes('struct SessionSnapshot') &&
+    rustController.includes('validate_session_snapshot_locked') &&
+    rustController.includes('session_generation()') &&
+    secureSession.includes('SESSION_GENERATION'),
+  'concurrent authenticated operations are not protected by session generation validation',
 )
 assert(
   rustController.includes('option_env!("VITE_API_BASE_URL")') &&
@@ -151,7 +153,7 @@ assert(
 assert(
   rustController.includes('managed_profile_marker(subject_id)') &&
     rustController.includes(
-      'deactivate_foreign_current_managed_profile(subject_id)',
+      'deactivate_foreign_current_managed_profile(&subject_id)',
     ) &&
     secureSession.includes('deactivate_managed_profiles()'),
   'account replacement can retain a managed profile owned by the previous subject',
