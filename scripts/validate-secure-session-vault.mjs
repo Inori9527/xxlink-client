@@ -99,18 +99,31 @@ const mine = readSource('src/pages/mine.tsx')
 const api = readSource('src/services/api.ts')
 const main = readSource('src/main.tsx')
 const rust = readSource('src-tauri/src/cmd/secure_session.rs')
+const backendController = readSource('src-tauri/src/cmd/backend_controller.rs')
 const cargo = readSource('src-tauri/Cargo.toml')
 
-assert.match(vault, /await writeAndVerify\([\s\S]*?clearLegacySession\(\)/)
-assert.match(vault, /stored\.subjectId !== user\.id/)
+assert.match(
+  vault,
+  /secure_session_migrate_legacy[\s\S]*?probeSession\(user\.id\)[\s\S]*?clearLegacySession\(\)/,
+)
+assert.match(vault, /status === 'subject_mismatch'/)
 assert.match(vault, /catch \{[\s\S]*?authStore\.preserveCachedShell\(\)/)
 assert.match(main, /await initializeSecureSession\(\)/)
 assert.match(vault, /export async function initializeSecureSession/)
 assert.match(vault, /export async function manualLogout/)
-assert.match(vault, /secure_session_delete[\s\S]*?authStore\.clearAuth\(\)/)
+assert.match(vault, /secure_session_logout[\s\S]*?authStore\.clearAuth\(\)/)
 assert.match(
   rust,
-  /logout_pending = true[\s\S]*?deactivate_managed_profiles\(\)[\s\S]*?delete_credential_internal\(\)/,
+  /write_logout_marker_internal\(\)[\s\S]*?session_operation_guard\(\)[\s\S]*?deactivate_managed_profiles\(\)[\s\S]*?delete_credential_internal\(\)/,
+)
+assert.match(rust, /LOGIN_ATTEMPT_GENERATION/)
+assert.match(
+  backendController,
+  /begin_login_attempt\(\)[\s\S]*?replace_active_session_for_login\(secret, login_attempt\)/,
+)
+assert.match(
+  backendController,
+  /secure_session_logout[\s\S]*?REFRESH_LOCK\.lock\(\)[\s\S]*?take_session_for_logout\(\)[\s\S]*?refresh_token\(\)/,
 )
 assert.match(
   vault,
@@ -118,6 +131,7 @@ assert.match(
 )
 assert.match(mine, /const cleaned = await manualLogout\(\)/)
 assert.match(vault, /VAULT_OPERATION_TIMEOUT_MS/)
+assert.doesNotMatch(vault, /withVaultTimeout\([\s\S]{0,80}secure_session_login/)
 assert.doesNotMatch(login, /accessToken|refreshToken|apiLogin|setAuth/)
 assert.doesNotMatch(mine, /accessToken|refreshToken|apiLogout|clearAuth/)
 assert.doesNotMatch(api, /state\.(accessToken|refreshToken)|authStore\.setAuth/)

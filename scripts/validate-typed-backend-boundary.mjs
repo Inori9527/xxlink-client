@@ -20,7 +20,7 @@ const deepLinkResolver = read('src-tauri/src/utils/resolve/scheme.rs')
 const fileHelpers = read('src-tauri/src/utils/help.rs')
 const rendererConfig = read('src/services/config.ts')
 const logoutDelete = secureSession.slice(
-  secureSession.indexOf('pub async fn secure_session_delete'),
+  secureSession.indexOf('pub(crate) async fn take_session_for_logout'),
   secureSession.indexOf('async fn delete_credential_internal'),
 )
 const consumers = [
@@ -160,6 +160,7 @@ assert(
 )
 assert(
   secureSession.includes('logout_pending = true') &&
+    secureSession.includes('write_logout_marker_internal') &&
     logoutDelete.indexOf('LOGOUT_REQUESTED.store(true') <
       logoutDelete.indexOf('session_operation_guard().await') &&
     secureSession.includes('secure_session_recover_pending_logout') &&

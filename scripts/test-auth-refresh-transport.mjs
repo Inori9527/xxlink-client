@@ -1,131 +1,90 @@
 import assert from 'node:assert/strict'
-import fs from 'node:fs'
-import { createRequire } from 'node:module'
-import path from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import test from 'node:test'
-import vm from 'node:vm'
 
-import ts from 'typescript'
+const root = resolve(import.meta.dirname, '..')
+const read = (path) => readFileSync(resolve(root, path), 'utf8')
 
-const repoRoot = path.resolve(import.meta.dirname, '..')
-const require = createRequire(import.meta.url)
+const auth = read('src/services/auth.ts')
+const vault = read('src/services/secure-session-vault.ts')
+const rustController = read('src-tauri/src/cmd/backend_controller.rs')
+const rustVault = read('src-tauri/src/cmd/secure_session.rs')
+const lib = read('src-tauri/src/lib.rs')
 
-function loadTsModule(relativePath, extraContext = {}) {
-  const sourcePath = path.join(repoRoot, relativePath)
-  const source = fs.readFileSync(sourcePath, 'utf8')
-  const { outputText } = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2022,
-      esModuleInterop: true,
-    },
-    fileName: sourcePath,
-  })
-  const module = { exports: {} }
-  vm.runInNewContext(outputText, {
-    AbortController,
-    clearTimeout,
-    exports: module.exports,
-    module,
-    require,
-    setTimeout,
-    ...extraContext,
-  })
-  return module.exports
-}
-
-test('auth refresh transport sends only the body token and omits credentials', () => {
-  const { createRefreshRequestInit } = loadTsModule(
-    'src/services/auth-refresh-transport.ts',
+test('authenticated session transport is owned by the Rust controller', () => {
+  assert.match(rustController, /post\(endpoint\("\/auth\/login"\)\)/)
+  assert.match(rustController, /post\(endpoint\("\/auth\/refresh"\)\)/)
+  assert.match(rustController, /post\(endpoint\("\/auth\/logout"\)\)/)
+  assert.match(rustController, /current\.refresh_token\(\)/)
+  assert.match(
+    rustController,
+    /replace_active_session_for_login\(secret, login_attempt\)/,
   )
+})
 
-  const init = createRefreshRequestInit('redacted-refresh-token')
-
-  assert.equal(init.method, 'POST')
-  assert.equal(init.credentials, 'omit')
+test('ordinary renderer auth transport cannot receive session tokens', () => {
+  for (const forbidden of [
+    'AuthTokens',
+    'LoginResult',
+    'apiLogin',
+    'apiLogout',
+    'apiRefreshToken',
+    'apiGoogleOAuthCallback',
+    '/auth/refresh',
+  ]) {
+    assert.equal(
+      auth.includes(forbidden),
+      false,
+      `${forbidden} remains in auth.ts`,
+    )
+  }
   assert.equal(
-    JSON.stringify(init.headers),
-    JSON.stringify({ 'Content-Type': 'application/json' }),
-  )
-  assert.equal(JSON.parse(init.body).refreshToken, 'redacted-refresh-token')
-  assert.equal(
-    JSON.stringify(init.headers).toLowerCase().includes('cookie'),
+    existsSync(resolve(root, 'src/services/auth-refresh-transport.ts')),
     false,
   )
 })
 
-test('auth refresh transport executes through browser fetch without cookies', async () => {
-  let observed = null
-  const { fetchRefreshWithBodyToken } = loadTsModule(
-    'src/services/auth-refresh-transport.ts',
-    {
-      fetch: async (url, init) => {
-        observed = { url, init }
-        return { ok: true, status: 200 }
-      },
-    },
-  )
-
-  await fetchRefreshWithBodyToken(
-    'https://api.xxlink.net/api/v1/auth/refresh',
-    'redacted-refresh-token',
-    5000,
-  )
-
-  assert.equal(observed.url, 'https://api.xxlink.net/api/v1/auth/refresh')
-  assert.equal(observed.init.credentials, 'omit')
-  assert.equal(observed.init.cache, 'no-store')
-  assert.equal(observed.init.headers.Cookie, undefined)
-  assert.equal(
-    JSON.parse(observed.init.body).refreshToken,
-    'redacted-refresh-token',
-  )
+test('vault commands return only state or sanitized user data', () => {
+  for (const command of [
+    'secure_session_probe',
+    'secure_session_migrate_legacy',
+    'secure_session_login',
+    'secure_session_logout',
+  ]) {
+    assert.match(lib, new RegExp(`cmd::${command}\\b`))
+    assert.equal(vault.includes(`'${command}'`), true)
+  }
+  for (const retired of ['secure_session_read', 'secure_session_write']) {
+    assert.doesNotMatch(lib, new RegExp(`cmd::${retired}\\b`))
+    assert.doesNotMatch(rustVault, new RegExp(`fn\\s+${retired}\\b`))
+    assert.equal(vault.includes(`'${retired}'`), false)
+  }
+  assert.doesNotMatch(lib, /cmd::secure_session_delete\b/)
+  assert.doesNotMatch(vault, /invoke<[^>]*(?:AuthTokens|VaultSecret)/)
 })
 
-test('auth refresh transport classifies cookie csrf as a transport/session error', () => {
-  const { isRefreshTransportSessionError } = loadTsModule(
-    'src/services/auth-refresh-transport.ts',
-  )
-
-  assert.equal(
-    isRefreshTransportSessionError({
-      status: 403,
-      code: 'CSRF_ORIGIN_FORBIDDEN',
-    }),
-    true,
-  )
-  assert.equal(
-    isRefreshTransportSessionError({
-      status: 401,
-      code: 'INVALID_REFRESH_TOKEN',
-    }),
-    false,
-  )
+test('legacy token access is isolated to the one-time migration bridge', () => {
+  assert.match(vault, /function readLegacySession\(\)/)
+  assert.match(vault, /secure_session_migrate_legacy/)
+  assert.match(vault, /clearLegacySession\(\)/)
+  assert.match(vault, /probeSession\(user\.id\)/)
+  assert.match(rustVault, /read_secret_raw_internal\(\)[\s\S]*?\.is_some\(\)/)
+  assert.doesNotMatch(vault, /return\s+\{\s*accessToken:\s*secret\./)
 })
 
-test('apiRefreshToken bypasses plugin fetch for body-only refresh transport', () => {
-  const authSource = fs.readFileSync(
-    path.join(repoRoot, 'src/services/auth.ts'),
-    'utf8',
+test('manual logout atomically takes the vault before detached server cleanup', () => {
+  const logoutStart = rustController.indexOf(
+    'pub async fn secure_session_logout()',
   )
-
-  assert.match(authSource, /fetchRefreshWithBodyToken\(/)
-  assert.doesNotMatch(
-    authSource,
-    /post<AuthTokens>\('\/auth\/refresh',\s*\{\s*refreshToken\s*\}\)/,
+  const logoutSource = rustController.slice(logoutStart)
+  assert.ok(logoutStart >= 0)
+  assert.ok(
+    logoutSource.indexOf('take_session_for_logout().await') <
+      logoutSource.indexOf('tauri::async_runtime::spawn'),
   )
   assert.doesNotMatch(
-    authSource,
-    /fetchWithTimeout\(\s*`\$\{BASE_URL\}\/auth\/refresh`/,
+    vault,
+    /withVaultTimeout\(invoke\('secure_session_logout'\)\)/,
   )
-})
-
-test('api auto-refresh maps backend cookie csrf to auth refresh transport code', () => {
-  const apiSource = fs.readFileSync(
-    path.join(repoRoot, 'src/services/api.ts'),
-    'utf8',
-  )
-
-  assert.match(apiSource, /isRefreshTransportSessionError\(error\)/)
-  assert.match(apiSource, /AUTH_REFRESH_TRANSPORT_FORBIDDEN_CODE/)
 })

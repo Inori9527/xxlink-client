@@ -5,11 +5,13 @@ use tokio::sync::{Mutex, MutexGuard};
 
 const VAULT_SERVICE: &str = "com.xxlink.desktop.secure-session";
 const VAULT_ACCOUNT: &str = "primary";
+const VAULT_LOGOUT_MARKER_ACCOUNT: &str = "logout-pending";
 const VAULT_VERSION: u8 = 1;
 static SESSION_OPERATION_LOCK: Mutex<()> = Mutex::const_new(());
 static VAULT_IO_LOCK: Mutex<()> = Mutex::const_new(());
 static LOGOUT_REQUESTED: AtomicBool = AtomicBool::new(false);
 static SESSION_GENERATION: AtomicU64 = AtomicU64::new(1);
+static LOGIN_ATTEMPT_GENERATION: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -52,6 +54,14 @@ fn advance_session_generation() {
     SESSION_GENERATION.fetch_add(1, Ordering::AcqRel);
 }
 
+pub(crate) fn begin_login_attempt() -> u64 {
+    LOGIN_ATTEMPT_GENERATION.fetch_add(1, Ordering::AcqRel) + 1
+}
+
+fn invalidate_login_attempts() {
+    LOGIN_ATTEMPT_GENERATION.fetch_add(1, Ordering::AcqRel);
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 enum VaultErrorKind {
@@ -77,6 +87,10 @@ impl std::fmt::Display for VaultErrorKind {
 
 fn entry() -> Result<Entry, VaultErrorKind> {
     Entry::new(VAULT_SERVICE, VAULT_ACCOUNT).map_err(|_| VaultErrorKind::Unavailable)
+}
+
+fn logout_marker_entry() -> Result<Entry, VaultErrorKind> {
+    Entry::new(VAULT_SERVICE, VAULT_LOGOUT_MARKER_ACCOUNT).map_err(|_| VaultErrorKind::Unavailable)
 }
 
 fn decode_secret(value: &str) -> Result<SecureSessionSecret, VaultErrorKind> {
@@ -143,6 +157,34 @@ pub(crate) async fn write_secret_internal(secret: SecureSessionSecret) -> Result
     Ok(())
 }
 
+pub(crate) async fn replace_active_session_for_login(
+    secret: SecureSessionSecret,
+    login_attempt: u64,
+) -> Result<(), ()> {
+    let _guard = session_operation_guard().await;
+    if LOGIN_ATTEMPT_GENERATION.load(Ordering::Acquire) != login_attempt {
+        return Err(());
+    }
+    if read_logout_marker_internal().await? {
+        crate::cmd::backend_controller::deactivate_managed_profiles()
+            .await
+            .map_err(|_| ())?;
+        delete_credential_internal().await?;
+        delete_logout_marker_internal().await?;
+    }
+    let existing = read_secret_raw_internal().await?;
+    if existing
+        .as_ref()
+        .is_some_and(|current| current.subject_id() != secret.subject_id() || current.is_logout_pending())
+    {
+        crate::cmd::backend_controller::deactivate_managed_profiles()
+            .await
+            .map_err(|_| ())?;
+    }
+    LOGOUT_REQUESTED.store(false, Ordering::Release);
+    write_secret_internal(secret).await
+}
+
 async fn write_pending_secret_internal(secret: SecureSessionSecret) -> Result<(), ()> {
     let _guard = VAULT_IO_LOCK.lock().await;
     write_secret_without_guard(secret).await
@@ -176,74 +218,117 @@ pub(crate) fn replacement_secret(
     decode_secret(&encode_secret(subject_id, access_token, refresh_token).map_err(|_| ())?).map_err(|_| ())
 }
 
-#[tauri::command]
-pub async fn secure_session_read() -> Result<Option<SecureSessionSecret>, String> {
-    let _guard = session_operation_guard().await;
-    read_secret_internal()
-        .await
-        .map_err(|_| VaultErrorKind::ReadFailed.to_string())
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SecureSessionProbe {
+    Operational,
+    Missing,
+    SubjectMismatch,
 }
 
 #[tauri::command]
-pub async fn secure_session_write(
+pub async fn secure_session_probe(subject_id: String) -> Result<SecureSessionProbe, String> {
+    let _guard = session_operation_guard().await;
+    let secret = read_secret_internal()
+        .await
+        .map_err(|_| VaultErrorKind::ReadFailed.to_string())?;
+    Ok(match secret {
+        Some(secret) if secret.subject_id() == subject_id => SecureSessionProbe::Operational,
+        Some(_) => SecureSessionProbe::SubjectMismatch,
+        None => SecureSessionProbe::Missing,
+    })
+}
+
+#[tauri::command]
+pub async fn secure_session_migrate_legacy(
     subject_id: String,
     access_token: String,
     refresh_token: String,
 ) -> Result<(), String> {
     let _guard = session_operation_guard().await;
-    let existing = read_secret_raw_internal()
-        .await
-        .map_err(|_| VaultErrorKind::ReadFailed.to_string())?;
-    if existing
-        .as_ref()
-        .is_some_and(|secret| secret.subject_id() != subject_id || secret.is_logout_pending())
-    {
-        crate::cmd::backend_controller::deactivate_managed_profiles()
-            .await
-            .map_err(|_| VaultErrorKind::WriteFailed.to_string())?;
-    }
-    LOGOUT_REQUESTED.store(false, Ordering::Release);
-    let encoded = encode_secret(subject_id, access_token, refresh_token).map_err(|error| error.to_string())?;
-    let _vault_guard = VAULT_IO_LOCK.lock().await;
-    if LOGOUT_REQUESTED.load(Ordering::Acquire) {
-        return Err(VaultErrorKind::WriteFailed.to_string());
-    }
-    tauri::async_runtime::spawn_blocking(move || {
-        entry()?.set_password(&encoded).map_err(|_| VaultErrorKind::WriteFailed)
-    })
-    .await
-    .map_err(|_| VaultErrorKind::WriteFailed.to_string())?
-    .map_err(|error| error.to_string())?;
-    advance_session_generation();
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn secure_session_delete() -> Result<(), String> {
-    LOGOUT_REQUESTED.store(true, Ordering::Release);
-    advance_session_generation();
-    if let Some(mut secret) = read_secret_raw_internal()
+    if read_secret_raw_internal()
         .await
         .map_err(|_| VaultErrorKind::ReadFailed.to_string())?
+        .is_some()
     {
-        secret.logout_pending = true;
-        if write_pending_secret_internal(secret).await.is_err() {
-            let _ = delete_credential_internal().await;
-            return Err(VaultErrorKind::WriteFailed.to_string());
-        }
+        return Err(VaultErrorKind::WriteFailed.to_string());
     }
+    let secret = replacement_secret(subject_id, access_token, refresh_token)
+        .map_err(|_| VaultErrorKind::Corrupted.to_string())?;
+    LOGOUT_REQUESTED.store(false, Ordering::Release);
+    write_secret_internal(secret)
+        .await
+        .map_err(|_| VaultErrorKind::WriteFailed.to_string())
+}
+
+pub(crate) async fn take_session_for_logout() -> Result<Option<SecureSessionSecret>, String> {
+    LOGOUT_REQUESTED.store(true, Ordering::Release);
+    invalidate_login_attempts();
+    advance_session_generation();
+    let marker_written = write_logout_marker_internal().await.is_ok();
     let _guard = session_operation_guard().await;
-    crate::cmd::backend_controller::deactivate_managed_profiles()
+    let secret = read_secret_raw_internal().await.ok().flatten();
+    if let Some(mut pending_secret) = secret.clone() {
+        pending_secret.logout_pending = true;
+        let _ = write_pending_secret_internal(pending_secret).await;
+    }
+    let profiles_cleaned = crate::cmd::backend_controller::deactivate_managed_profiles()
         .await
-        .map_err(|_| VaultErrorKind::DeleteFailed.to_string())?;
-    delete_credential_internal()
-        .await
-        .map_err(|_| VaultErrorKind::DeleteFailed.to_string())
+        .is_ok();
+    let credential_cleaned = delete_credential_internal().await.is_ok();
+    let marker_cleaned = if profiles_cleaned && credential_cleaned {
+        delete_logout_marker_internal().await.is_ok()
+    } else {
+        false
+    };
+    if profiles_cleaned && credential_cleaned && marker_cleaned {
+        Ok(secret)
+    } else {
+        if !marker_written {
+            let _ = write_logout_marker_internal().await;
+        }
+        Err(VaultErrorKind::DeleteFailed.to_string())
+    }
 }
 
 async fn delete_credential_internal() -> Result<(), ()> {
     let _guard = VAULT_IO_LOCK.lock().await;
     tauri::async_runtime::spawn_blocking(move || match entry()?.delete_credential() {
+        Ok(()) | Err(KeyringError::NoEntry) => Ok(()),
+        Err(_) => Err(VaultErrorKind::DeleteFailed),
+    })
+    .await
+    .map_err(|_| ())?
+    .map_err(|_| ())
+}
+
+async fn write_logout_marker_internal() -> Result<(), ()> {
+    let _guard = VAULT_IO_LOCK.lock().await;
+    tauri::async_runtime::spawn_blocking(move || {
+        logout_marker_entry()?
+            .set_password("pending")
+            .map_err(|_| VaultErrorKind::WriteFailed)
+    })
+    .await
+    .map_err(|_| ())?
+    .map_err(|_| ())
+}
+
+async fn read_logout_marker_internal() -> Result<bool, ()> {
+    let _guard = VAULT_IO_LOCK.lock().await;
+    tauri::async_runtime::spawn_blocking(move || match logout_marker_entry()?.get_password() {
+        Ok(_) => Ok(true),
+        Err(KeyringError::NoEntry) => Ok(false),
+        Err(_) => Err(VaultErrorKind::ReadFailed),
+    })
+    .await
+    .map_err(|_| ())?
+    .map_err(|_| ())
+}
+
+async fn delete_logout_marker_internal() -> Result<(), ()> {
+    let _guard = VAULT_IO_LOCK.lock().await;
+    tauri::async_runtime::spawn_blocking(move || match logout_marker_entry()?.delete_credential() {
         Ok(()) | Err(KeyringError::NoEntry) => Ok(()),
         Err(_) => Err(VaultErrorKind::DeleteFailed),
     })
@@ -261,10 +346,14 @@ pub struct PendingLogoutRecovery {
 
 #[tauri::command]
 pub async fn secure_session_recover_pending_logout() -> Result<PendingLogoutRecovery, String> {
-    let pending = read_secret_raw_internal()
+    let marker_pending = read_logout_marker_internal()
         .await
-        .map_err(|_| VaultErrorKind::ReadFailed.to_string())?
-        .is_some_and(|secret| secret.is_logout_pending());
+        .map_err(|_| VaultErrorKind::ReadFailed.to_string())?;
+    let secret_pending = read_secret_raw_internal()
+        .await
+        .map(|secret| secret.is_some_and(|value| value.is_logout_pending()))
+        .unwrap_or(marker_pending);
+    let pending = marker_pending || secret_pending;
     if !pending {
         return Ok(PendingLogoutRecovery {
             pending: false,
@@ -273,12 +362,19 @@ pub async fn secure_session_recover_pending_logout() -> Result<PendingLogoutReco
     }
 
     LOGOUT_REQUESTED.store(true, Ordering::Release);
+    invalidate_login_attempts();
     advance_session_generation();
     let _guard = session_operation_guard().await;
-    let cleaned = crate::cmd::backend_controller::deactivate_managed_profiles()
+    let profiles_cleaned = crate::cmd::backend_controller::deactivate_managed_profiles()
         .await
-        .is_ok()
-        && delete_credential_internal().await.is_ok();
+        .is_ok();
+    let credential_cleaned = delete_credential_internal().await.is_ok();
+    let marker_cleaned = if profiles_cleaned && credential_cleaned {
+        delete_logout_marker_internal().await.is_ok()
+    } else {
+        false
+    };
+    let cleaned = profiles_cleaned && credential_cleaned && marker_cleaned;
     Ok(PendingLogoutRecovery { pending: true, cleaned })
 }
 
@@ -329,6 +425,14 @@ mod tests {
             .map(|secret| secret.is_logout_pending()),
             Ok(true)
         );
+    }
+
+    #[test]
+    fn newest_login_attempt_invalidates_older_attempts() {
+        let older = begin_login_attempt();
+        let newer = begin_login_attempt();
+        assert_ne!(older, newer);
+        assert_eq!(LOGIN_ATTEMPT_GENERATION.load(Ordering::Acquire), newer);
     }
 
     #[tokio::test]

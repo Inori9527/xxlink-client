@@ -4,28 +4,8 @@
  * it uses browser fetch with credentials omitted so the plugin cookie jar cannot
  * turn a desktop body-token refresh into a cookie-CSRF refresh.
  */
-import { fetchRefreshWithBodyToken } from '@/services/auth-refresh-transport'
 import { BASE_URL } from '@/services/config'
-import {
-  DEFAULT_AUTH_TIMEOUT_MS,
-  DEFAULT_REFRESH_TIMEOUT_MS,
-  fetchWithTimeout,
-} from '@/services/http'
-
-export interface AuthUser {
-  id: string
-  email: string
-  role: 'USER' | 'ADMIN'
-}
-
-export interface AuthTokens {
-  accessToken: string
-  refreshToken: string
-}
-
-export interface LoginResult extends AuthTokens {
-  user: AuthUser
-}
+import { DEFAULT_AUTH_TIMEOUT_MS, fetchWithTimeout } from '@/services/http'
 
 export interface ApiResponse<T> {
   success: boolean
@@ -59,9 +39,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     },
-    path === '/auth/refresh'
-      ? DEFAULT_REFRESH_TIMEOUT_MS
-      : DEFAULT_AUTH_TIMEOUT_MS,
+    DEFAULT_AUTH_TIMEOUT_MS,
   )
 
   let json: ApiResponse<T>
@@ -86,13 +64,6 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return json.data
 }
 
-export async function apiLogin(
-  email: string,
-  password: string,
-): Promise<LoginResult> {
-  return post<LoginResult>('/auth/login', { email, password })
-}
-
 export async function apiRegister(
   email: string,
   password: string,
@@ -101,46 +72,4 @@ export async function apiRegister(
     email,
     password,
   })
-}
-
-export async function apiLogout(refreshToken: string): Promise<void> {
-  await post<unknown>('/auth/logout', { refreshToken })
-}
-
-export async function apiRefreshToken(
-  refreshToken: string,
-): Promise<AuthTokens> {
-  const res = await fetchRefreshWithBodyToken(
-    `${BASE_URL}/auth/refresh`,
-    refreshToken,
-    DEFAULT_REFRESH_TIMEOUT_MS,
-  )
-
-  let json: ApiResponse<AuthTokens>
-  try {
-    json = (await res.json()) as ApiResponse<AuthTokens>
-  } catch {
-    throw new AuthError(
-      `Server returned non-JSON response (${res.status})`,
-      res.status,
-    )
-  }
-
-  if (!res.ok || !json.success) {
-    const { message, code } = getEnvelopeError(json.error)
-    throw new AuthError(message, res.status, code)
-  }
-
-  if (json.data === undefined) {
-    throw new AuthError('Server response missing data', res.status)
-  }
-
-  return json.data
-}
-
-export async function apiGoogleOAuthCallback(
-  code: string,
-  redirectUri: string,
-): Promise<LoginResult> {
-  return post<LoginResult>('/auth/oauth/google', { code, redirectUri })
 }

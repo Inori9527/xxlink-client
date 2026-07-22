@@ -1,9 +1,9 @@
 import { invoke } from '@tauri-apps/api/core'
 
-import { apiLogin, apiLogout, type AuthTokens, type AuthUser } from './auth'
-import { authStore } from './auth-store'
+import { AuthError } from './auth'
+import { authStore, type AuthUser } from './auth-store'
 
-type VaultSecret = AuthTokens & { version: number; subjectId: string }
+type SessionProbe = 'operational' | 'missing' | 'subject_mismatch'
 const VAULT_OPERATION_TIMEOUT_MS = 5_000
 const LEGACY_ACCESS_TOKEN_KEY = 'xxlink_access_token'
 const LEGACY_REFRESH_TOKEN_KEY = 'xxlink_refresh_token'
@@ -22,35 +22,10 @@ export class SecureSessionUnavailableError extends Error {
   }
 }
 
-function toVaultError(error: unknown): SecureSessionUnavailableError {
-  const kind =
-    typeof error === 'string' &&
-    [
-      'unavailable',
-      'corrupted',
-      'write_failed',
-      'read_failed',
-      'delete_failed',
-    ].includes(error)
-      ? (error as SecureSessionUnavailableError['kind'])
-      : 'unavailable'
-  return new SecureSessionUnavailableError(kind)
-}
-
-function isValidSecret(value: VaultSecret | null): value is VaultSecret {
-  return Boolean(
-    value &&
-    value.version === 1 &&
-    typeof value.subjectId === 'string' &&
-    value.subjectId.length > 0 &&
-    typeof value.accessToken === 'string' &&
-    value.accessToken.length > 0 &&
-    typeof value.refreshToken === 'string' &&
-    value.refreshToken.length > 0,
-  )
-}
-
-function readLegacySession(): AuthTokens | null {
+function readLegacySession(): {
+  accessToken: string
+  refreshToken: string
+} | null {
   try {
     const accessToken = localStorage.getItem(LEGACY_ACCESS_TOKEN_KEY)
     const refreshToken = localStorage.getItem(LEGACY_REFRESH_TOKEN_KEY)
@@ -65,7 +40,7 @@ function clearLegacySession(): void {
     localStorage.removeItem(LEGACY_ACCESS_TOKEN_KEY)
     localStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY)
   } catch {
-    // A later startup can retry cleanup after the secure vault is confirmed.
+    // A later startup can retry cleanup after migration is confirmed.
   }
 }
 
@@ -84,46 +59,20 @@ async function withVaultTimeout<T>(operation: Promise<T>): Promise<T> {
   }
 }
 
-async function readVault(): Promise<VaultSecret | null> {
-  try {
-    const value = await withVaultTimeout(
-      invoke<VaultSecret | null>('secure_session_read'),
-    )
-    if (value === null) return null
-    if (!isValidSecret(value))
-      throw new SecureSessionUnavailableError('corrupted')
-    return value
-  } catch (error) {
-    if (error instanceof SecureSessionUnavailableError) throw error
-    throw toVaultError(error)
+function toLoginError(error: unknown): Error {
+  if (error === 'auth') return new AuthError('Authentication failed', 401)
+  if (error === 'network') {
+    const networkError = new Error('Network request failed')
+    networkError.name = 'NetworkError'
+    return networkError
   }
+  return new Error('Authentication service unavailable')
 }
 
-async function writeAndVerify(
-  tokens: AuthTokens,
-  subjectId: string,
-): Promise<void> {
-  try {
-    await withVaultTimeout(
-      invoke('secure_session_write', {
-        subjectId,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-      }),
-    )
-    const confirmed = await readVault()
-    if (
-      !confirmed ||
-      confirmed.subjectId !== subjectId ||
-      confirmed.accessToken !== tokens.accessToken ||
-      confirmed.refreshToken !== tokens.refreshToken
-    ) {
-      throw new SecureSessionUnavailableError('read_failed')
-    }
-  } catch (error) {
-    if (error instanceof SecureSessionUnavailableError) throw error
-    throw toVaultError(error)
-  }
+async function probeSession(subjectId: string): Promise<SessionProbe> {
+  return withVaultTimeout(
+    invoke<SessionProbe>('secure_session_probe', { subjectId }),
+  )
 }
 
 export async function initializeSecureSession(): Promise<void> {
@@ -139,6 +88,8 @@ export async function initializeSecureSession(): Promise<void> {
     }
   } catch {
     // A later startup can retry; no credential is returned to the renderer.
+    authStore.preserveCachedShell()
+    return
   }
 
   const { user } = authStore.getState()
@@ -148,14 +99,14 @@ export async function initializeSecureSession(): Promise<void> {
   }
 
   try {
-    const stored = await readVault()
-    if (stored) {
-      if (stored.subjectId !== user.id) {
-        authStore.preserveCachedShell()
-        return
-      }
+    const status = await probeSession(user.id)
+    if (status === 'operational') {
       clearLegacySession()
       authStore.setSessionStatus('operational')
+      return
+    }
+    if (status === 'subject_mismatch') {
+      authStore.preserveCachedShell()
       return
     }
 
@@ -164,48 +115,21 @@ export async function initializeSecureSession(): Promise<void> {
       authStore.preserveCachedShell()
       return
     }
-
-    await writeAndVerify(legacy, user.id)
+    await withVaultTimeout(
+      invoke('secure_session_migrate_legacy', {
+        subjectId: user.id,
+        accessToken: legacy.accessToken,
+        refreshToken: legacy.refreshToken,
+      }),
+    )
+    if ((await probeSession(user.id)) !== 'operational') {
+      throw new SecureSessionUnavailableError('read_failed')
+    }
     clearLegacySession()
     authStore.setSessionStatus('operational')
   } catch {
-    // Preserve legacy credentials for a later retry, but never return them to
-    // React or use the legacy transport after migration has failed.
+    // Preserve the cached account shell and retry migration on a later startup.
     authStore.preserveCachedShell()
-  }
-}
-
-export async function requireSecureSession(): Promise<AuthTokens> {
-  if (authStore.getState().sessionStatus !== 'operational') {
-    throw new SecureSessionUnavailableError()
-  }
-  try {
-    const secret = await readVault()
-    const userId = authStore.getState().user?.id
-    if (!secret || !userId || secret.subjectId !== userId) {
-      authStore.preserveCachedShell()
-      throw new SecureSessionUnavailableError('read_failed')
-    }
-    return {
-      accessToken: secret.accessToken,
-      refreshToken: secret.refreshToken,
-    }
-  } catch (error) {
-    authStore.preserveCachedShell()
-    if (error instanceof SecureSessionUnavailableError) throw error
-    throw toVaultError(error)
-  }
-}
-
-export async function replaceSecureSession(tokens: AuthTokens): Promise<void> {
-  const subjectId = authStore.getState().user?.id
-  if (!subjectId) throw new SecureSessionUnavailableError('write_failed')
-  try {
-    await writeAndVerify(tokens, subjectId)
-    authStore.setSessionStatus('operational')
-  } catch (error) {
-    authStore.preserveCachedShell()
-    throw error
   }
 }
 
@@ -213,29 +137,24 @@ export async function signInWithSecureSession(
   email: string,
   password: string,
 ): Promise<AuthUser> {
-  const result = await apiLogin(email, password)
   try {
-    await writeAndVerify(result, result.user.id)
+    const user = await invoke<AuthUser>('secure_session_login', {
+      email,
+      password,
+    })
     clearLegacySession()
-    authStore.setAuthenticatedUser(result.user)
+    authStore.setAuthenticatedUser(user)
+    return user
   } catch (error) {
-    authStore.preserveCachedShell(result.user)
-    throw error
+    authStore.preserveCachedShell()
+    throw toLoginError(error)
   }
-  return result.user
 }
 
 export async function manualLogout(): Promise<boolean> {
-  try {
-    const secret = await readVault()
-    if (secret) await apiLogout(secret.refreshToken)
-  } catch {
-    // Explicit local logout must still complete when the server or vault fails.
-  }
-
   let cleaned = true
   try {
-    await withVaultTimeout(invoke('secure_session_delete'))
+    await invoke('secure_session_logout')
   } catch {
     cleaned = false
   } finally {
