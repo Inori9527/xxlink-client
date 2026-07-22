@@ -4,6 +4,7 @@ use anyhow::Result;
 use percent_encoding::percent_decode_str;
 use smartstring::alias::String;
 use tauri::Url;
+use tokio::sync::Semaphore;
 
 use crate::{
     config::{Config, PrfItem, profiles},
@@ -11,6 +12,8 @@ use crate::{
     utils::help,
 };
 use xxlink_logging::{Type, logging, logging_error};
+
+static DEEP_LINK_IMPORT_SLOTS: Semaphore = Semaphore::const_new(2);
 
 pub(super) async fn resolve_scheme(param: &str) -> Result<()> {
     let redacted_param = redacted_deep_link_for_log(param);
@@ -77,13 +80,18 @@ fn decode_subscription_url(raw_url: &str) -> std::string::String {
 }
 
 async fn import_subscription(url: &str, name: Option<&String>) {
-    let had_current_profile = {
-        let profiles = Config::profiles().await;
-        profiles.latest_arc().current.is_some()
+    let Ok(_slot) = DEEP_LINK_IMPORT_SLOTS.acquire().await else {
+        return;
     };
 
     let Some(mut item) = fetch_profile_item(url, name).await else {
         return;
+    };
+
+    let _guard = crate::cmd::wait_profile_switch_guard().await;
+    let had_current_profile = {
+        let profiles = Config::profiles().await;
+        profiles.latest_arc().current.is_some()
     };
 
     let uid = item.uid.clone().unwrap_or_default();

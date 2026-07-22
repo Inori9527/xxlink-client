@@ -29,6 +29,39 @@ function hasModifier(node, kind) {
   return node.modifiers?.some((modifier) => modifier.kind === kind) ?? false
 }
 
+function loadSubscriptionSync(mocks) {
+  const source = readSource('src/services/subscription-sync.ts')
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText
+  const module = { exports: {} }
+  const window = {
+    setTimeout(callback, timeoutMs) {
+      return setTimeout(callback, timeoutMs).unref()
+    },
+  }
+
+  Function(
+    'require',
+    'module',
+    'exports',
+    'window',
+    compiled,
+  )(
+    (specifier) => {
+      assert.equal(specifier, '@/services/managed-subscription-profile')
+      return mocks
+    },
+    module,
+    module.exports,
+    window,
+  )
+  return module.exports
+}
+
 test('managed subscription adapter exports only opaque void operations', () => {
   assert.equal(
     existsSync(adapterPath),
@@ -93,9 +126,37 @@ test('subscription sync retains orchestration and delegates managed profile work
     source,
     /\b(?:api|getSubUrl|getProfiles|importProfile|updateProfile|deleteProfile|patchProfile|patchProfilesConfig)\b/,
   )
-  assert.match(source, /if \(inflight\) return inflight/)
+  assert.match(source, /if \(inflight\)/)
+  assert.match(source, /forcedFollowup/)
   assert.match(source, /Promise\.race\(\[work, timeout\]\)/)
   assert.match(source, /options\?\.timeoutMs \?\? 15_000/)
+})
+
+test('force sync queued during regular sync runs one forced follow-up', async () => {
+  let finishRefresh
+  let refreshCount = 0
+  let rebuildCount = 0
+  const { syncSubscription } = loadSubscriptionSync({
+    refreshManagedSubscriptionProfile() {
+      refreshCount += 1
+      return new Promise((resolve) => {
+        finishRefresh = resolve
+      })
+    },
+    async rebuildManagedSubscriptionProfile() {
+      rebuildCount += 1
+    },
+  })
+
+  const regular = syncSubscription({ timeoutMs: 100 })
+  const forced = syncSubscription({ force: true, timeoutMs: 100 })
+  const coalescedForced = syncSubscription({ force: true, timeoutMs: 100 })
+
+  assert.equal(refreshCount, 1)
+  assert.equal(rebuildCount, 0)
+  finishRefresh()
+  await Promise.all([regular, forced, coalescedForced])
+  assert.equal(rebuildCount, 1)
 })
 
 test('managed profile sources never log or return raw failure details', () => {
@@ -119,7 +180,8 @@ test('managed profile sources never log or return raw failure details', () => {
   }
 
   const adapterSource = sources[0][1]
-  assert.match(adapterSource, /reportSafeClientFailure/)
+  assert.match(adapterSource, /backendController\.syncManagedSubscription/)
+  assert.doesNotMatch(adapterSource, /catch\s*\([^)]*\)/)
 })
 
 test('Plans keeps dashboard recharge behavior outside the adapter change', () => {

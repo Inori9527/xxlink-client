@@ -43,15 +43,17 @@ import {
   type SafeSubscriptionSnapshot,
   writeAccountLkgCache,
 } from '@/services/account-lkg-cache'
-import {
-  api,
-  isSubscriptionActiveNow,
-  type Plan,
-  type PublicBenefitStatus,
-  type Subscription,
-  type UsageData,
-} from '@/services/api'
 import { authStore } from '@/services/auth-store'
+import {
+  backendController,
+  captureBackendSubject,
+  isBackendSubjectCurrent,
+  isSubscriptionActiveNow,
+  type PlanView,
+  type PublicBenefitView,
+  type SubscriptionView,
+  type UsageView,
+} from '@/services/backend-controller'
 import { showNotice } from '@/services/notice-service'
 import { runResumeRecovery } from '@/services/resume-recovery'
 import {
@@ -116,7 +118,7 @@ function normalizeBillingPeriod(
   return null
 }
 
-function getPlanPeriodField(plan: Plan): string | null {
+function getPlanPeriodField(plan: PlanView): string | null {
   const record = plan as unknown as Record<string, unknown>
   for (const key of PLAN_PERIOD_FIELD_KEYS) {
     const value = record[key]
@@ -125,7 +127,7 @@ function getPlanPeriodField(plan: Plan): string | null {
   return null
 }
 
-function getBillingPeriod(plan: Plan): BillingPeriod {
+function getBillingPeriod(plan: PlanView): BillingPeriod {
   const explicitPeriod = normalizeBillingPeriod(getPlanPeriodField(plan))
   if (explicitPeriod) return explicitPeriod
 
@@ -149,7 +151,7 @@ function formatPrice(price: number): string {
 }
 
 function formatCooldownHours(
-  status: PublicBenefitStatus,
+  status: PublicBenefitView,
   labels: {
     available: string
     hours: (count: number) => string
@@ -176,19 +178,18 @@ const PlansPage = () => {
     () => readAccountLkgCache(currentUserId),
     [currentUserId],
   )
-  const [plans, setPlans] = useState<Plan[]>(
+  const [plans, setPlans] = useState<PlanView[]>(
     () => initialAccountCache?.plans ?? [],
   )
   const [subscription, setSubscription] = useState<
-    Subscription | SafeSubscriptionSnapshot | null
+    SubscriptionView | SafeSubscriptionSnapshot | null
   >(() => initialAccountCache?.subscription ?? null)
-  const [usage, setUsage] = useState<UsageData | null>(
+  const [usage, setUsage] = useState<UsageView | null>(
     () => initialAccountCache?.usage ?? null,
   )
-  const [publicBenefit, setPublicBenefit] =
-    useState<PublicBenefitStatus | null>(
-      () => initialAccountCache?.publicBenefit ?? null,
-    )
+  const [publicBenefit, setPublicBenefit] = useState<PublicBenefitView | null>(
+    () => initialAccountCache?.publicBenefit ?? null,
+  )
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [showRefreshFailureNotice, setShowRefreshFailureNotice] =
@@ -210,14 +211,17 @@ const PlansPage = () => {
 
   const loadPlans = useCallback(async () => {
     setError(null)
+    const subjectId = captureBackendSubject()
+    if (!subjectId) return
     const [plansResult, subResult, usageResult, benefitResult] =
       await Promise.allSettled([
-        api.subscription.plans(),
-        api.subscription.current(),
-        api.user.usage(),
-        api.user.publicBenefit(),
+        backendController.plans(),
+        backendController.subscription(),
+        backendController.usage(),
+        backendController.publicBenefit(),
       ])
-    const userId = authStore.getState().user?.id
+    if (!isBackendSubjectCurrent(subjectId)) return
+    const userId = subjectId
     const hasLastKnownGood = Boolean(
       userId ? readAccountLkgCache(userId) : initialAccountCache,
     )
@@ -301,7 +305,7 @@ const PlansPage = () => {
   )
 
   const groupedPlans = useMemo(() => {
-    const groups: Record<BillingPeriod, Plan[]> = {
+    const groups: Record<BillingPeriod, PlanView[]> = {
       month: [],
       quarter: [],
       year: [],
@@ -364,7 +368,7 @@ const PlansPage = () => {
     setClaimingBenefit(true)
     setError(null)
     try {
-      const benefitData = await api.user.claimPublicBenefit()
+      const benefitData = await backendController.claimPublicBenefit()
       setPublicBenefit(benefitData)
       await loadPlans()
       showNotice.success(t('plans.trial.claimSuccess'))
@@ -378,7 +382,7 @@ const PlansPage = () => {
     }
   })
 
-  const handleSubscribe = useLockFn(async (plan: Plan) => {
+  const handleSubscribe = useLockFn(async (plan: PlanView) => {
     setOpeningPlanId(plan.id)
     setError(null)
     try {

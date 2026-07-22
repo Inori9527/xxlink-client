@@ -1,15 +1,132 @@
 use crate::config::with_encryption;
 use anyhow::{Context as _, Result, anyhow, bail};
-use xxlink_logging::{Type, logging};
 use nanoid::nanoid;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_yaml_ng::Mapping;
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+use tokio::io::AsyncWriteExt as _;
+use tokio::sync::Mutex;
+use xxlink_logging::{Type, logging};
+
+static ATOMIC_WRITE_LOCK: Mutex<()> = Mutex::const_new(());
+
+fn atomic_sidecar_path(path: &Path, suffix: &str) -> Result<PathBuf> {
+    let name = path
+        .file_name()
+        .ok_or_else(|| anyhow!("atomic write target has no file name"))?
+        .to_string_lossy();
+    Ok(path.with_file_name(format!(".{name}.xxlink-{suffix}")))
+}
+
 #[cfg(target_os = "windows")]
-use std::path::Path;
-use std::{path::PathBuf, str::FromStr};
+fn replace_file(source: &Path, destination: &Path) -> Result<()> {
+    use std::os::windows::ffi::OsStrExt as _;
+    use windows::{
+        Win32::Storage::FileSystem::{MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW},
+        core::PCWSTR,
+    };
+
+    let source_wide: Vec<u16> = source.as_os_str().encode_wide().chain(Some(0)).collect();
+    let destination_wide: Vec<u16> = destination.as_os_str().encode_wide().chain(Some(0)).collect();
+    unsafe {
+        MoveFileExW(
+            PCWSTR(source_wide.as_ptr()),
+            PCWSTR(destination_wide.as_ptr()),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    }
+    .with_context(|| format!("failed to replace file \"{}\"", destination.display()))
+}
+
+#[cfg(not(target_os = "windows"))]
+fn replace_file(source: &Path, destination: &Path) -> Result<()> {
+    std::fs::rename(source, destination)
+        .with_context(|| format!("failed to replace file \"{}\"", destination.display()))
+}
+
+#[cfg(not(target_os = "windows"))]
+fn sync_parent(path: &Path) -> Result<()> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| anyhow!("atomic write target has no parent directory"))?
+        .to_owned();
+    std::fs::File::open(parent)?.sync_all()?;
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn sync_parent(path: &Path) -> Result<()> {
+    let _ = path
+        .parent()
+        .ok_or_else(|| anyhow!("atomic write target has no parent directory"))?;
+    Ok(())
+}
+
+async fn recover_atomic_write_unlocked(path: &Path) -> Result<()> {
+    let pending = atomic_sidecar_path(path, "pending")?;
+    let ready = atomic_sidecar_path(path, "ready")?;
+    if tokio::fs::try_exists(&pending).await.unwrap_or(false) {
+        tokio::fs::remove_file(&pending)
+            .await
+            .with_context(|| format!("failed to discard incomplete file \"{}\"", pending.display()))?;
+    }
+    if tokio::fs::try_exists(&ready).await.unwrap_or(false) {
+        let ready_for_replace = ready.clone();
+        let destination = path.to_owned();
+        tokio::task::spawn_blocking(move || replace_file(&ready_for_replace, &destination))
+            .await
+            .context("failed to join atomic recovery")??;
+        sync_parent(path)?;
+    }
+    Ok(())
+}
+
+pub async fn recover_atomic_write(path: &Path) -> Result<()> {
+    let _guard = ATOMIC_WRITE_LOCK.lock().await;
+    recover_atomic_write_unlocked(path).await
+}
+
+pub async fn atomic_write(path: &Path, data: &[u8]) -> Result<()> {
+    let _guard = ATOMIC_WRITE_LOCK.lock().await;
+    recover_atomic_write_unlocked(path).await?;
+    let pending = atomic_sidecar_path(path, "pending")?;
+    let ready = atomic_sidecar_path(path, "ready")?;
+    let mut file = tokio::fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&pending)
+        .await
+        .with_context(|| format!("failed to create staged file \"{}\"", pending.display()))?;
+    if let Err(error) = async {
+        file.write_all(data).await?;
+        file.flush().await?;
+        file.sync_all().await?;
+        drop(file);
+        tokio::fs::rename(&pending, &ready).await?;
+        sync_parent(path)?;
+        let ready_for_replace = ready.clone();
+        let destination = path.to_owned();
+        tokio::task::spawn_blocking(move || replace_file(&ready_for_replace, &destination))
+            .await
+            .context("failed to join atomic replace")??;
+        sync_parent(path)?;
+        Ok::<(), anyhow::Error>(())
+    }
+    .await
+    {
+        let _ = tokio::fs::remove_file(&pending).await;
+        let _ = tokio::fs::remove_file(&ready).await;
+        return Err(error).with_context(|| format!("failed to atomically save file \"{}\"", path.display()));
+    }
+    Ok(())
+}
 
 /// read data from yaml as struct T
 pub async fn read_yaml<T: DeserializeOwned>(path: &PathBuf) -> Result<T> {
+    recover_atomic_write(path).await?;
     if !tokio::fs::try_exists(path).await.unwrap_or(false) {
         bail!("file not found \"{}\"", path.display());
     }
@@ -21,6 +138,7 @@ pub async fn read_yaml<T: DeserializeOwned>(path: &PathBuf) -> Result<T> {
 
 /// read mapping from yaml
 pub async fn read_mapping(path: &PathBuf) -> Result<Mapping> {
+    recover_atomic_write(path).await?;
     if !tokio::fs::try_exists(path).await.unwrap_or(false) {
         bail!("file not found \"{}\"", path.display());
     }
@@ -53,7 +171,7 @@ pub async fn read_mapping(path: &PathBuf) -> Result<Mapping> {
 
 /// save the data to the file
 /// can set `prefix` string to add some comments
-pub async fn save_yaml<T: Serialize + Sync>(path: &PathBuf, data: &T, prefix: Option<&str>) -> Result<()> {
+pub async fn save_yaml<T: Serialize + Sync>(path: &Path, data: &T, prefix: Option<&str>) -> Result<()> {
     let data_str = with_encryption(|| async { serde_yaml_ng::to_string(data) }).await?;
 
     let yaml_str = match prefix {
@@ -62,7 +180,7 @@ pub async fn save_yaml<T: Serialize + Sync>(path: &PathBuf, data: &T, prefix: Op
     };
 
     let path_str = path.as_os_str().to_string_lossy().to_string();
-    tokio::fs::write(path, yaml_str.as_bytes())
+    atomic_write(path, yaml_str.as_bytes())
         .await
         .with_context(|| format!("failed to save file \"{path_str}\""))?;
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
@@ -237,4 +355,31 @@ pub fn snapshot_path(original_path: &Path) -> Result<PathBuf> {
     std::fs::copy(original_path, &temp_path)?;
 
     Ok(temp_path)
+}
+
+#[cfg(test)]
+mod atomic_write_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn atomic_write_commits_and_recovers_only_ready_data() -> Result<()> {
+        let directory = std::env::temp_dir().join(format!("xxlink-atomic-write-{}", get_uid("t")));
+        tokio::fs::create_dir_all(&directory).await?;
+        let target = directory.join("profiles.yaml");
+
+        atomic_write(&target, b"first").await?;
+        assert_eq!(tokio::fs::read(&target).await?, b"first");
+
+        let pending = atomic_sidecar_path(&target, "pending")?;
+        let ready = atomic_sidecar_path(&target, "ready")?;
+        tokio::fs::write(&pending, b"incomplete").await?;
+        tokio::fs::write(&ready, b"second").await?;
+        recover_atomic_write(&target).await?;
+        assert_eq!(tokio::fs::read(&target).await?, b"second");
+        assert!(!tokio::fs::try_exists(&pending).await?);
+        assert!(!tokio::fs::try_exists(&ready).await?);
+
+        tokio::fs::remove_dir_all(directory).await?;
+        Ok(())
+    }
 }

@@ -4,12 +4,11 @@ use crate::utils::{
     help,
 };
 use anyhow::{Context as _, Result, bail};
-use xxlink_logging::{Type, logging};
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::Mapping;
 use smartstring::alias::String;
 use std::collections::HashSet;
-use tokio::fs;
+use xxlink_logging::{Type, logging};
 
 /// Define the `profiles.yaml` schema
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
@@ -144,7 +143,7 @@ impl IProfiles {
                 .ok_or_else(|| anyhow::anyhow!("file field is required when file_data is provided"))?;
             let path = dirs::app_profiles_dir()?.join(file.as_str());
 
-            fs::write(&path, file_data.as_bytes())
+            help::atomic_write(&path, file_data.as_bytes())
                 .await
                 .with_context(|| format!("failed to write to file \"{file}\""))?;
         }
@@ -161,6 +160,13 @@ impl IProfiles {
             items.push(item.to_owned());
         }
 
+        Ok(())
+    }
+
+    async fn append_item_preserve_current(&mut self, item: &mut PrfItem) -> Result<()> {
+        let current = self.current.clone();
+        self.append_item(item).await?;
+        self.current = current;
         Ok(())
     }
 
@@ -245,7 +251,7 @@ impl IProfiles {
 
                         let path = dirs::app_profiles_dir()?.join(file.as_str());
 
-                        fs::write(&path, file_data.as_bytes())
+                        help::atomic_write(&path, file_data.as_bytes())
                             .await
                             .with_context(|| format!("failed to write to file \"{file}\""))?;
                     }
@@ -543,6 +549,16 @@ pub async fn profiles_append_item_safe(item: &mut PrfItem) -> Result<()> {
         .await
 }
 
+pub async fn profiles_append_item_preserve_current_safe(item: &mut PrfItem) -> Result<()> {
+    Config::profiles()
+        .await
+        .with_data_modify(|mut profiles| async move {
+            profiles.append_item_preserve_current(item).await?;
+            Ok((profiles, ()))
+        })
+        .await
+}
+
 pub async fn profiles_patch_item_safe(index: &String, item: &PrfItem) -> Result<()> {
     Config::profiles()
         .await
@@ -583,6 +599,103 @@ pub async fn profiles_save_file_safe() -> Result<()> {
         .await
 }
 
+pub async fn profiles_clear_current_safe() -> Result<()> {
+    Config::profiles()
+        .await
+        .with_data_modify(|mut profiles| async move {
+            profiles.current = None;
+            profiles.save_file().await?;
+            Ok((profiles, ()))
+        })
+        .await
+}
+
+async fn profiles_remove_items_safe(indices: &[String], allow_current: bool) -> Result<()> {
+    if indices.is_empty() {
+        return Ok(());
+    }
+    let targets: HashSet<String> = indices.iter().cloned().collect();
+    let removed_files = Config::profiles()
+        .await
+        .with_data_modify(|mut profiles| async move {
+            let removes_current = profiles
+                .current
+                .as_ref()
+                .is_some_and(|current| targets.contains(current));
+            if removes_current && !allow_current {
+                bail!("cannot retire the current profile");
+            }
+            if removes_current {
+                profiles.current = None;
+            }
+
+            let mut remove_uids = targets.clone();
+            if let Some(items) = profiles.items.as_ref() {
+                for item in items {
+                    if item.uid.as_ref().is_some_and(|uid| targets.contains(uid))
+                        && let Some(option) = &item.option
+                    {
+                        remove_uids.extend(
+                            [
+                                option.merge.clone(),
+                                option.script.clone(),
+                                option.rules.clone(),
+                                option.proxies.clone(),
+                                option.groups.clone(),
+                            ]
+                            .into_iter()
+                            .flatten(),
+                        );
+                    }
+                }
+                let protected_helpers: HashSet<String> = items
+                    .iter()
+                    .filter(|item| !item.uid.as_ref().is_some_and(|uid| targets.contains(uid)))
+                    .filter_map(|item| item.option.as_ref())
+                    .flat_map(|option| {
+                        [
+                            option.merge.clone(),
+                            option.script.clone(),
+                            option.rules.clone(),
+                            option.proxies.clone(),
+                            option.groups.clone(),
+                        ]
+                    })
+                    .flatten()
+                    .collect();
+                remove_uids.retain(|uid| !protected_helpers.contains(uid));
+            }
+
+            let mut removed_files = Vec::new();
+            if let Some(items) = profiles.items.as_mut() {
+                items.retain(|item| {
+                    let remove = item.uid.as_ref().is_some_and(|uid| remove_uids.contains(uid));
+                    if remove && let Some(file) = &item.file {
+                        removed_files.push(file.clone());
+                    }
+                    !remove
+                });
+            }
+            profiles.save_file().await?;
+            Ok((profiles, removed_files))
+        })
+        .await?;
+
+    let directory = dirs::app_profiles_dir()?;
+    for file in removed_files {
+        let _ = directory.join(file.as_str()).remove_if_exists().await;
+    }
+    Ok(())
+}
+
+pub async fn profiles_retire_items_safe(indices: &[String]) -> Result<()> {
+    profiles_remove_items_safe(indices, false).await
+}
+
+pub async fn profiles_deactivate_items_safe(indices: &[String]) -> Result<()> {
+    profiles_remove_items_safe(indices, true).await
+}
+
 pub async fn profiles_draft_update_item_safe(index: &String, item: &mut PrfItem) -> Result<()> {
     Config::profiles()
         .await
@@ -591,4 +704,25 @@ pub async fn profiles_draft_update_item_safe(index: &String, item: &mut PrfItem)
             Ok((profiles, ()))
         })
         .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn detached_staging_does_not_select_the_first_profile() -> Result<()> {
+        let mut profiles = IProfiles::default();
+        let mut item = PrfItem {
+            uid: Some("staged".into()),
+            itype: Some("local".into()),
+            ..Default::default()
+        };
+
+        profiles.append_item_preserve_current(&mut item).await?;
+
+        assert!(profiles.current.is_none());
+        assert_eq!(profiles.items.as_ref().map(Vec::len), Some(1));
+        Ok(())
+    }
 }

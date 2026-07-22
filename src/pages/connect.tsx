@@ -63,15 +63,17 @@ import {
   readAccountLkgCache,
   writeAccountLkgCache,
 } from '@/services/account-lkg-cache'
-import {
-  api,
-  isTrafficExceededError,
-  isSubscriptionActiveNow,
-  type Node,
-  type PublicBenefitStatus,
-  type UsageData,
-} from '@/services/api'
 import { authStore } from '@/services/auth-store'
+import {
+  backendController,
+  captureBackendSubject,
+  isBackendSubjectCurrent,
+  isSubscriptionActiveNow,
+  isTrafficExceededError,
+  type NodeView,
+  type PublicBenefitView,
+  type UsageView,
+} from '@/services/backend-controller'
 import {
   formatNodeLatencyLabel,
   getNodeLatencyChipColor,
@@ -219,7 +221,7 @@ const connectionSessionReducer = (
   }
 }
 
-const toPeriodUsageState = (usage: UsageData): PeriodUsageState => {
+const toPeriodUsageState = (usage: UsageView): PeriodUsageState => {
   const used = getNumericBytes(usage.trafficUsed)
   const limit = getNumericBytes(usage.trafficLimit)
   const remainingFromServer = getNumericBytes(usage.trafficRemaining)
@@ -278,16 +280,15 @@ const ConnectPage = () => {
   )
   const [accountRefreshFailed, setAccountRefreshFailed] = useState(false)
   const [nodeRefreshFailed, setNodeRefreshFailed] = useState(false)
-  const [publicBenefit, setPublicBenefit] =
-    useState<PublicBenefitStatus | null>(
-      () => initialAccountCache?.publicBenefit ?? null,
-    )
+  const [publicBenefit, setPublicBenefit] = useState<PublicBenefitView | null>(
+    () => initialAccountCache?.publicBenefit ?? null,
+  )
   const [periodUsage, setPeriodUsage] = useState<PeriodUsageState | null>(() =>
     initialAccountCache?.usage
       ? toPeriodUsageState(initialAccountCache.usage)
       : null,
   )
-  const [accountNodes, setAccountNodes] = useState<Node[]>(
+  const [accountNodes, setAccountNodes] = useState<NodeView[]>(
     () => initialAccountCache?.nodes ?? [],
   )
   const [nodeMenuAnchor, setNodeMenuAnchor] = useState<HTMLElement | null>(null)
@@ -321,13 +322,16 @@ const ConnectPage = () => {
   } | null>(null)
 
   const refreshAccountState = useCallback(async () => {
+    const subjectId = captureBackendSubject()
+    if (!subjectId) return
     const [subscriptionResult, benefitResult, usageResult, nodesResult] =
       await Promise.allSettled([
-        api.subscription.current(),
-        api.user.publicBenefit(),
-        api.user.usage(),
-        api.nodes.list(),
+        backendController.subscription(),
+        backendController.publicBenefit(),
+        backendController.usage(),
+        backendController.nodes(),
       ])
+    if (!isBackendSubjectCurrent(subjectId)) return
 
     const refreshFailureState = getAccountRefreshFailureState({
       subscriptionFailed: subscriptionResult.status === 'rejected',
@@ -351,9 +355,8 @@ const ConnectPage = () => {
     if (nodesResult.status === 'fulfilled') {
       setAccountNodes(nodesResult.value)
     }
-    const userId = authStore.getState().user?.id
-    if (userId) {
-      writeAccountLkgCache(userId, {
+    if (isBackendSubjectCurrent(subjectId)) {
+      writeAccountLkgCache(subjectId, {
         subscription:
           subscriptionResult.status === 'fulfilled'
             ? subscriptionResult.value
@@ -982,13 +985,13 @@ const ConnectPage = () => {
         down: Math.max(0, bytes.down - bytesDown),
       }
       try {
-        await api.traffic.report({
+        await backendController.reportTraffic({
           nodeId: currentNodeId,
-          bytes_up: bytesUp,
-          bytes_down: bytesDown,
+          bytesUp,
+          bytesDown,
           timestamp: Date.now(),
         })
-        const usage = await api.user.usage().catch(() => null)
+        const usage = await backendController.usage().catch(() => null)
         if (usage) setPeriodUsage(toPeriodUsageState(usage))
       } catch (error) {
         if (isTrafficExceededError(error)) {

@@ -191,6 +191,19 @@ impl PrfItem {
         file_data: Option<String>,
         option: Option<&PrfOption>,
     ) -> Result<Self> {
+        let (item, helpers) = Self::from_local_detached(name, desc, file_data, option)?;
+        for mut helper in helpers {
+            profiles::profiles_append_item_safe(&mut helper).await?;
+        }
+        Ok(item)
+    }
+
+    pub(crate) fn from_local_detached(
+        name: String,
+        desc: String,
+        file_data: Option<String>,
+        option: Option<&PrfOption>,
+    ) -> Result<(Self, Vec<Self>)> {
         let uid = help::get_uid("L").into();
         let file = format!("{uid}.yaml").into();
         let opt_ref = option.as_ref();
@@ -200,54 +213,58 @@ impl PrfItem {
         let mut rules = opt_ref.and_then(|o| o.rules.clone());
         let mut proxies = opt_ref.and_then(|o| o.proxies.clone());
         let mut groups = opt_ref.and_then(|o| o.groups.clone());
+        let mut helpers = Vec::new();
 
         if merge.is_none() {
-            let merge_item = &mut Self::from_merge(None)?;
-            profiles::profiles_append_item_safe(merge_item).await?;
+            let merge_item = Self::from_merge(None)?;
             merge = merge_item.uid.clone();
+            helpers.push(merge_item);
         }
         if script.is_none() {
-            let script_item = &mut Self::from_script(None)?;
-            profiles::profiles_append_item_safe(script_item).await?;
+            let script_item = Self::from_script(None)?;
             script = script_item.uid.clone();
+            helpers.push(script_item);
         }
         if rules.is_none() {
-            let rules_item = &mut Self::from_rules()?;
-            profiles::profiles_append_item_safe(rules_item).await?;
+            let rules_item = Self::from_rules()?;
             rules = rules_item.uid.clone();
+            helpers.push(rules_item);
         }
         if proxies.is_none() {
-            let proxies_item = &mut Self::from_proxies()?;
-            profiles::profiles_append_item_safe(proxies_item).await?;
+            let proxies_item = Self::from_proxies()?;
             proxies = proxies_item.uid.clone();
+            helpers.push(proxies_item);
         }
         if groups.is_none() {
-            let groups_item = &mut Self::from_groups()?;
-            profiles::profiles_append_item_safe(groups_item).await?;
+            let groups_item = Self::from_groups()?;
             groups = groups_item.uid.clone();
+            helpers.push(groups_item);
         }
-        Ok(Self {
-            uid: Some(uid),
-            itype: Some("local".into()),
-            name: Some(name),
-            desc: Some(desc),
-            file: Some(file),
-            url: None,
-            selected: None,
-            extra: None,
-            option: Some(PrfOption {
-                update_interval,
-                merge,
-                script,
-                rules,
-                proxies,
-                groups,
-                ..PrfOption::default()
-            }),
-            home: None,
-            updated: Some(chrono::Local::now().timestamp() as usize),
-            file_data: Some(file_data.unwrap_or_else(|| tmpl::ITEM_LOCAL.into())),
-        })
+        Ok((
+            Self {
+                uid: Some(uid),
+                itype: Some("local".into()),
+                name: Some(name),
+                desc: Some(desc),
+                file: Some(file),
+                url: None,
+                selected: None,
+                extra: None,
+                option: Some(PrfOption {
+                    update_interval,
+                    merge,
+                    script,
+                    rules,
+                    proxies,
+                    groups,
+                    ..PrfOption::default()
+                }),
+                home: None,
+                updated: Some(chrono::Local::now().timestamp() as usize),
+                file_data: Some(file_data.unwrap_or_else(|| tmpl::ITEM_LOCAL.into())),
+            },
+            helpers,
+        ))
     }
 
     /// ## Remote type
@@ -532,6 +549,7 @@ impl PrfItem {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("could not find the file"))?;
         let path = dirs::app_profiles_dir()?.join(file.as_str());
+        help::recover_atomic_write(&path).await?;
         let content = fs::read_to_string(path).await.context("failed to read the file")?;
         Ok(content.into())
     }
@@ -543,7 +561,7 @@ impl PrfItem {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("could not find the file"))?;
         let path = dirs::app_profiles_dir()?.join(file.as_str());
-        fs::write(path, data.as_bytes())
+        help::atomic_write(&path, data.as_bytes())
             .await
             .context("failed to save the file")
     }

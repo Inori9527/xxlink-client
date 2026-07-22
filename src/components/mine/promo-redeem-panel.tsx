@@ -16,7 +16,10 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useAppData } from '@/providers/app-data-context'
-import { api, type PromoRedeemResult } from '@/services/api'
+import {
+  backendController,
+  type PromoRedeemView,
+} from '@/services/backend-controller'
 import {
   classifyClientError,
   reportSafeClientFailure,
@@ -25,7 +28,7 @@ import {
 import { syncSubscription } from '@/services/subscription-sync'
 
 function formatRedeemResult(
-  result: PromoRedeemResult,
+  result: PromoRedeemView,
   t: (key: string, options?: Record<string, unknown>) => string,
 ): string {
   if (result.message) return result.message
@@ -49,7 +52,7 @@ export const PromoRedeemPanel = () => {
   const [code, setCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [syncing, setSyncing] = useState(false)
-  const [result, setResult] = useState<PromoRedeemResult | null>(null)
+  const [result, setResult] = useState<PromoRedeemView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [syncWarning, setSyncWarning] = useState(false)
 
@@ -79,7 +82,7 @@ export const PromoRedeemPanel = () => {
     setResult(null)
 
     try {
-      const redeemResult = await api.promo.redeemCode(normalizedCode)
+      const redeemResult = await backendController.redeemPromo(normalizedCode)
       setResult(redeemResult)
       setCode('')
       await handleSync()

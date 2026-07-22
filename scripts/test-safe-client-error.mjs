@@ -17,6 +17,14 @@ class ApiError extends Error {
   }
 }
 
+class BackendControllerError extends Error {
+  constructor(kind) {
+    super('Backend operation failed')
+    this.name = 'BackendControllerError'
+    this.kind = kind
+  }
+}
+
 function loadSafeClientErrorModule(consoleImpl = console) {
   const sourcePath = resolve(repoRoot, 'src/services/safe-client-error.ts')
   const source = readFileSync(sourcePath, 'utf8')
@@ -36,6 +44,9 @@ function loadSafeClientErrorModule(consoleImpl = console) {
     module,
     require: (specifier) => {
       if (specifier === '@/services/api') return { ApiError }
+      if (specifier === '@/services/backend-controller') {
+        return { BackendControllerError }
+      }
       throw new Error(`Unexpected runtime import in focused test: ${specifier}`)
     },
   })
@@ -248,6 +259,16 @@ test('classifies ApiError status and transport code-like shapes without exposing
       kind: 'network',
       retryable: true,
     },
+  )
+  assert.deepEqual(
+    asPlainValue(
+      classifyClientError(new BackendControllerError('service_blocked')),
+    ),
+    { kind: 'service', retryable: false },
+  )
+  assert.deepEqual(
+    asPlainValue(classifyClientError(new BackendControllerError('network'))),
+    { kind: 'network', retryable: true },
   )
   assert.deepEqual(asPlainValue(classifyClientError(new Error('fixture'))), {
     kind: 'unknown',

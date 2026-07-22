@@ -12,14 +12,71 @@ use crate::{
     process::AsyncHandler,
     utils::{dirs, help},
 };
-use scopeguard::defer;
+use once_cell::sync::Lazy;
 use smartstring::alias::String;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
+use tokio::sync::Notify;
 use xxlink_draft::SharedDraft;
 use xxlink_logging::{Type, logging};
 
 static CURRENT_SWITCHING_PROFILE: AtomicBool = AtomicBool::new(false);
+static PRIORITY_PROFILE_WAITERS: AtomicUsize = AtomicUsize::new(0);
+static PROFILE_SWITCH_RELEASED: Lazy<Notify> = Lazy::new(Notify::new);
+
+pub(crate) struct ProfileSwitchGuard;
+
+impl Drop for ProfileSwitchGuard {
+    fn drop(&mut self) {
+        CURRENT_SWITCHING_PROFILE.store(false, Ordering::Release);
+        PROFILE_SWITCH_RELEASED.notify_waiters();
+    }
+}
+
+pub(crate) fn try_profile_switch_guard() -> Option<ProfileSwitchGuard> {
+    CURRENT_SWITCHING_PROFILE
+        .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+        .ok()
+        .map(|_| ProfileSwitchGuard)
+}
+
+pub(crate) async fn wait_profile_switch_guard() -> ProfileSwitchGuard {
+    loop {
+        let released = PROFILE_SWITCH_RELEASED.notified();
+        if PRIORITY_PROFILE_WAITERS.load(Ordering::Acquire) == 0
+            && let Some(guard) = try_profile_switch_guard()
+        {
+            return guard;
+        }
+        released.await;
+    }
+}
+
+struct PriorityProfileWaiter;
+
+impl Drop for PriorityProfileWaiter {
+    fn drop(&mut self) {
+        PRIORITY_PROFILE_WAITERS.fetch_sub(1, Ordering::AcqRel);
+        PROFILE_SWITCH_RELEASED.notify_waiters();
+    }
+}
+
+pub(crate) async fn wait_priority_profile_switch_guard() -> ProfileSwitchGuard {
+    PRIORITY_PROFILE_WAITERS.fetch_add(1, Ordering::AcqRel);
+    let waiter = PriorityProfileWaiter;
+    loop {
+        let released = PROFILE_SWITCH_RELEASED.notified();
+        if let Some(guard) = try_profile_switch_guard() {
+            drop(waiter);
+            return guard;
+        }
+        released.await;
+    }
+}
+
+fn require_profile_switch_guard() -> CmdResult<ProfileSwitchGuard> {
+    try_profile_switch_guard().ok_or_else(|| "profile_busy".into())
+}
 
 #[tauri::command]
 pub async fn get_profiles() -> CmdResult<SharedDraft<IProfiles>> {
@@ -32,6 +89,7 @@ pub async fn get_profiles() -> CmdResult<SharedDraft<IProfiles>> {
 /// 增强配置文件
 #[tauri::command]
 pub async fn enhance_profiles() -> CmdResult {
+    let _guard = require_profile_switch_guard()?;
     match feat::enhance_profiles().await {
         Ok((true, _)) => {
             handle::Handle::refresh_clash();
@@ -61,6 +119,7 @@ pub async fn enhance_profiles() -> CmdResult {
 /// 导入配置文件
 #[tauri::command]
 pub async fn import_profile(url: std::string::String, option: Option<PrfOption>) -> CmdResult {
+    let _guard = require_profile_switch_guard()?;
     logging!(info, Type::Cmd, "[导入订阅] 开始导入: {}", help::mask_url(&url));
 
     // 直接依赖 PrfItem::from_url 自身的超时/重试逻辑，不再使用 tokio::time::timeout 包裹
@@ -111,6 +170,7 @@ pub async fn import_profile(url: std::string::String, option: Option<PrfOption>)
 /// 更新配置文件
 #[tauri::command]
 pub async fn update_profile(index: String, option: Option<PrfOption>) -> CmdResult {
+    let _guard = require_profile_switch_guard()?;
     match feat::update_profile(&index, option.as_ref(), true, true, true).await {
         Ok(_) => Ok(()),
         Err(e) => {
@@ -124,6 +184,7 @@ pub async fn update_profile(index: String, option: Option<PrfOption>) -> CmdResu
 /// 删除配置文件
 #[tauri::command]
 pub async fn delete_profile(index: String) -> CmdResult {
+    let _guard = require_profile_switch_guard()?;
     // 使用Send-safe helper函数
     let should_update = profiles_delete_item_safe(&index).await.stringify_err()?;
     profiles_save_file_safe().await.stringify_err()?;
@@ -328,9 +389,6 @@ async fn handle_timeout(current_profile: Option<&String>) -> CmdResult<bool> {
 }
 
 async fn perform_config_update(current_value: Option<&String>, current_profile: Option<&String>) -> CmdResult<bool> {
-    defer! {
-        CURRENT_SWITCHING_PROFILE.store(false, Ordering::Release);
-    }
     let update_result = tokio::time::timeout(Duration::from_secs(30), CoreManager::global().update_config()).await;
 
     match update_result {
@@ -342,15 +400,11 @@ async fn perform_config_update(current_value: Option<&String>, current_profile: 
 }
 
 /// 修改profiles的配置
-#[tauri::command]
-pub async fn patch_profiles_config(profiles: IProfiles) -> CmdResult<bool> {
-    if CURRENT_SWITCHING_PROFILE
-        .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
-        .is_err()
-    {
+async fn patch_profiles_config_inner(profiles: IProfiles, expected_current: Option<Option<String>>) -> CmdResult<bool> {
+    let Some(_guard) = try_profile_switch_guard() else {
         logging!(info, Type::Cmd, "当前正在切换配置，放弃请求");
         return Ok(false);
-    }
+    };
 
     let target_profile = profiles.current.as_ref();
 
@@ -358,6 +412,9 @@ pub async fn patch_profiles_config(profiles: IProfiles) -> CmdResult<bool> {
 
     // 保存当前配置，以便在验证失败时恢复
     let previous_profile = Config::profiles().await.data_arc().current.clone();
+    if expected_current.is_some_and(|expected| expected != previous_profile) {
+        return Ok(false);
+    }
     logging!(info, Type::Cmd, "当前配置: {:?}", previous_profile);
 
     // 如果要切换配置，先检查目标配置文件是否有语法错误
@@ -365,11 +422,36 @@ pub async fn patch_profiles_config(profiles: IProfiles) -> CmdResult<bool> {
         && previous_profile.as_ref() != Some(switch_to_profile)
         && validate_new_profile(switch_to_profile).await.is_err()
     {
-        CURRENT_SWITCHING_PROFILE.store(false, Ordering::Release);
         return Ok(false);
     }
     Config::profiles().await.edit_draft(|d| d.patch_config(&profiles));
 
+    perform_config_update(target_profile, previous_profile.as_ref()).await
+}
+
+#[tauri::command]
+pub async fn patch_profiles_config(profiles: IProfiles) -> CmdResult<bool> {
+    patch_profiles_config_inner(profiles, None).await
+}
+
+pub(crate) async fn patch_profiles_config_if_current_under_guard(
+    profiles: IProfiles,
+    expected_current: Option<String>,
+) -> CmdResult<bool> {
+    let target_profile = profiles.current.as_ref();
+    let previous_profile = Config::profiles().await.data_arc().current.clone();
+    if previous_profile != expected_current {
+        return Ok(false);
+    }
+    if let Some(switch_to_profile) = target_profile
+        && previous_profile.as_ref() != Some(switch_to_profile)
+        && validate_new_profile(switch_to_profile).await.is_err()
+    {
+        return Ok(false);
+    }
+    Config::profiles()
+        .await
+        .edit_draft(|draft| draft.patch_config(&profiles));
     perform_config_update(target_profile, previous_profile.as_ref()).await
 }
 
@@ -388,6 +470,7 @@ pub async fn patch_profiles_config_by_profile_index(profile_index: String) -> Cm
 /// 修改某个profile item的
 #[tauri::command]
 pub async fn patch_profile(index: String, profile: PrfItem) -> CmdResult {
+    let _guard = require_profile_switch_guard()?;
     // 保存修改前检查是否有更新 update_interval
     let profiles = Config::profiles().await;
     let should_refresh_timer = if let Ok(old_profile) = profiles.latest_arc().get_item(&index)
