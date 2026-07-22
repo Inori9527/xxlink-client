@@ -43,6 +43,8 @@ pub(crate) fn try_profile_switch_guard() -> Option<ProfileSwitchGuard> {
 pub(crate) async fn wait_profile_switch_guard() -> ProfileSwitchGuard {
     loop {
         let released = PROFILE_SWITCH_RELEASED.notified();
+        tokio::pin!(released);
+        released.as_mut().enable();
         if PRIORITY_PROFILE_WAITERS.load(Ordering::Acquire) == 0
             && let Some(guard) = try_profile_switch_guard()
         {
@@ -66,6 +68,8 @@ pub(crate) async fn wait_priority_profile_switch_guard() -> ProfileSwitchGuard {
     let waiter = PriorityProfileWaiter;
     loop {
         let released = PROFILE_SWITCH_RELEASED.notified();
+        tokio::pin!(released);
+        released.as_mut().enable();
         if let Some(guard) = try_profile_switch_guard() {
             drop(waiter);
             return guard;

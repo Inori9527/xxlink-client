@@ -417,10 +417,8 @@ async fn validate_session_snapshot_locked(subject_id: &str, generation: u64) -> 
 
 async fn refresh_session(stale_access_token: &str) -> BackendResult<SecureSessionSecret> {
     let _guard = REFRESH_LOCK.lock().await;
-    let current = read_secret_internal()
-        .await
-        .map_err(|_| BackendError::Unknown)?
-        .ok_or(BackendError::Auth)?;
+    let snapshot = session_snapshot().await?;
+    let current = snapshot.secret;
     if current.access_token() != stale_access_token {
         return Ok(current);
     }
@@ -440,6 +438,8 @@ async fn refresh_session(stale_access_token: &str) -> BackendResult<SecureSessio
         tokens.refresh_token,
     )
     .map_err(|_| BackendError::InvalidResponse)?;
+    let _session_guard = session_operation_guard().await;
+    validate_session_snapshot_locked(current.subject_id(), snapshot.generation).await?;
     write_secret_internal(replacement.clone())
         .await
         .map_err(|_| BackendError::Unknown)?;
@@ -651,8 +651,16 @@ fn validated_subscription_url(value: &str) -> BackendResult<Url> {
     {
         return Err(BackendError::InvalidResponse);
     }
+    let existing_query: Vec<(String, String)> = candidate
+        .query_pairs()
+        .filter(|(key, _)| key != "format")
+        .map(|(key, value)| (key.into_owned(), value.into_owned()))
+        .collect();
     candidate.set_query(None);
-    candidate.query_pairs_mut().append_pair("format", "clash");
+    let mut query = candidate.query_pairs_mut();
+    query.extend_pairs(existing_query);
+    query.append_pair("format", "clash");
+    drop(query);
     Ok(candidate)
 }
 
@@ -1140,6 +1148,12 @@ mod tests {
             assert_eq!(valid.query(), Some("format=clash"));
             assert_eq!(valid.host_str(), Some("api.xxlink.net"));
         }
+        let authorized = validated_subscription_url(
+            "https://api.xxlink.net/api/v1/subscription/profile?token=credential-fixture&format=sing-box",
+        )?;
+        let query: std::collections::HashMap<_, _> = authorized.query_pairs().into_owned().collect();
+        assert_eq!(query.get("token").map(String::as_str), Some("credential-fixture"));
+        assert_eq!(query.get("format").map(String::as_str), Some("clash"));
         for invalid in [
             "short",
             "token/with/path",

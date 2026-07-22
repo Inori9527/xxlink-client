@@ -179,6 +179,20 @@ assert(
   'profile activation CAS does not use an auto-releasing guard',
 )
 assert(
+  (profileCommands.match(/released\.as_mut\(\)\.enable\(\)/g) ?? []).length ===
+    2,
+  'profile guard waiters can miss a release notification',
+)
+assert(
+  rustController.includes(
+    'validate_session_snapshot_locked(current.subject_id(), snapshot.generation)',
+  ) &&
+    rustController.indexOf(
+      'validate_session_snapshot_locked(current.subject_id(), snapshot.generation)',
+    ) < rustController.indexOf('write_secret_internal(replacement.clone())'),
+  'token refresh can overwrite a concurrently replaced account session',
+)
+assert(
   profileTimer.includes('wait_profile_switch_guard().await') &&
     !profileTimer.includes('Skipping scheduled profile update'),
   'scheduled profile refresh can silently skip updates during guard contention',
