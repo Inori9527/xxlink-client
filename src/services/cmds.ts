@@ -4,38 +4,8 @@ import { getProxies, getProxyProviders } from 'tauri-plugin-mihomo-api'
 
 import { reportSafeClientFailure } from '@/services/safe-client-error'
 
-export async function getProfiles() {
-  return invoke<IProfilesConfig>('get_profiles')
-}
-
 export async function enhanceProfiles() {
   return invoke<void>('enhance_profiles')
-}
-
-export async function patchProfilesConfig(profiles: IProfilesConfig) {
-  return invoke<boolean>('patch_profiles_config', { profiles })
-}
-
-export async function importProfile(url: string, option?: IProfileOption) {
-  return invoke<void>('import_profile', {
-    url,
-    option: option || { with_proxy: true },
-  })
-}
-
-export async function updateProfile(index: string, option?: IProfileOption) {
-  return invoke<void>('update_profile', { index, option })
-}
-
-export async function deleteProfile(index: string) {
-  return invoke<void>('delete_profile', { index })
-}
-
-export async function patchProfile(
-  index: string,
-  profile: Partial<IProfileItem>,
-) {
-  return invoke<void>('patch_profile', { index, profile })
 }
 
 export async function getClashInfo() {
@@ -47,20 +17,12 @@ export async function getRuntimeConfig() {
   return invoke<IConfigData | null>('get_runtime_config')
 }
 
-export async function getRuntimeExists() {
-  return invoke<string[]>('get_runtime_exists')
-}
-
 export async function getRuntimeLogs() {
   return invoke<Record<string, [string, string][]>>('get_runtime_logs')
 }
 
 export async function patchClashConfig(payload: Partial<IConfigData>) {
   return invoke<void>('patch_clash_config', { payload })
-}
-
-export async function syncTrayProxySelection() {
-  return invoke<void>('sync_tray_proxy_selection')
 }
 
 export async function calcuProxies(): Promise<{
@@ -224,53 +186,8 @@ export async function getAutotemProxy() {
   }
 }
 
-export async function getAutoLaunchStatus() {
-  try {
-    return await invoke<boolean>('get_auto_launch_status')
-  } catch (error) {
-    reportSafeClientFailure('auto-launch-read', error)
-    return false
-  }
-}
-
-export async function changeClashCore(clashCore: string) {
-  return invoke<string | null>('change_clash_core', { clashCore })
-}
-
-export async function startCore() {
-  return invoke<void>('start_core')
-}
-
-export async function stopCore() {
-  return invoke<void>('stop_core')
-}
-
-export async function restartCore() {
-  return invoke<void>('restart_core')
-}
-
-export async function restartApp() {
-  return invoke<void>('restart_app')
-}
-
-export async function getAppDir() {
-  return invoke<string>('get_app_dir')
-}
-
-export async function cmdTestDelay(url: string) {
-  return invoke<number>('test_delay', { url })
-}
-
-export async function exportDiagnosticInfo() {
-  return invoke('export_diagnostic_info')
-}
-
 export async function getSystemInfo() {
   return invoke<string>('get_system_info')
-}
-
-export async function getNetworkInterfaces() {
-  return invoke<string[]>('get_network_interfaces')
 }
 
 export async function getSystemHostname() {
@@ -291,26 +208,6 @@ export const getAppUptime = async () => {
   return invoke<number>('get_app_uptime')
 }
 
-// 安装系统服务
-export const installService = async () => {
-  return invoke<void>('install_service')
-}
-
-// 卸载系统服务
-export const uninstallService = async () => {
-  return invoke<void>('uninstall_service')
-}
-
-// 重装系统服务
-export const reinstallService = async () => {
-  return invoke<void>('reinstall_service')
-}
-
-// 修复系统服务
-export const repairService = async () => {
-  return invoke<void>('repair_service')
-}
-
 // 系统服务是否可用
 export const isServiceAvailable = async () => {
   try {
@@ -319,9 +216,6 @@ export const isServiceAvailable = async () => {
     reportSafeClientFailure('service-availability-check', error)
     return false
   }
-}
-export const exit_lightweight_mode = async () => {
-  return invoke<void>('exit_lightweight_mode')
 }
 export const isAdmin = async () => {
   try {

@@ -27,8 +27,6 @@ pub enum ServiceStatus {
     NeedsReinstall,
     InstallRequired,
     UninstallRequired,
-    ReinstallRequired,
-    ForceReinstallRequired,
     Unavailable(String),
 }
 
@@ -334,15 +332,6 @@ fn reinstall_service() -> Result<()> {
     }
 }
 
-/// 强制重装服务（UI修复按钮）
-fn force_reinstall_service() -> Result<()> {
-    logging!(info, Type::Service, "用户请求强制重装服务");
-    reinstall_service().map_err(|err| {
-        logging!(error, Type::Service, "强制重装服务失败: {}", err);
-        err
-    })
-}
-
 /// 尝试使用服务启动core
 pub(super) async fn start_with_existing_service(config_file: &PathBuf) -> Result<()> {
     logging!(info, Type::Service, "尝试使用现有服务启动核心");
@@ -520,14 +509,9 @@ impl ServiceManager {
                 logging!(info, Type::Service, "服务就绪，直接启动");
                 self.0 = ServiceStatus::Ready;
             }
-            ServiceStatus::NeedsReinstall | ServiceStatus::ReinstallRequired => {
+            ServiceStatus::NeedsReinstall => {
                 logging!(info, Type::Service, "服务需要重装，执行重装流程");
                 run_blocking_service_operation("reinstall", reinstall_service).await?;
-                wait_and_check_service_available(self).await?;
-            }
-            ServiceStatus::ForceReinstallRequired => {
-                logging!(info, Type::Service, "服务需要强制重装，执行强制重装流程");
-                run_blocking_service_operation("force reinstall", force_reinstall_service).await?;
                 wait_and_check_service_available(self).await?;
             }
             ServiceStatus::InstallRequired => {

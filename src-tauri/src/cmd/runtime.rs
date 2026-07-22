@@ -2,18 +2,12 @@ use super::CmdResult;
 use crate::config::Config;
 use serde_yaml_ng::Mapping;
 use smartstring::alias::String;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// 获取运行时配置
 #[tauri::command]
 pub async fn get_runtime_config() -> CmdResult<Option<Mapping>> {
     Ok(Config::runtime().await.latest_arc().config.clone())
-}
-
-/// 获取运行时存在的键
-#[tauri::command]
-pub async fn get_runtime_exists() -> CmdResult<HashSet<String>> {
-    Ok(Config::runtime().await.latest_arc().exists_keys.clone())
 }
 
 /// 获取运行时日志
