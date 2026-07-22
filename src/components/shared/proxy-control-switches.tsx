@@ -19,6 +19,7 @@ import { useServiceUninstaller } from '@/hooks/use-service-uninstaller'
 import { useSystemProxyState } from '@/hooks/use-system-proxy-state'
 import { useSystemState } from '@/hooks/use-system-state'
 import { useVerge } from '@/hooks/use-verge'
+import { runtimeActionController } from '@/services/runtime-action-controller'
 type ProxyControlKind = 'systemProxy' | 'tun'
 
 interface ProxyControlProps {
@@ -151,7 +152,7 @@ const SystemProxyControl = ({ onError }: ProxyControlProps) => {
 
 const TunControl = ({ onError }: ProxyControlProps) => {
   const { t } = useTranslation()
-  const { verge, mutateVerge, patchVerge } = useVerge()
+  const { verge, mutateVerge } = useVerge()
   const { installServiceAndRestartCore } = useServiceInstaller()
   const { uninstallServiceAndRestartCore } = useServiceUninstaller()
   const { isServiceOk, isTunModeAvailable, mutateSystemState } =
@@ -166,7 +167,7 @@ const TunControl = ({ onError }: ProxyControlProps) => {
       throw new Error(t(msgKey))
     }
     mutateVerge({ ...verge, enable_tun_mode: value }, false)
-    await patchVerge({ enable_tun_mode: value })
+    await runtimeActionController.setTunEnabled(value)
   }
 
   const onInstallService = useLockFn(async () => {

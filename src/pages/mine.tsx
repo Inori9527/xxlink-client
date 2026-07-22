@@ -50,8 +50,8 @@ import {
   isBackendSubjectCurrent,
   type UsageView,
 } from '@/services/backend-controller'
-import { copyDiagnosticsBundleToClipboard } from '@/services/diagnostics-bundle'
 import { showNotice } from '@/services/notice-service'
+import { runtimeActionController } from '@/services/runtime-action-controller'
 import {
   classifyClientError,
   reportSafeClientFailure,
@@ -306,7 +306,7 @@ const MinePage = () => {
 
   const handleCopyDiagnostics = async () => {
     try {
-      await copyDiagnosticsBundleToClipboard()
+      await runtimeActionController.copyDiagnostics()
       showNotice.success(text.diagnosticsCopied)
     } catch (error) {
       reportSafeClientFailure('mine-copy-diagnostics', error)

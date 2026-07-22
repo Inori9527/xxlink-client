@@ -1,10 +1,8 @@
 import { Box, Button, LinearProgress, Link } from '@mui/material'
-import { relaunch } from '@tauri-apps/plugin-process'
 import { open as openUrl } from '@tauri-apps/plugin-shell'
-import type { DownloadEvent } from '@tauri-apps/plugin-updater'
 import { useLockFn } from 'ahooks'
 import type { Ref } from 'react'
-import { useImperativeHandle, useMemo, useRef, useState } from 'react'
+import { useImperativeHandle, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
 
@@ -37,16 +35,6 @@ export function UpdateViewer({
 
   const { updateInfo } = useUpdate()
 
-  const [downloaded, setDownloaded] = useState(0)
-  const [total, setTotal] = useState(0)
-  const downloadedRef = useRef(0)
-  const totalRef = useRef(0)
-
-  const progress = useMemo(() => {
-    if (total <= 0) return 0
-    return Math.min((downloaded / total) * 100, 100)
-  }, [downloaded, total])
-
   useImperativeHandle(ref, () => ({
     open: () => setOpen(true),
     close: () => setOpen(false),
@@ -74,38 +62,9 @@ export function UpdateViewer({
     }
     if (updateState) return
     setUpdateState(true)
-    setDownloaded(0)
-    setTotal(0)
-    downloadedRef.current = 0
-    totalRef.current = 0
-
-    const onDownloadEvent = (event: DownloadEvent) => {
-      if (event.event === 'Started') {
-        const contentLength = event.data.contentLength ?? 0
-        totalRef.current = contentLength
-        setTotal(contentLength)
-        setDownloaded(0)
-        downloadedRef.current = 0
-        return
-      }
-
-      if (event.event === 'Progress') {
-        setDownloaded((prev) => {
-          const next = prev + event.data.chunkLength
-          downloadedRef.current = next
-          return next
-        })
-      }
-
-      if (event.event === 'Finished' && totalRef.current === 0) {
-        totalRef.current = downloadedRef.current
-        setTotal(downloadedRef.current)
-      }
-    }
 
     try {
-      await updateInfo.downloadAndInstall(onDownloadEvent)
-      await relaunch()
+      await updateInfo.downloadAndInstall()
     } catch (err: unknown) {
       reportSafeClientFailure('update-install', err)
       showNotice.error(
@@ -113,10 +72,6 @@ export function UpdateViewer({
       )
     } finally {
       setUpdateState(false)
-      setDownloaded(0)
-      setTotal(0)
-      downloadedRef.current = 0
-      totalRef.current = 0
     }
   })
 
@@ -179,11 +134,7 @@ export function UpdateViewer({
         </ReactMarkdown>
       </Box>
       {updateState && (
-        <LinearProgress
-          variant={total > 0 ? 'determinate' : 'indeterminate'}
-          value={progress}
-          sx={{ marginTop: '5px' }}
-        />
+        <LinearProgress variant="indeterminate" sx={{ marginTop: '5px' }} />
       )}
     </BaseDialog>
   )

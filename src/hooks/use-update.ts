@@ -1,16 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { queryClient } from '@/services/query-client'
-import { checkUpdateSafe } from '@/services/update'
+import { runtimeActionController } from '@/services/runtime-action-controller'
 
 import { useVerge } from './use-verge'
 
 export interface UpdateInfo {
   version: string
-  body: string
-  date: string
+  body: string | null
+  date: string | null
   available: boolean
-  downloadAndInstall: (onEvent?: any) => Promise<void>
+  downloadAndInstall: () => Promise<void>
 }
 
 const LAST_CHECK_KEY = 'last_check_update'
@@ -47,9 +47,15 @@ export const useUpdate = (enabled: boolean = true) => {
   } = useQuery({
     queryKey: ['checkUpdate'],
     queryFn: async () => {
-      const result = await checkUpdateSafe()
+      const result = await runtimeActionController.checkUpdate()
       updateLastCheckTime()
-      return result
+      if (!result) return null
+      return {
+        ...result,
+        available: true,
+        downloadAndInstall: () =>
+          runtimeActionController.installUpdate(result.version),
+      }
     },
     enabled: shouldCheck,
     retry: 2,
