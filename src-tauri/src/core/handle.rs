@@ -50,12 +50,6 @@ impl Handle {
         });
     }
 
-    pub fn notify_timer_updated(profile_index: &String) {
-        Self::send_event(FrontendEvent::TimerUpdated {
-            profile_index: profile_index.clone(),
-        });
-    }
-
     pub fn notify_profile_update_started(uid: &String) {
         Self::send_event(FrontendEvent::ProfileUpdateStarted { uid: uid.clone() });
     }

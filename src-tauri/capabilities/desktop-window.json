@@ -1,0 +1,23 @@
+{
+  "identifier": "desktop-window-capability",
+  "description": "Least-privilege window operations for the main desktop window",
+  "local": true,
+  "webviews": ["main"],
+  "windows": ["main"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-close",
+    "core:window:allow-is-maximized",
+    "core:window:allow-is-fullscreen",
+    "core:window:allow-is-decorated",
+    "core:window:allow-minimize",
+    "core:window:allow-maximize",
+    "core:window:allow-unmaximize",
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-set-decorations",
+    "core:window:allow-set-minimizable",
+    "core:window:allow-set-fullscreen"
+  ]
+}

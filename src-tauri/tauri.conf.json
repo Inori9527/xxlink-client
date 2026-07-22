@@ -40,11 +40,14 @@
       "desktop": {
         "schemes": ["xxlink"]
       }
+    },
+    "shell": {
+      "open": "^https://(?:(?:www\\.)?xxlink\\.net(?:/.*)?|api\\.xxlink\\.net(?:/.*)?|github\\.com/Inori9527/xxlink-client(?:/.*)?)$"
     }
   },
   "app": {
     "security": {
-      "capabilities": ["desktop-capability", "migrated"],
+      "capabilities": ["desktop-capability", "desktop-window-capability"],
       "assetProtocol": {
         "enable": true,
         "scope": {

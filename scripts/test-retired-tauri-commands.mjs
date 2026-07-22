@@ -12,6 +12,9 @@ const readSourceIfExists = (relativePath) =>
   existsSync(resolve(repoRoot, relativePath)) ? readSource(relativePath) : ''
 
 const cmdSource = readSource('src/services/cmds.ts')
+const runtimeControllerSource = readSource(
+  'src/services/runtime-action-controller.ts',
+)
 const libSource = readSource('src-tauri/src/lib.rs')
 const cmdModSource = readSource('src-tauri/src/cmd/mod.rs')
 
@@ -43,6 +46,27 @@ const retiredRawConfigCommands = [
   [null, 'validate_dns_config'],
 ]
 
+const retiredWebviewCommands = [
+  ['getProfiles', 'get_profiles'],
+  ['patchProfilesConfig', 'patch_profiles_config'],
+  ['importProfile', 'import_profile'],
+  ['updateProfile', 'update_profile'],
+  ['deleteProfile', 'delete_profile'],
+  ['patchProfile', 'patch_profile'],
+  ['getRuntimeExists', 'get_runtime_exists'],
+  ['syncTrayProxySelection', 'sync_tray_proxy_selection'],
+  ['getAutoLaunchStatus', 'get_auto_launch_status'],
+  ['changeClashCore', 'change_clash_core'],
+  ['restartApp', 'restart_app'],
+  ['getAppDir', 'get_app_dir'],
+  ['cmdTestDelay', 'test_delay'],
+  ['exportDiagnosticInfo', 'export_diagnostic_info'],
+  ['getNetworkInterfaces', 'get_network_interfaces'],
+  ['reinstallService', 'reinstall_service'],
+  ['repairService', 'repair_service'],
+  ['exit_lightweight_mode', 'exit_lightweight_mode'],
+]
+
 const readFrontendRuntimeSources = (relativeDir) =>
   readdirSync(resolve(repoRoot, relativeDir), { withFileTypes: true }).flatMap(
     (entry) => {
@@ -61,6 +85,9 @@ test('retired frontend command wrappers are absent', () => {
     'reorderProfile',
     ...retiredDeletedConsumerCommands.map(([name]) => name),
     ...retiredRawConfigCommands.flatMap(([name]) => (name ? [name] : [])),
+    ...retiredWebviewCommands.map(([name]) => name),
+    'installService',
+    'uninstallService',
   ]) {
     assert.doesNotMatch(
       cmdSource,
@@ -77,6 +104,7 @@ test('retired frontend command wrappers are absent', () => {
     'reorder_profile',
     ...retiredDeletedConsumerCommands.map(([, name]) => name),
     ...retiredRawConfigCommands.map(([, name]) => name),
+    ...retiredWebviewCommands.map(([, name]) => name),
   ]) {
     assert.equal(
       cmdSource.includes(`'${command}'`),
@@ -124,7 +152,7 @@ test('retired Rust commands and registrations are absent', () => {
   const retiredHandlerSources = [
     readSource('src-tauri/src/cmd/app.rs'),
     readSource('src-tauri/src/cmd/clash.rs'),
-    readSource('src-tauri/src/cmd/lightweight.rs'),
+    readSourceIfExists('src-tauri/src/cmd/lightweight.rs'),
     readSource('src-tauri/src/cmd/network.rs'),
     readSource('src-tauri/src/cmd/profile.rs'),
     readSource('src-tauri/src/cmd/runtime.rs'),
@@ -159,7 +187,9 @@ test('retired Rust commands and registrations are absent', () => {
 test('retired command modules are absent', () => {
   for (const moduleName of [
     'media_unlock_checker',
+    'lightweight',
     'oauth',
+    'proxy',
     'save_profile',
     'uwp',
   ]) {
@@ -179,6 +209,16 @@ test('retired command modules are absent', () => {
     existsSync(resolve(repoRoot, 'src-tauri/src/cmd/media_unlock_checker')),
     false,
     'media unlock command module must remain retired',
+  )
+  assert.equal(
+    existsSync(resolve(repoRoot, 'src-tauri/src/cmd/lightweight.rs')),
+    false,
+    'renderer lightweight command module must remain retired',
+  )
+  assert.equal(
+    existsSync(resolve(repoRoot, 'src-tauri/src/cmd/proxy.rs')),
+    false,
+    'renderer tray proxy command module must remain retired',
   )
   assert.equal(
     existsSync(resolve(repoRoot, 'src-tauri/src/cmd/oauth.rs')),
@@ -236,25 +276,18 @@ test('live error conversion, timer, validation, and Clash helpers remain', () =>
   assert.match(validatorSource, /pub\s+async\s+fn\s+validate_config\b/)
   assert.match(clashFeatureSource, /pub\s+async\s+fn\s+restart_clash_core\b/)
   assert.match(clashFeatureSource, /pub\s+async\s+fn\s+restart_app\b/)
-  assert.match(clashFeatureSource, /pub\s+async\s+fn\s+test_delay\b/)
+  assert.doesNotMatch(clashFeatureSource, /pub\s+async\s+fn\s+test_delay\b/)
 })
 
-test('managed profile, current-selection, and tray commands remain registered', () => {
-  for (const command of [
-    'get_profiles',
-    'enhance_profiles',
-    'patch_profiles_config',
-    'import_profile',
-    'update_profile',
-    'delete_profile',
-    'patch_profile',
-    'sync_tray_proxy_selection',
-  ]) {
-    assert.match(libSource, new RegExp(`\\bcmd::${command}\\b`))
-    assert.equal(
-      cmdSource.includes(`'${command}'`),
-      true,
-      `${command} frontend invoke must remain available`,
+test('managed profile UI commands are retired while internal enhancement remains', () => {
+  assert.match(libSource, /\bcmd::enhance_profiles\b/)
+  assert.equal(cmdSource.includes("'enhance_profiles'"), true)
+
+  for (const [, command] of retiredWebviewCommands) {
+    assert.doesNotMatch(
+      libSource,
+      new RegExp(`\\bcmd::${command}\\b`),
+      `${command} must not remain registered`,
     )
   }
 })
@@ -262,15 +295,9 @@ test('managed profile, current-selection, and tray commands remain registered', 
 test('approved runtime reads and Clash actions remain registered', () => {
   for (const [wrapper, command] of [
     ['getRuntimeConfig', 'get_runtime_config'],
-    ['getRuntimeExists', 'get_runtime_exists'],
     ['getRuntimeLogs', 'get_runtime_logs'],
     ['getClashInfo', 'get_clash_info'],
     ['patchClashConfig', 'patch_clash_config'],
-    ['changeClashCore', 'change_clash_core'],
-    ['startCore', 'start_core'],
-    ['stopCore', 'stop_core'],
-    ['restartCore', 'restart_core'],
-    ['cmdTestDelay', 'test_delay'],
     ['getClashLogs', 'get_clash_logs'],
   ]) {
     assert.match(
@@ -288,6 +315,17 @@ test('approved runtime reads and Clash actions remain registered', () => {
       new RegExp(`\\bcmd::${command}\\b`),
       `${command} must remain registered`,
     )
+  }
+
+  for (const command of [
+    'start_core',
+    'stop_core',
+    'restart_core',
+    'install_service',
+    'uninstall_service',
+  ]) {
+    assert.equal(runtimeControllerSource.includes(`'${command}'`), true)
+    assert.match(libSource, new RegExp(`\\bcmd::${command}\\b`))
   }
 })
 
@@ -345,11 +383,7 @@ test('system proxy and diagnostics commands remain available', () => {
     )
   }
 
-  for (const command of [
-    'get_system_info',
-    'get_app_uptime',
-    'export_diagnostic_info',
-  ]) {
+  for (const command of ['get_system_info', 'get_app_uptime']) {
     assert.match(
       libSource,
       new RegExp(`tauri_plugin_xxlink_sysinfo::commands::${command}`),
@@ -360,4 +394,9 @@ test('system proxy and diagnostics commands remain available', () => {
       `${command} frontend invoke must remain available`,
     )
   }
+
+  assert.doesNotMatch(
+    libSource,
+    /tauri_plugin_xxlink_sysinfo::commands::export_diagnostic_info/,
+  )
 })
