@@ -295,10 +295,8 @@ test('managed profile UI commands are retired while internal enhancement remains
 test('approved runtime reads and Clash actions remain registered', () => {
   for (const [wrapper, command] of [
     ['getRuntimeConfig', 'get_runtime_config'],
-    ['getRuntimeLogs', 'get_runtime_logs'],
     ['getClashInfo', 'get_clash_info'],
     ['patchClashConfig', 'patch_clash_config'],
-    ['getClashLogs', 'get_clash_logs'],
   ]) {
     assert.match(
       cmdSource,
@@ -371,8 +369,6 @@ test('system proxy and diagnostics commands remain available', () => {
   for (const command of [
     'get_sys_proxy',
     'get_auto_proxy',
-    'get_runtime_logs',
-    'get_clash_logs',
     'get_running_mode',
   ]) {
     assert.match(libSource, new RegExp(`\\bcmd::${command}\\b`))
@@ -382,6 +378,15 @@ test('system proxy and diagnostics commands remain available', () => {
       `${command} frontend invoke must remain available`,
     )
   }
+
+  for (const command of [
+    'runtime_get_diagnostics_log_summaries',
+    'runtime_write_diagnostics_bundle',
+  ]) {
+    assert.match(libSource, new RegExp(`\\bcmd::${command}\\b`))
+  }
+  assert.doesNotMatch(cmdSource, /getRuntimeLogs|getClashLogs/)
+  assert.doesNotMatch(libSource, /cmd::get_runtime_logs|cmd::get_clash_logs/)
 
   for (const command of ['get_system_info', 'get_app_uptime']) {
     assert.match(
