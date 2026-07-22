@@ -139,7 +139,9 @@ assert(
 )
 assert(
   rustController.includes('managed_profile_marker(subject_id)') &&
-    rustController.includes('deactivate_foreign_current_managed_profile(subject_id)') &&
+    rustController.includes(
+      'deactivate_foreign_current_managed_profile(subject_id)',
+    ) &&
     secureSession.includes('deactivate_managed_profiles()'),
   'account replacement can retain a managed profile owned by the previous subject',
 )
