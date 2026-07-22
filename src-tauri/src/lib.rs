@@ -167,6 +167,7 @@ mod app_init {
             cmd::secure_session_read,
             cmd::secure_session_write,
             cmd::secure_session_delete,
+            cmd::secure_session_recover_pending_logout,
             cmd::backend_get_plans,
             cmd::backend_get_subscription,
             cmd::backend_get_usage,

@@ -108,18 +108,15 @@ assert.match(main, /await initializeSecureSession\(\)/)
 assert.match(vault, /export async function initializeSecureSession/)
 assert.match(vault, /export async function manualLogout/)
 assert.match(vault, /secure_session_delete[\s\S]*?authStore\.clearAuth\(\)/)
-assert.doesNotMatch(
-  vault,
-  /secure_session_delete[\s\S]{0,400}(?:catch|finally)[\s\S]{0,200}authStore\.clearAuth\(\)/,
-)
 assert.match(
   rust,
-  /deactivate_managed_profiles\(\)[\s\S]*?delete_credential\(\)/,
+  /logout_pending = true[\s\S]*?deactivate_managed_profiles\(\)[\s\S]*?delete_credential_internal\(\)/,
 )
-assert.doesNotMatch(
-  mine,
-  /manualLogout\(\)[\s\S]{0,200}finally[\s\S]{0,120}navigate\(['"]\/login['"]\)/,
+assert.match(
+  vault,
+  /secure_session_recover_pending_logout[\s\S]*?recovery\.pending[\s\S]*?authStore\.clearAuth\(\)/,
 )
+assert.match(mine, /const cleaned = await manualLogout\(\)/)
 assert.match(vault, /VAULT_OPERATION_TIMEOUT_MS/)
 assert.doesNotMatch(login, /accessToken|refreshToken|apiLogin|setAuth/)
 assert.doesNotMatch(mine, /accessToken|refreshToken|apiLogout|clearAuth/)

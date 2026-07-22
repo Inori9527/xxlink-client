@@ -14,6 +14,8 @@ pub struct SecureSessionSecret {
     subject_id: String,
     access_token: String,
     refresh_token: String,
+    #[serde(default)]
+    logout_pending: bool,
 }
 
 impl SecureSessionSecret {
@@ -27,6 +29,10 @@ impl SecureSessionSecret {
 
     pub(crate) fn refresh_token(&self) -> &str {
         &self.refresh_token
+    }
+
+    pub(crate) fn is_logout_pending(&self) -> bool {
+        self.logout_pending
     }
 }
 
@@ -82,6 +88,7 @@ fn encode_secret(subject_id: String, access_token: String, refresh_token: String
         subject_id,
         access_token,
         refresh_token,
+        logout_pending: false,
     })
     .map_err(|_| VaultErrorKind::WriteFailed)
 }
@@ -94,20 +101,21 @@ fn read_secret() -> Result<Option<SecureSessionSecret>, VaultErrorKind> {
     }
 }
 
-pub(crate) async fn read_secret_internal() -> Result<Option<SecureSessionSecret>, ()> {
+async fn read_secret_raw_internal() -> Result<Option<SecureSessionSecret>, ()> {
     tauri::async_runtime::spawn_blocking(read_secret)
         .await
         .map_err(|_| ())?
         .map_err(|_| ())
 }
 
+pub(crate) async fn read_secret_internal() -> Result<Option<SecureSessionSecret>, ()> {
+    read_secret_raw_internal()
+        .await
+        .map(|secret| secret.filter(|value| !value.is_logout_pending()))
+}
+
 pub(crate) async fn write_secret_internal(secret: SecureSessionSecret) -> Result<(), ()> {
-    let encoded = encode_secret(
-        secret.subject_id.clone(),
-        secret.access_token.clone(),
-        secret.refresh_token.clone(),
-    )
-    .map_err(|_| ())?;
+    let encoded = serde_json::to_string(&secret).map_err(|_| ())?;
     tauri::async_runtime::spawn_blocking(move || {
         let vault = entry()?;
         vault.set_password(&encoded).map_err(|_| VaultErrorKind::WriteFailed)?;
@@ -137,10 +145,10 @@ pub(crate) fn replacement_secret(
 #[tauri::command]
 pub async fn secure_session_read() -> Result<Option<SecureSessionSecret>, String> {
     let _guard = session_operation_guard().await;
-    tauri::async_runtime::spawn_blocking(read_secret)
+    read_secret_raw_internal()
         .await
-        .map_err(|_| VaultErrorKind::ReadFailed.to_string())?
-        .map_err(|error| error.to_string())
+        .map(|secret| secret.filter(|value| !value.is_logout_pending()))
+        .map_err(|_| VaultErrorKind::ReadFailed.to_string())
 }
 
 #[tauri::command]
@@ -150,12 +158,12 @@ pub async fn secure_session_write(
     refresh_token: String,
 ) -> Result<(), String> {
     let _guard = session_operation_guard().await;
-    let existing = read_secret_internal()
+    let existing = read_secret_raw_internal()
         .await
         .map_err(|_| VaultErrorKind::ReadFailed.to_string())?;
     if existing
         .as_ref()
-        .is_some_and(|secret| secret.subject_id() != subject_id)
+        .is_some_and(|secret| secret.subject_id() != subject_id || secret.is_logout_pending())
     {
         crate::cmd::backend_controller::deactivate_managed_profiles()
             .await
@@ -173,16 +181,60 @@ pub async fn secure_session_write(
 #[tauri::command]
 pub async fn secure_session_delete() -> Result<(), String> {
     let _guard = session_operation_guard().await;
+    if let Some(mut secret) = read_secret_raw_internal()
+        .await
+        .map_err(|_| VaultErrorKind::ReadFailed.to_string())?
+    {
+        secret.logout_pending = true;
+        if write_secret_internal(secret).await.is_err() {
+            let _ = delete_credential_internal().await;
+            return Err(VaultErrorKind::WriteFailed.to_string());
+        }
+    }
     crate::cmd::backend_controller::deactivate_managed_profiles()
         .await
         .map_err(|_| VaultErrorKind::DeleteFailed.to_string())?;
+    delete_credential_internal()
+        .await
+        .map_err(|_| VaultErrorKind::DeleteFailed.to_string())
+}
+
+async fn delete_credential_internal() -> Result<(), ()> {
     tauri::async_runtime::spawn_blocking(move || match entry()?.delete_credential() {
         Ok(()) | Err(KeyringError::NoEntry) => Ok(()),
         Err(_) => Err(VaultErrorKind::DeleteFailed),
     })
     .await
-    .map_err(|_| VaultErrorKind::DeleteFailed.to_string())?
-    .map_err(|error| error.to_string())
+    .map_err(|_| ())?
+    .map_err(|_| ())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingLogoutRecovery {
+    pending: bool,
+    cleaned: bool,
+}
+
+#[tauri::command]
+pub async fn secure_session_recover_pending_logout() -> Result<PendingLogoutRecovery, String> {
+    let _guard = session_operation_guard().await;
+    let pending = read_secret_raw_internal()
+        .await
+        .map_err(|_| VaultErrorKind::ReadFailed.to_string())?
+        .is_some_and(|secret| secret.is_logout_pending());
+    if !pending {
+        return Ok(PendingLogoutRecovery {
+            pending: false,
+            cleaned: true,
+        });
+    }
+
+    let cleaned = crate::cmd::backend_controller::deactivate_managed_profiles()
+        .await
+        .is_ok()
+        && delete_credential_internal().await.is_ok();
+    Ok(PendingLogoutRecovery { pending: true, cleaned })
 }
 
 #[cfg(test)]
@@ -200,6 +252,7 @@ mod tests {
                     subject_id: "user-fixture".into(),
                     access_token: "access-fixture".into(),
                     refresh_token: "refresh-fixture".into(),
+                    logout_pending: false,
                 })
         );
     }
@@ -215,6 +268,23 @@ mod tests {
         ] {
             assert!(matches!(decode_secret(fixture), Err(VaultErrorKind::Corrupted)));
         }
+    }
+
+    #[test]
+    fn legacy_secret_defaults_to_active_and_pending_secret_round_trips() {
+        let legacy =
+            decode_secret(r#"{"version":1,"subjectId":"user","accessToken":"access","refreshToken":"refresh"}"#)
+                .expect("legacy secret should decode");
+        assert!(!legacy.is_logout_pending());
+
+        let mut pending = legacy;
+        pending.logout_pending = true;
+        let encoded = serde_json::to_string(&pending).expect("pending secret should encode");
+        assert!(
+            decode_secret(&encoded)
+                .expect("pending secret should decode")
+                .is_logout_pending()
+        );
     }
 
     #[tokio::test]

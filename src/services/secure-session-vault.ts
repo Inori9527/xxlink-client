@@ -127,6 +127,20 @@ async function writeAndVerify(
 }
 
 export async function initializeSecureSession(): Promise<void> {
+  try {
+    const recovery = await withVaultTimeout(
+      invoke<{ pending: boolean; cleaned: boolean }>(
+        'secure_session_recover_pending_logout',
+      ),
+    )
+    if (recovery.pending) {
+      authStore.clearAuth()
+      return
+    }
+  } catch {
+    // A later startup can retry; no credential is returned to the renderer.
+  }
+
   const { user } = authStore.getState()
   if (!user) {
     authStore.setSessionStatus('signed_out')
@@ -211,7 +225,7 @@ export async function signInWithSecureSession(
   return result.user
 }
 
-export async function manualLogout(): Promise<void> {
+export async function manualLogout(): Promise<boolean> {
   try {
     const secret = await readVault()
     if (secret) await apiLogout(secret.refreshToken)
@@ -219,6 +233,13 @@ export async function manualLogout(): Promise<void> {
     // Explicit local logout must still complete when the server or vault fails.
   }
 
-  await withVaultTimeout(invoke('secure_session_delete'))
-  authStore.clearAuth()
+  let cleaned = true
+  try {
+    await withVaultTimeout(invoke('secure_session_delete'))
+  } catch {
+    cleaned = false
+  } finally {
+    authStore.clearAuth()
+  }
+  return cleaned
 }

@@ -153,6 +153,12 @@ assert(
   'account replacement can retain a managed profile owned by the previous subject',
 )
 assert(
+  secureSession.includes('logout_pending = true') &&
+    secureSession.includes('secure_session_recover_pending_logout') &&
+    secureSession.includes('filter(|value| !value.is_logout_pending())'),
+  'pending logout credentials can remain usable or restore the renderer session',
+)
+assert(
   rustController.includes('try_profile_switch_guard') &&
     rustController.includes('patch_profiles_config_if_current_under_guard') &&
     profileStore.includes('cannot retire the current profile'),
