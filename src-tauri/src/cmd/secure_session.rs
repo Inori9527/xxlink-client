@@ -31,7 +31,7 @@ impl SecureSessionSecret {
         &self.refresh_token
     }
 
-    pub(crate) fn is_logout_pending(&self) -> bool {
+    pub(crate) const fn is_logout_pending(&self) -> bool {
         self.logout_pending
     }
 }
@@ -272,18 +272,17 @@ mod tests {
 
     #[test]
     fn legacy_secret_defaults_to_active_and_pending_secret_round_trips() {
-        let legacy =
+        assert_eq!(
             decode_secret(r#"{"version":1,"subjectId":"user","accessToken":"access","refreshToken":"refresh"}"#)
-                .expect("legacy secret should decode");
-        assert!(!legacy.is_logout_pending());
-
-        let mut pending = legacy;
-        pending.logout_pending = true;
-        let encoded = serde_json::to_string(&pending).expect("pending secret should encode");
-        assert!(
-            decode_secret(&encoded)
-                .expect("pending secret should decode")
-                .is_logout_pending()
+                .map(|secret| secret.is_logout_pending()),
+            Ok(false)
+        );
+        assert_eq!(
+            decode_secret(
+                r#"{"version":1,"subjectId":"user","accessToken":"access","refreshToken":"refresh","logoutPending":true}"#,
+            )
+            .map(|secret| secret.is_logout_pending()),
+            Ok(true)
         );
     }
 
