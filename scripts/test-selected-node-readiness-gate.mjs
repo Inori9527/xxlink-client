@@ -269,7 +269,12 @@ test('probe timeout does not stop or switch the selected route', () => {
 
   assert.equal(source.includes('const next = !runtimeConnected'), true)
   assert.equal(source.includes('stopFailedReadinessConnection'), true)
-  assert.equal(source.includes('getReadinessFailureDisconnectPayload()'), true)
+  assert.equal(
+    source.includes(
+      'runtimeActionController.setConnectionEnabled(mode, false)',
+    ),
+    true,
+  )
   const stopBlock = source.slice(
     source.indexOf('const stopFailedReadinessConnection'),
     source.indexOf('const validateSelectedNodeReadiness'),

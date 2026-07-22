@@ -1,10 +1,10 @@
 import { useCallback } from 'react'
 
-import { restartCore, stopCore, uninstallService } from '@/services/cmds'
 import {
   showNotice,
   showSafeClientFailureNotice,
 } from '@/services/notice-service'
+import { runtimeActionController } from '@/services/runtime-action-controller'
 import type { SafeClientFailureScope } from '@/services/safe-client-error'
 
 import { useSystemState } from './use-system-state'
@@ -33,12 +33,12 @@ export const useServiceUninstaller = () => {
   const uninstallServiceAndRestartCore = useCallback(async () => {
     try {
       await executeWithErrorHandling(
-        () => stopCore(),
+        () => runtimeActionController.stopCore(),
         'service-stop-before-uninstall',
         'settings.statuses.clash.stopping',
       )
       await executeWithErrorHandling(
-        () => uninstallService(),
+        () => runtimeActionController.uninstallService(),
         'service-uninstall',
         'settings.statuses.clashService.uninstalling',
         'settings.feedback.notifications.clashService.uninstallSuccess',
@@ -46,7 +46,7 @@ export const useServiceUninstaller = () => {
     } catch (ignore) {
     } finally {
       await executeWithErrorHandling(
-        () => restartCore(),
+        () => runtimeActionController.restartCore(),
         'service-restart-after-uninstall',
         'settings.statuses.clash.restarting',
         'settings.feedback.notifications.clash.restartSuccess',

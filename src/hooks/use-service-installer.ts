@@ -1,10 +1,10 @@
 import { useCallback } from 'react'
 
-import { installService, restartCore } from '@/services/cmds'
 import {
   showNotice,
   showSafeClientFailureNotice,
 } from '@/services/notice-service'
+import { runtimeActionController } from '@/services/runtime-action-controller'
 import type { SafeClientFailureScope } from '@/services/safe-client-error'
 
 import { useSystemState } from './use-system-state'
@@ -32,14 +32,14 @@ export const useServiceInstaller = () => {
 
   const installServiceAndRestartCore = useCallback(async () => {
     await executeWithErrorHandling(
-      () => installService(),
+      () => runtimeActionController.installService(),
       'service-install',
       'settings.statuses.clashService.installing',
       'settings.feedback.notifications.clashService.installSuccess',
     )
 
     await executeWithErrorHandling(
-      () => restartCore(),
+      () => runtimeActionController.restartCore(),
       'service-restart-after-install',
       'settings.statuses.clash.restarting',
       'settings.feedback.notifications.clash.restartSuccess',

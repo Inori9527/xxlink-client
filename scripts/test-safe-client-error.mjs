@@ -646,7 +646,6 @@ test('reachable safety-tail sinks never display, persist, copy, or log raw error
     'src/hooks/use-service-installer.ts',
     'src/hooks/use-service-uninstaller.ts',
     'src/services/preload.ts',
-    'src/services/update.ts',
     'src/hooks/use-system-state.ts',
     'src/pages/_layout/hooks/use-app-initialization.ts',
     'src/pages/_layout/hooks/use-layout-events.ts',

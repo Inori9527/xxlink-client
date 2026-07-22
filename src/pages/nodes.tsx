@@ -20,6 +20,7 @@ import { useVerge } from '@/hooks/use-verge'
 import { useAppData } from '@/providers/app-data-context'
 import delayManager from '@/services/delay'
 import { showNotice } from '@/services/notice-service'
+import { runtimeActionController } from '@/services/runtime-action-controller'
 import { reportSafeClientFailure } from '@/services/safe-client-error'
 import {
   getProxyDisplayKey,
@@ -132,12 +133,11 @@ const NodesPage = () => {
     setTestingDelay(true)
     try {
       setDelayRefreshTick((value) => value + 1)
-      await delayManager.checkListDelay(
-        nodes.map((node) => node.name),
+      await runtimeActionController.testNodeLatency({
+        nodeNames: nodes.map((node) => node.name),
         groupName,
-        latencyTimeout,
-        6,
-      )
+        timeoutMs: latencyTimeout,
+      })
       setDelayRefreshTick((value) => value + 1)
       await refreshProxy()
     } catch {

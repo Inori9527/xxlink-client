@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { getRunningMode, isAdmin, isServiceAvailable } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
+import { runtimeActionController } from '@/services/runtime-action-controller'
 import { reportSafeClientFailure } from '@/services/safe-client-error'
 
 import { useVerge } from './use-verge'
@@ -27,7 +28,7 @@ const STARTUP_GRACE_MS = 10_000
  * 包括运行模式、管理员状态、系统服务是否可用
  */
 export function useSystemState() {
-  const { verge, patchVerge } = useVerge()
+  const { verge } = useVerge()
   const disablingTunRef = useRef(false)
   const [isStartingUp, setIsStartingUp] = useState(true)
 
@@ -71,7 +72,8 @@ export function useSystemState() {
       !isStartingUp
     ) {
       disablingTunRef.current = true
-      patchVerge({ enable_tun_mode: false })
+      runtimeActionController
+        .setTunEnabled(false)
         .then(() => {
           showNotice.info(
             'settings.sections.system.notifications.tunMode.autoDisabled',
@@ -99,7 +101,7 @@ export function useSystemState() {
         disablingTunRef.current = false
       }
     }
-  }, [enable_tun_mode, isTunModeAvailable, patchVerge, isLoading, isStartingUp])
+  }, [enable_tun_mode, isTunModeAvailable, isLoading, isStartingUp])
 
   return {
     runningMode: systemState.runningMode,

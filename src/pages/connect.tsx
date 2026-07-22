@@ -41,9 +41,7 @@ import { useNavigate } from 'react-router'
 
 import { BasePage } from '@/components/base'
 import ProxyControlSwitches from '@/components/shared/proxy-control-switches'
-import { useClash } from '@/hooks/use-clash'
 import {
-  getConnectModePayload,
   loadConnectMode,
   persistConnectMode,
   type ConnectMode,
@@ -80,6 +78,7 @@ import {
 } from '@/services/node-latency-display'
 import { showNotice } from '@/services/notice-service'
 import { runResumeRecovery } from '@/services/resume-recovery'
+import { runtimeActionController } from '@/services/runtime-action-controller'
 import {
   classifyClientError,
   reportSafeClientFailure,
@@ -87,7 +86,6 @@ import {
 } from '@/services/safe-client-error'
 import {
   checkSelectedNodeReadiness,
-  getReadinessFailureDisconnectPayload,
   isSelectedNodeConnected,
   shouldAutoSelectNode,
   shouldDisplayReadinessFailure,
@@ -243,8 +241,7 @@ const ConnectPage = () => {
   const theme = useTheme()
   const navigate = useNavigate()
   const pageVisible = useVisibility()
-  const { verge, patchVerge } = useVerge()
-  const { patchClash } = useClash()
+  const { verge } = useVerge()
   const { proxies, refreshProxy } = useAppData()
   const currentUserId = authStore.getState().user?.id ?? null
   const initialAccountCache = useMemo(
@@ -685,32 +682,17 @@ const ConnectPage = () => {
       setMode(next)
       persistConnectMode(next)
 
-      const payload = runtimeConnected
-        ? getConnectModePayload(next, true)
-        : ({ connect_mode: next } as Partial<IVergeConfig>)
-      const rollbackPayload = runtimeConnected
-        ? getConnectModePayload(previousMode, true)
-        : ({ connect_mode: previousMode } as Partial<IVergeConfig>)
-
       void (async () => {
         try {
           setModeChanging(true)
-          if (runtimeConnected) {
-            await patchClash({ mode: next === 'smart' ? 'rule' : 'global' })
-          }
-          await patchVerge(payload)
+          await runtimeActionController.setConnectionMode(next)
           await refreshProxy()
         } catch (error) {
           setMode(previousMode)
           persistConnectMode(previousMode)
 
           try {
-            if (runtimeConnected) {
-              await patchClash({
-                mode: previousMode === 'smart' ? 'rule' : 'global',
-              })
-            }
-            await patchVerge(rollbackPayload)
+            await runtimeActionController.setConnectionMode(previousMode)
             await refreshProxy()
           } catch (rollbackError) {
             reportSafeClientFailure('connect-mode-rollback', rollbackError)
@@ -726,16 +708,7 @@ const ConnectPage = () => {
         }
       })()
     },
-    [
-      mode,
-      modeChanging,
-      patchClash,
-      patchVerge,
-      refreshProxy,
-      runtimeConnected,
-      t,
-      triggerErrorFlash,
-    ],
+    [mode, modeChanging, refreshProxy, t, triggerErrorFlash],
   )
 
   const handleNodeMenuOpen = useCallback(
@@ -775,10 +748,7 @@ const ConnectPage = () => {
   const stopFailedReadinessConnection = useCallback(
     async (attempt: number) => {
       try {
-        await patchVerge({
-          ...getReadinessFailureDisconnectPayload(),
-          connect_mode: mode,
-        })
+        await runtimeActionController.setConnectionEnabled(mode, false)
         if (readinessAttemptRef.current === attempt) {
           lastReadinessNodeRef.current = null
           setReadinessStatus('disconnected')
@@ -794,7 +764,7 @@ const ConnectPage = () => {
         )
       }
     },
-    [mode, patchVerge, refreshProxy, t],
+    [mode, refreshProxy, t],
   )
 
   const validateSelectedNodeReadiness = useCallback(async () => {
@@ -872,25 +842,15 @@ const ConnectPage = () => {
     setBusy(true)
     try {
       const next = !runtimeConnected
-      const payload: Partial<IVergeConfig> = {}
-      if (mode === 'system') {
-        payload.enable_tun_mode = false
-        payload.enable_system_proxy = next
-      } else {
-        // Full VPN and Smart Split both need TUN so desktop apps are covered.
-        payload.enable_tun_mode = next
-        payload.enable_system_proxy = next
-      }
       if (next) {
         setReadinessStatus('connecting')
         await refreshAccountState()
-        await patchClash({ mode: mode === 'smart' ? 'rule' : 'global' })
       } else {
         readinessAttemptRef.current += 1
         lastReadinessNodeRef.current = null
         setReadinessStatus('disconnected')
       }
-      await patchVerge({ ...payload, connect_mode: mode })
+      await runtimeActionController.setConnectionEnabled(mode, next)
       if (next) {
         await refreshProxy()
         await validateSelectedNodeReadiness()
@@ -953,10 +913,7 @@ const ConnectPage = () => {
   const disconnectForTrafficExceeded = useCallback(async () => {
     setBusy(true)
     try {
-      await patchVerge({
-        enable_tun_mode: false,
-        enable_system_proxy: false,
-      })
+      await runtimeActionController.setConnectionEnabled(mode, false)
       readinessAttemptRef.current += 1
       lastReadinessNodeRef.current = null
       setReadinessStatus('disconnected')
@@ -972,7 +929,7 @@ const ConnectPage = () => {
     } finally {
       setBusy(false)
     }
-  }, [patchVerge, refreshAccountState, refreshProxy])
+  }, [mode, refreshAccountState, refreshProxy])
 
   useEffect(() => {
     if (!connected || !currentNodeId) return
