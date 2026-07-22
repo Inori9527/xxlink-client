@@ -1,4 +1,9 @@
 {
+  "secureSession": {
+    "recoveryRequired": "Your account is still available, but secure session recovery is required before online actions can continue.",
+    "serviceBlocked": "Your account remains signed in, but the service rejected this session. Online actions are unavailable.",
+    "retry": "Retry"
+  },
   "components": {
     "navigation": {
       "tabs": {

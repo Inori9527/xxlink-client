@@ -297,6 +297,11 @@ export interface TranslationResources {
           title: string
         }
       }
+      secureSession: {
+        recoveryRequired: string
+        retry: string
+        serviceBlocked: string
+      }
     }
     mine: {
       cancel: string
@@ -1421,6 +1426,8 @@ export interface TranslationResources {
         brand: string
         cancelGoogleLogin: string
         errors: {
+          accountExists: string
+          invalidCredentials: string
           loginFailed: string
           openBrowser: string
           registerFailed: string

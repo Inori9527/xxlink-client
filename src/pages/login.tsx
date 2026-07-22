@@ -14,13 +14,14 @@ import { useState, type FormEvent, type ReactNode, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, Link as RouterLink } from 'react-router'
 
-import { apiLogin, AuthError } from '@/services/auth'
+import { AuthError } from '@/services/auth'
 import { useAuth } from '@/services/auth-store'
 import {
   classifyClientError,
   reportSafeClientFailure,
   toSafeClientErrorMessage,
 } from '@/services/safe-client-error'
+import { signInWithSecureSession } from '@/services/secure-session-controller'
 import { SESSION_EXPIRED_MESSAGE_KEY } from '@/services/session'
 import { syncSubscription } from '@/services/subscription-sync'
 
@@ -40,7 +41,7 @@ const getLoginErrorMessage = (
 export default function LoginPage(): ReactNode {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { setAuth, isAuthenticated } = useAuth()
+  const { isAuthenticated } = useAuth()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -69,8 +70,7 @@ export default function LoginPage(): ReactNode {
     setError('')
     setLoading(true)
     try {
-      const result = await apiLogin(email, password)
-      setAuth(result.user, result.accessToken, result.refreshToken)
+      await signInWithSecureSession(email, password)
       syncSubscription({ force: true, timeoutMs: 10_000 }).catch((error) =>
         reportSafeClientFailure('login-subscription-sync', error),
       )

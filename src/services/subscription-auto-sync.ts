@@ -10,7 +10,7 @@ let unsubscribe: (() => void) | null = null
 let running = false
 
 async function runAutoSync(): Promise<void> {
-  if (running || !authStore.getState().isAuthenticated) return
+  if (running || !authStore.getState().isOperational) return
 
   running = true
   try {
@@ -30,7 +30,7 @@ function stopTimer(): void {
 }
 
 function syncTimerState(): void {
-  if (!authStore.getState().isAuthenticated) {
+  if (!authStore.getState().isOperational) {
     stopTimer()
     return
   }

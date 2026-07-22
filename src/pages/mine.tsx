@@ -45,7 +45,6 @@ import {
   writeAccountLkgCache,
 } from '@/services/account-lkg-cache'
 import { api, type UsageData } from '@/services/api'
-import { apiLogout } from '@/services/auth'
 import { useAuth } from '@/services/auth-store'
 import { copyDiagnosticsBundleToClipboard } from '@/services/diagnostics-bundle'
 import { showNotice } from '@/services/notice-service'
@@ -54,6 +53,7 @@ import {
   reportSafeClientFailure,
   toSafeClientErrorMessage,
 } from '@/services/safe-client-error'
+import { manualLogout } from '@/services/secure-session-controller'
 import parseTraffic from '@/utils/parse-traffic'
 
 const DASHBOARD_URL = 'https://xxlink.net/dashboard'
@@ -174,7 +174,7 @@ const MinePage = () => {
   const { t } = useTranslation()
   const theme = useTheme()
   const navigate = useNavigate()
-  const { user, refreshToken, clearAuth } = useAuth()
+  const { user } = useAuth()
   const updateViewerRef = useRef<DialogRef>(null)
   const { updateInfo, checkUpdate, loading: checkingUpdate } = useUpdate(false)
   const [logoutOpen, setLogoutOpen] = useState(false)
@@ -271,11 +271,8 @@ const MinePage = () => {
 
   const confirmLogout = useLockFn(async () => {
     try {
-      if (refreshToken) await apiLogout(refreshToken)
-    } catch {
-      /* local logout should still proceed */
+      await manualLogout()
     } finally {
-      clearAuth()
       setLogoutOpen(false)
       navigate('/login')
     }
