@@ -14,7 +14,11 @@ import {
 } from 'react'
 
 import { clearAccountLkgCache } from './account-lkg-cache'
-import type { AuthUser } from './auth'
+export interface AuthUser {
+  id: string
+  email: string
+  role: 'USER' | 'ADMIN'
+}
 
 const LEGACY_ACCESS_TOKEN_KEY = 'xxlink_access_token'
 const LEGACY_REFRESH_TOKEN_KEY = 'xxlink_refresh_token'

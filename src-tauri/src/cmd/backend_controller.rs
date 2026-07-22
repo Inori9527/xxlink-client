@@ -1,6 +1,7 @@
 use crate::{
     cmd::secure_session::{
-        SecureSessionSecret, read_secret_internal, replacement_secret, session_generation, session_operation_guard,
+        SecureSessionSecret, begin_login_attempt, read_secret_internal, replace_active_session_for_login,
+        replacement_secret, session_generation, session_operation_guard, take_session_for_logout,
         write_secret_internal,
     },
     config::{
@@ -286,6 +287,14 @@ struct RefreshedTokens {
     refresh_token: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LoginReply {
+    access_token: String,
+    refresh_token: String,
+    user: UserProfileView,
+}
+
 fn endpoint(path: &str) -> String {
     format!("{}{}", API_BASE_URL.trim_end_matches('/'), path)
 }
@@ -508,6 +517,50 @@ async fn authenticated_request<T: DeserializeOwned>(
             subject_id: reply.subject_id,
             data: reply.data,
         })
+}
+
+#[tauri::command]
+pub async fn secure_session_login(email: String, password: String) -> Result<UserProfileView, BackendError> {
+    let login_attempt = begin_login_attempt();
+    let client = HTTP_CLIENT.as_ref().map_err(|error| *error)?;
+    let login = tokio::time::timeout(std::time::Duration::from_secs(8), async {
+        let response = client
+            .post(endpoint("/auth/login"))
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .json(&serde_json::json!({ "email": email, "password": password }))
+            .send()
+            .await
+            .map_err(|_| BackendError::Network)?;
+        parse_response::<LoginReply>(response, "/auth/login").await
+    })
+    .await
+    .map_err(|_| BackendError::Network)??;
+    let secret = replacement_secret(login.user.id.clone(), login.access_token, login.refresh_token)
+        .map_err(|_| BackendError::InvalidResponse)?;
+    replace_active_session_for_login(secret, login_attempt)
+        .await
+        .map_err(|_| BackendError::Unknown)?;
+    Ok(login.user)
+}
+
+#[tauri::command]
+pub async fn secure_session_logout() -> Result<(), BackendError> {
+    let _refresh_guard = REFRESH_LOCK.lock().await;
+    let secret = take_session_for_logout().await.map_err(|_| BackendError::Unknown)?;
+    if let Some(secret) = secret {
+        let refresh_token = secret.refresh_token().to_owned();
+        tauri::async_runtime::spawn(async move {
+            if let Ok(client) = HTTP_CLIENT.as_ref() {
+                let _ = client
+                    .post(endpoint("/auth/logout"))
+                    .header(reqwest::header::CONTENT_TYPE, "application/json")
+                    .json(&serde_json::json!({ "refreshToken": refresh_token }))
+                    .send()
+                    .await;
+            }
+        });
+    }
+    Ok(())
 }
 
 #[tauri::command]
