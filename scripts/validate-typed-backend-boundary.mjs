@@ -19,6 +19,10 @@ const profileTimer = read('src-tauri/src/core/timer.rs')
 const deepLinkResolver = read('src-tauri/src/utils/resolve/scheme.rs')
 const fileHelpers = read('src-tauri/src/utils/help.rs')
 const rendererConfig = read('src/services/config.ts')
+const logoutDelete = secureSession.slice(
+  secureSession.indexOf('pub async fn secure_session_delete'),
+  secureSession.indexOf('async fn delete_credential_internal'),
+)
 const consumers = [
   'src/pages/connect.tsx',
   'src/pages/plans.tsx',
@@ -154,6 +158,8 @@ assert(
 )
 assert(
   secureSession.includes('logout_pending = true') &&
+    logoutDelete.indexOf('LOGOUT_REQUESTED.store(true') <
+      logoutDelete.indexOf('session_operation_guard().await') &&
     secureSession.includes('secure_session_recover_pending_logout') &&
     secureSession.includes('filter(|value| !value.is_logout_pending())'),
   'pending logout credentials can remain usable or restore the renderer session',
@@ -170,12 +176,11 @@ assert(
     profileCommands.includes('patch_profiles_config_if_current_under_guard'),
   'profile activation CAS does not use an auto-releasing guard',
 )
-for (const [source, label] of [[profileTimer, 'scheduled profile refresh']]) {
-  assert(
-    source.includes('try_profile_switch_guard'),
-    `${label} does not participate in the shared profile mutation guard`,
-  )
-}
+assert(
+  profileTimer.includes('wait_profile_switch_guard().await') &&
+    !profileTimer.includes('Skipping scheduled profile update'),
+  'scheduled profile refresh can silently skip updates during guard contention',
+)
 assert(
   deepLinkResolver.includes('wait_profile_switch_guard().await') &&
     deepLinkResolver.includes('Semaphore::const_new(2)') &&

@@ -1,11 +1,14 @@
 use keyring::{Entry, Error as KeyringError};
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::{Mutex, MutexGuard};
 
 const VAULT_SERVICE: &str = "com.xxlink.desktop.secure-session";
 const VAULT_ACCOUNT: &str = "primary";
 const VAULT_VERSION: u8 = 1;
 static SESSION_OPERATION_LOCK: Mutex<()> = Mutex::const_new(());
+static VAULT_IO_LOCK: Mutex<()> = Mutex::const_new(());
+static LOGOUT_REQUESTED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -102,6 +105,7 @@ fn read_secret() -> Result<Option<SecureSessionSecret>, VaultErrorKind> {
 }
 
 async fn read_secret_raw_internal() -> Result<Option<SecureSessionSecret>, ()> {
+    let _guard = VAULT_IO_LOCK.lock().await;
     tauri::async_runtime::spawn_blocking(read_secret)
         .await
         .map_err(|_| ())?
@@ -109,12 +113,31 @@ async fn read_secret_raw_internal() -> Result<Option<SecureSessionSecret>, ()> {
 }
 
 pub(crate) async fn read_secret_internal() -> Result<Option<SecureSessionSecret>, ()> {
-    read_secret_raw_internal()
-        .await
-        .map(|secret| secret.filter(|value| !value.is_logout_pending()))
+    if LOGOUT_REQUESTED.load(Ordering::Acquire) {
+        return Ok(None);
+    }
+    let secret = read_secret_raw_internal().await?;
+    if LOGOUT_REQUESTED.load(Ordering::Acquire) {
+        Ok(None)
+    } else {
+        Ok(secret.filter(|value| !value.is_logout_pending()))
+    }
 }
 
 pub(crate) async fn write_secret_internal(secret: SecureSessionSecret) -> Result<(), ()> {
+    let _guard = VAULT_IO_LOCK.lock().await;
+    if LOGOUT_REQUESTED.load(Ordering::Acquire) {
+        return Err(());
+    }
+    write_secret_without_guard(secret).await
+}
+
+async fn write_pending_secret_internal(secret: SecureSessionSecret) -> Result<(), ()> {
+    let _guard = VAULT_IO_LOCK.lock().await;
+    write_secret_without_guard(secret).await
+}
+
+async fn write_secret_without_guard(secret: SecureSessionSecret) -> Result<(), ()> {
     let encoded = serde_json::to_string(&secret).map_err(|_| ())?;
     tauri::async_runtime::spawn_blocking(move || {
         let vault = entry()?;
@@ -145,9 +168,8 @@ pub(crate) fn replacement_secret(
 #[tauri::command]
 pub async fn secure_session_read() -> Result<Option<SecureSessionSecret>, String> {
     let _guard = session_operation_guard().await;
-    read_secret_raw_internal()
+    read_secret_internal()
         .await
-        .map(|secret| secret.filter(|value| !value.is_logout_pending()))
         .map_err(|_| VaultErrorKind::ReadFailed.to_string())
 }
 
@@ -169,7 +191,12 @@ pub async fn secure_session_write(
             .await
             .map_err(|_| VaultErrorKind::WriteFailed.to_string())?;
     }
+    LOGOUT_REQUESTED.store(false, Ordering::Release);
     let encoded = encode_secret(subject_id, access_token, refresh_token).map_err(|error| error.to_string())?;
+    let _vault_guard = VAULT_IO_LOCK.lock().await;
+    if LOGOUT_REQUESTED.load(Ordering::Acquire) {
+        return Err(VaultErrorKind::WriteFailed.to_string());
+    }
     tauri::async_runtime::spawn_blocking(move || {
         entry()?.set_password(&encoded).map_err(|_| VaultErrorKind::WriteFailed)
     })
@@ -180,17 +207,18 @@ pub async fn secure_session_write(
 
 #[tauri::command]
 pub async fn secure_session_delete() -> Result<(), String> {
-    let _guard = session_operation_guard().await;
+    LOGOUT_REQUESTED.store(true, Ordering::Release);
     if let Some(mut secret) = read_secret_raw_internal()
         .await
         .map_err(|_| VaultErrorKind::ReadFailed.to_string())?
     {
         secret.logout_pending = true;
-        if write_secret_internal(secret).await.is_err() {
+        if write_pending_secret_internal(secret).await.is_err() {
             let _ = delete_credential_internal().await;
             return Err(VaultErrorKind::WriteFailed.to_string());
         }
     }
+    let _guard = session_operation_guard().await;
     crate::cmd::backend_controller::deactivate_managed_profiles()
         .await
         .map_err(|_| VaultErrorKind::DeleteFailed.to_string())?;
@@ -200,6 +228,7 @@ pub async fn secure_session_delete() -> Result<(), String> {
 }
 
 async fn delete_credential_internal() -> Result<(), ()> {
+    let _guard = VAULT_IO_LOCK.lock().await;
     tauri::async_runtime::spawn_blocking(move || match entry()?.delete_credential() {
         Ok(()) | Err(KeyringError::NoEntry) => Ok(()),
         Err(_) => Err(VaultErrorKind::DeleteFailed),
@@ -218,7 +247,6 @@ pub struct PendingLogoutRecovery {
 
 #[tauri::command]
 pub async fn secure_session_recover_pending_logout() -> Result<PendingLogoutRecovery, String> {
-    let _guard = session_operation_guard().await;
     let pending = read_secret_raw_internal()
         .await
         .map_err(|_| VaultErrorKind::ReadFailed.to_string())?
@@ -230,6 +258,8 @@ pub async fn secure_session_recover_pending_logout() -> Result<PendingLogoutReco
         });
     }
 
+    LOGOUT_REQUESTED.store(true, Ordering::Release);
+    let _guard = session_operation_guard().await;
     let cleaned = crate::cmd::backend_controller::deactivate_managed_profiles()
         .await
         .is_ok()
