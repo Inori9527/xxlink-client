@@ -22,7 +22,7 @@ use smartstring::alias::String as SmartString;
 use tokio::sync::Mutex;
 use url::Url;
 
-const API_BASE_URL: &str = match option_env!("XXLINK_API_BASE_URL") {
+const API_BASE_URL: &str = match option_env!("VITE_API_BASE_URL") {
     Some(value) => value,
     None => "https://api.xxlink.net/api/v1",
 };

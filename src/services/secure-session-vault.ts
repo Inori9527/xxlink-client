@@ -219,12 +219,6 @@ export async function manualLogout(): Promise<void> {
     // Explicit local logout must still complete when the server or vault fails.
   }
 
-  try {
-    await withVaultTimeout(invoke('secure_session_delete'))
-  } catch {
-    // The account shell is still cleared. A missing local user prevents an
-    // orphaned credential from silently restoring a signed-in shell.
-  } finally {
-    authStore.clearAuth()
-  }
+  await withVaultTimeout(invoke('secure_session_delete'))
+  authStore.clearAuth()
 }

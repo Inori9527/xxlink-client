@@ -51,6 +51,7 @@ export const SAFE_CLIENT_FAILURE_SCOPES = [
   'login-submit',
   'login-subscription-sync',
   'mine-copy-diagnostics',
+  'mine-manual-logout',
   'nodes-proxy-selection',
   'notice-copy',
   'plans-claim-public-benefit',

@@ -278,9 +278,13 @@ const MinePage = () => {
   const confirmLogout = useLockFn(async () => {
     try {
       await manualLogout()
-    } finally {
       setLogoutOpen(false)
       navigate('/login')
+    } catch (error) {
+      reportSafeClientFailure('mine-manual-logout', error)
+      showNotice.error(
+        toSafeClientErrorMessage(classifyClientError(error).kind, t),
+      )
     }
   })
 

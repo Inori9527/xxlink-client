@@ -18,6 +18,7 @@ const profileCommands = read('src-tauri/src/cmd/profile.rs')
 const profileTimer = read('src-tauri/src/core/timer.rs')
 const deepLinkResolver = read('src-tauri/src/utils/resolve/scheme.rs')
 const fileHelpers = read('src-tauri/src/utils/help.rs')
+const rendererConfig = read('src/services/config.ts')
 const consumers = [
   'src/pages/connect.tsx',
   'src/pages/plans.tsx',
@@ -106,6 +107,12 @@ assert(
   rustController.includes('session_operation_guard().await') &&
     secureSession.includes('SESSION_OPERATION_LOCK'),
   'authenticated operations are not serialized with session replacement',
+)
+assert(
+  rustController.includes('option_env!("VITE_API_BASE_URL")') &&
+    !rustController.includes('XXLINK_API_BASE_URL') &&
+    rendererConfig.includes('VITE_API_BASE_URL'),
+  'trusted and renderer transports can resolve different configured API origins',
 )
 assert(
   rustController.includes('deactivate_managed_profiles().await') &&

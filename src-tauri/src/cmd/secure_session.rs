@@ -173,21 +173,16 @@ pub async fn secure_session_write(
 #[tauri::command]
 pub async fn secure_session_delete() -> Result<(), String> {
     let _guard = session_operation_guard().await;
-    let deactivation_failed = crate::cmd::backend_controller::deactivate_managed_profiles()
+    crate::cmd::backend_controller::deactivate_managed_profiles()
         .await
-        .is_err();
+        .map_err(|_| VaultErrorKind::DeleteFailed.to_string())?;
     tauri::async_runtime::spawn_blocking(move || match entry()?.delete_credential() {
         Ok(()) | Err(KeyringError::NoEntry) => Ok(()),
         Err(_) => Err(VaultErrorKind::DeleteFailed),
     })
     .await
     .map_err(|_| VaultErrorKind::DeleteFailed.to_string())?
-    .map_err(|error| error.to_string())?;
-    if deactivation_failed {
-        Err(VaultErrorKind::DeleteFailed.to_string())
-    } else {
-        Ok(())
-    }
+    .map_err(|error| error.to_string())
 }
 
 #[cfg(test)]
