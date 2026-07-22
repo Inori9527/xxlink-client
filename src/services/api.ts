@@ -11,6 +11,10 @@ import { isServiceAccessBlockedResponse } from '@/services/auth-session-boundary
 import { authStore } from '@/services/auth-store'
 import { BASE_URL } from '@/services/config'
 import { fetchWithTimeout } from '@/services/http'
+import {
+  replaceSecureSession,
+  requireSecureSession,
+} from '@/services/secure-session-vault'
 
 // ---------------------------------------------------------------------------
 // Shared type definitions
@@ -260,6 +264,7 @@ function getServiceBlockedMessage(code?: string): string {
 }
 
 function handleAuthFatal(status: number, code?: string): never {
+  authStore.setSessionStatus('service_blocked')
   const friendlyMessage = getServiceBlockedMessage(code)
   throw new ApiError(friendlyMessage, status, code || 'SERVICE_ACCESS_BLOCKED')
 }
@@ -272,12 +277,10 @@ async function request<T>(
   } = {},
 ): Promise<T> {
   const doRequest = async (): Promise<Response> => {
-    const state = authStore.getState()
+    const session = await requireSecureSession()
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-    }
-    if (state.accessToken) {
-      headers['Authorization'] = `Bearer ${state.accessToken}`
+      Authorization: `Bearer ${session.accessToken}`,
     }
 
     return fetchWithTimeout(`${BASE_URL}${path}`, {
@@ -292,21 +295,12 @@ async function request<T>(
 
   // 401 → attempt token refresh once
   if (res.status === 401) {
-    const state = authStore.getState()
-    if (state.refreshToken) {
+    const session = await requireSecureSession()
+    if (session.refreshToken) {
       if (!isRefreshing) {
         isRefreshing = true
-        refreshPromise = apiRefreshToken(state.refreshToken)
-          .then((tokens) => {
-            // Update the singleton with new tokens; user stays the same
-            if (state.user) {
-              authStore.setAuth(
-                state.user,
-                tokens.accessToken,
-                tokens.refreshToken,
-              )
-            }
-          })
+        refreshPromise = apiRefreshToken(session.refreshToken)
+          .then(replaceSecureSession)
           .catch((error) => {
             if (
               error instanceof AuthError &&
@@ -340,7 +334,7 @@ async function request<T>(
           })
       }
       await refreshPromise
-      if (!authStore.getState().accessToken) {
+      if (!authStore.getState().isOperational) {
         handleAuthFatal(401, 'SESSION_EXPIRED')
       }
       // Retry the original request with the refreshed token

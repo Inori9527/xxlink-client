@@ -37,6 +37,7 @@ import {
   toSafeClientFailureRecord,
   writeSafeClientFailureToClipboard,
 } from './services/safe-client-error'
+import { initializeSecureSession } from './services/secure-session-controller'
 import { SESSION_EXPIRED_EVENT } from './services/session'
 import {
   LoadingCacheProvider,
@@ -190,11 +191,12 @@ const startBackgroundStartupTasks = () => {
   startSubscriptionAutoSync()
   startResumeRecoveryListeners()
 
-  if (!authStore.getState().isAuthenticated) return
+  if (!authStore.getState().isOperational) return
   void runResumeRecovery('startup', { force: true })
 }
 
 const bootstrap = async () => {
+  await initializeSecureSession()
   const timeoutSymbol = Symbol('preload-timeout')
   const result = await Promise.race([
     preloadAppData(),

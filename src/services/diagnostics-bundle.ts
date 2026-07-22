@@ -521,8 +521,8 @@ function buildAuthStateInput(): DiagnosticsAuthInput {
     const state = authStore.getState()
     return {
       isAuthenticated: state.isAuthenticated,
-      hasAccessToken: Boolean(state.accessToken),
-      hasRefreshToken: Boolean(state.refreshToken),
+      hasAccessToken: state.isOperational,
+      hasRefreshToken: state.isOperational,
       userRole: state.user?.role ?? null,
     }
   } catch {

@@ -1,18 +1,14 @@
 /**
- * Global auth state store.
+ * Global account shell state.
  *
- * Tokens are persisted in localStorage (the Tauri WebView's localStorage,
- * which is sandboxed per app identifier and never exposed to the network).
- *
- * Exposes a React context + hook for components, and a plain singleton
- * `authStore` for non-component code (e.g. the API refresh interceptor).
+ * Credentials live behind SecureSessionVault. React receives only the
+ * displayable account and a categorized secure-session state.
  */
 import {
   createContext,
   use,
   useState,
   useEffect,
-  useCallback,
   createElement,
   type ReactNode,
 } from 'react'
@@ -20,80 +16,84 @@ import {
 import { clearAccountLkgCache } from './account-lkg-cache'
 import type { AuthUser } from './auth'
 
-// ---------------------------------------------------------------------------
-// localStorage keys
-// ---------------------------------------------------------------------------
-
-const LS_ACCESS_TOKEN = 'xxlink_access_token'
-const LS_REFRESH_TOKEN = 'xxlink_refresh_token'
+const LEGACY_ACCESS_TOKEN_KEY = 'xxlink_access_token'
+const LEGACY_REFRESH_TOKEN_KEY = 'xxlink_refresh_token'
 const LS_USER = 'xxlink_user'
 
-// ---------------------------------------------------------------------------
-// In-memory singleton (shared between context and non-React code)
-// ---------------------------------------------------------------------------
+export type SecureSessionStatus =
+  | 'initializing'
+  | 'operational'
+  | 'recovery_required'
+  | 'service_blocked'
+  | 'signed_out'
 
-interface AuthState {
+export interface AuthState {
   user: AuthUser | null
-  accessToken: string | null
-  refreshToken: string | null
+  sessionStatus: SecureSessionStatus
   isAuthenticated: boolean
+  isOperational: boolean
 }
 
-function loadFromStorage(): AuthState {
+function isAuthUser(value: unknown): value is AuthUser {
+  if (!value || typeof value !== 'object') return false
+  const record = value as Record<string, unknown>
+  return (
+    typeof record.id === 'string' &&
+    record.id.length > 0 &&
+    typeof record.email === 'string' &&
+    (record.role === 'USER' || record.role === 'ADMIN')
+  )
+}
+
+function loadUser(): AuthUser | null {
   try {
-    const accessToken = localStorage.getItem(LS_ACCESS_TOKEN)
-    const refreshToken = localStorage.getItem(LS_REFRESH_TOKEN)
-    const userRaw = localStorage.getItem(LS_USER)
-    const user: AuthUser | null = userRaw
-      ? (JSON.parse(userRaw) as AuthUser)
-      : null
-    const isAuthenticated = Boolean(accessToken && user)
-    return { user, accessToken, refreshToken, isAuthenticated }
+    const raw = localStorage.getItem(LS_USER)
+    if (!raw) return null
+    const value: unknown = JSON.parse(raw)
+    return isAuthUser(value) ? value : null
   } catch {
-    return {
-      user: null,
-      accessToken: null,
-      refreshToken: null,
-      isAuthenticated: false,
-    }
+    return null
   }
 }
 
-function saveToStorage(
-  user: AuthUser,
-  accessToken: string,
-  refreshToken: string,
-): void {
-  localStorage.setItem(LS_ACCESS_TOKEN, accessToken)
-  localStorage.setItem(LS_REFRESH_TOKEN, refreshToken)
+function toState(
+  user: AuthUser | null,
+  sessionStatus: SecureSessionStatus,
+): AuthState {
+  const isAuthenticated = user !== null && sessionStatus !== 'signed_out'
+  return {
+    user,
+    sessionStatus,
+    isAuthenticated,
+    isOperational: isAuthenticated && sessionStatus === 'operational',
+  }
+}
+
+function loadFromStorage(): AuthState {
+  const user = loadUser()
+  return toState(user, user ? 'initializing' : 'signed_out')
+}
+
+function saveUser(user: AuthUser): void {
   localStorage.setItem(LS_USER, JSON.stringify(user))
 }
 
 function clearStorage(): void {
-  localStorage.removeItem(LS_ACCESS_TOKEN)
-  localStorage.removeItem(LS_REFRESH_TOKEN)
+  localStorage.removeItem(LEGACY_ACCESS_TOKEN_KEY)
+  localStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY)
   localStorage.removeItem(LS_USER)
 
-  // Also clear any xxlink:* namespaced keys (user preferences like
-  // connect-mode, show-advanced-settings, last-sync-error, etc.).
-  // We do NOT touch clash-verge-* keys — those are device-scoped by design.
   try {
     const keysToRemove: string[] = []
     for (let i = 0; i < localStorage.length; i += 1) {
       const key = localStorage.key(i)
-      if (key && key.startsWith('xxlink:')) {
-        keysToRemove.push(key)
-      }
+      if (key?.startsWith('xxlink:')) keysToRemove.push(key)
     }
     keysToRemove.forEach((key) => localStorage.removeItem(key))
   } catch {
-    // localStorage unavailable — ignore
+    // localStorage unavailable
   }
 }
-
-// ---------------------------------------------------------------------------
-// Plain singleton for non-React callers
-// ---------------------------------------------------------------------------
 
 type Listener = () => void
 
@@ -105,25 +105,31 @@ class AuthStoreSingleton {
     return this.state
   }
 
-  setAuth(user: AuthUser, accessToken: string, refreshToken: string): void {
+  setAuthenticatedUser(user: AuthUser): void {
     const previousUserId = this.state.user?.id
     if (previousUserId && previousUserId !== user.id) {
       clearAccountLkgCache(previousUserId)
     }
-    saveToStorage(user, accessToken, refreshToken)
-    this.state = { user, accessToken, refreshToken, isAuthenticated: true }
+    saveUser(user)
+    this.state = toState(user, 'operational')
+    this.notify()
+  }
+
+  setSessionStatus(sessionStatus: SecureSessionStatus): void {
+    this.state = toState(this.state.user, sessionStatus)
+    this.notify()
+  }
+
+  preserveCachedShell(user: AuthUser | null = this.state.user): void {
+    if (user) saveUser(user)
+    this.state = toState(user, user ? 'recovery_required' : 'signed_out')
     this.notify()
   }
 
   clearAuth(): void {
     clearAccountLkgCache(this.state.user?.id)
     clearStorage()
-    this.state = {
-      user: null,
-      accessToken: null,
-      refreshToken: null,
-      isAuthenticated: false,
-    }
+    this.state = toState(null, 'signed_out')
     this.notify()
   }
 
@@ -133,69 +139,24 @@ class AuthStoreSingleton {
   }
 
   private notify(): void {
-    this.listeners.forEach((l) => l())
+    this.listeners.forEach((listener) => listener())
   }
 }
 
 export const authStore = new AuthStoreSingleton()
 
-// ---------------------------------------------------------------------------
-// React context
-// ---------------------------------------------------------------------------
+const AuthContext = createContext<AuthState | null>(null)
 
-interface AuthContextValue extends AuthState {
-  setAuth: (user: AuthUser, accessToken: string, refreshToken: string) => void
-  clearAuth: () => void
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null)
-
-interface AuthProviderProps {
-  children: ReactNode
-}
-
-export function AuthProvider({ children }: AuthProviderProps): ReactNode {
+export function AuthProvider({ children }: { children: ReactNode }): ReactNode {
   const [state, setState] = useState<AuthState>(() => authStore.getState())
 
-  useEffect(() => {
-    // Keep context state in sync with singleton (e.g. when token refresh
-    // updates the singleton from outside a React render cycle)
-    return authStore.subscribe(() => {
-      setState(authStore.getState())
-    })
-  }, [])
+  useEffect(() => authStore.subscribe(() => setState(authStore.getState())), [])
 
-  const setAuth = useCallback(
-    (user: AuthUser, accessToken: string, refreshToken: string) => {
-      authStore.setAuth(user, accessToken, refreshToken)
-      // listener above will fire, but we also set locally for immediate render
-      setState(authStore.getState())
-    },
-    [],
-  )
-
-  const clearAuth = useCallback(() => {
-    authStore.clearAuth()
-    setState(authStore.getState())
-  }, [])
-
-  return createElement(
-    AuthContext.Provider,
-    {
-      value: {
-        ...state,
-        setAuth,
-        clearAuth,
-      },
-    },
-    children,
-  )
+  return createElement(AuthContext.Provider, { value: state }, children)
 }
 
-export function useAuth(): AuthContextValue {
-  const ctx = use(AuthContext)
-  if (!ctx) {
-    throw new Error('useAuth must be used inside <AuthProvider>')
-  }
-  return ctx
+export function useAuth(): AuthState {
+  const context = use(AuthContext)
+  if (!context) throw new Error('useAuth must be used inside <AuthProvider>')
+  return context
 }

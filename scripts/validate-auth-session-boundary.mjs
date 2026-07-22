@@ -150,8 +150,19 @@ assert.equal(
 const mineSource = readSource('src/pages/mine.tsx')
 assert.equal(
   mineSource.includes('clearAuth()'),
-  true,
-  'manual logout path should still clear local auth state',
+  false,
+  'React pages must not directly clear local auth state',
+)
+assert.match(
+  mineSource,
+  /await manualLogout\(\)/,
+  'Mine should delegate explicit logout to the trusted session controller',
+)
+const secureSessionSource = readSource('src/services/secure-session-vault.ts')
+assert.match(
+  secureSessionSource,
+  /export async function manualLogout\([\s\S]*?authStore\.clearAuth\(\)/,
+  'manual logout controller should clear local auth state',
 )
 
 console.log(`auth session boundary cases passed: ${cases.length}`)

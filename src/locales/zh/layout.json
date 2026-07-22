@@ -1,4 +1,9 @@
 {
+  "secureSession": {
+    "recoveryRequired": "账户资料仍保留，但需要恢复安全会话后才能继续在线操作。",
+    "serviceBlocked": "账户仍保持登录，但服务端已拒绝当前会话，在线操作暂不可用。",
+    "retry": "重试"
+  },
   "components": {
     "navigation": {
       "tabs": {

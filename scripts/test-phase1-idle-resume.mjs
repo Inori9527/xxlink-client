@@ -259,6 +259,7 @@ test('resume recovery refreshes safe account state without exposing secrets', as
   const authStore = {
     getState: () => ({
       isAuthenticated: true,
+      isOperational: true,
       user: {
         id: 'user@example.test',
         email: 'user@example.test',
@@ -370,6 +371,7 @@ test('failed resume recovery persists classification without raw client material
       authStore: {
         getState: () => ({
           isAuthenticated: true,
+          isOperational: true,
           user: { id: 'user-id', email: 'user@example.test', role: 'USER' },
         }),
       },

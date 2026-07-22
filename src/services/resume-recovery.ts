@@ -90,7 +90,7 @@ export async function runResumeRecovery(
   options: { force?: boolean } = {},
 ): Promise<void> {
   const state = authStore.getState()
-  if (!state.isAuthenticated || !state.user) return
+  if (!state.isOperational || !state.user) return
   const userId = state.user.id
 
   const now = Date.now()

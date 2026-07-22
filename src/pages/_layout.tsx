@@ -1,6 +1,14 @@
 import KeyboardDoubleArrowLeftRoundedIcon from '@mui/icons-material/KeyboardDoubleArrowLeftRounded'
 import KeyboardDoubleArrowRightRoundedIcon from '@mui/icons-material/KeyboardDoubleArrowRightRounded'
-import { Box, IconButton, List, Paper, ThemeProvider } from '@mui/material'
+import {
+  Alert,
+  Box,
+  Button,
+  IconButton,
+  List,
+  Paper,
+  ThemeProvider,
+} from '@mui/material'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
@@ -18,7 +26,9 @@ import { WindowControls } from '@/components/layout/window-controller'
 import { useI18n } from '@/hooks/use-i18n'
 import { useVerge } from '@/hooks/use-verge'
 import { useWindowDecorations } from '@/hooks/use-window'
+import { useAuth } from '@/services/auth-store'
 import { reportSafeClientFailure } from '@/services/safe-client-error'
+import { initializeSecureSession } from '@/services/secure-session-controller'
 import { useThemeMode } from '@/services/states'
 import getSystem from '@/utils/get-system'
 
@@ -42,6 +52,7 @@ const Layout = () => {
   const mode = useThemeMode()
   const { t } = useTranslation()
   const { theme } = useCustomTheme()
+  const { sessionStatus } = useAuth()
   const { verge, patchVerge } = useVerge()
   const { language } = verge ?? {}
   const navCollapsed = verge?.collapse_navbar ?? false
@@ -218,6 +229,28 @@ const Layout = () => {
           <div className="layout-content__right">
             <div className="the-bar"></div>
             <div className="the-content">
+              {sessionStatus === 'recovery_required' && (
+                <Alert
+                  severity="warning"
+                  action={
+                    <Button
+                      color="inherit"
+                      size="small"
+                      onClick={() => void initializeSecureSession()}
+                    >
+                      {t('layout.secureSession.retry')}
+                    </Button>
+                  }
+                  sx={{ mx: 2, mt: 2 }}
+                >
+                  {t('layout.secureSession.recoveryRequired')}
+                </Alert>
+              )}
+              {sessionStatus === 'service_blocked' && (
+                <Alert severity="error" sx={{ mx: 2, mt: 2 }}>
+                  {t('layout.secureSession.serviceBlocked')}
+                </Alert>
+              )}
               <BaseErrorBoundary>
                 <Outlet />
               </BaseErrorBoundary>
