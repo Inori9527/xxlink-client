@@ -1,4 +1,4 @@
-import { Box, Button, LinearProgress } from '@mui/material'
+import { Box, Button, LinearProgress, Link } from '@mui/material'
 import { relaunch } from '@tauri-apps/plugin-process'
 import { open as openUrl } from '@tauri-apps/plugin-shell'
 import type { DownloadEvent } from '@tauri-apps/plugin-updater'
@@ -7,7 +7,6 @@ import type { Ref } from 'react'
 import { useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
-import rehypeRaw from 'rehype-raw'
 
 import { BaseDialog, DialogRef } from '@/components/base'
 import { useUpdate } from '@/hooks/use-update'
@@ -18,6 +17,10 @@ import {
   toSafeClientErrorMessage,
 } from '@/services/safe-client-error'
 import { useSetUpdateState, useUpdateState } from '@/services/states'
+import {
+  getSafeUpdateLink,
+  UPDATE_MARKDOWN_ALLOWED_ELEMENTS,
+} from '@/services/update-content-policy'
 
 export function UpdateViewer({
   ref,
@@ -153,14 +156,21 @@ export function UpdateViewer({
     >
       <Box sx={{ height: 'calc(100% - 10px)', overflow: 'auto' }}>
         <ReactMarkdown
-          rehypePlugins={[rehypeRaw]}
+          allowedElements={[...UPDATE_MARKDOWN_ALLOWED_ELEMENTS]}
+          skipHtml
           components={{
-            a: ({ ...props }) => {
-              const { children } = props
+            a: ({ children, href }) => {
+              const safeHref = getSafeUpdateLink(href)
+              if (!safeHref) return <span>{children}</span>
+
               return (
-                <a {...props} target="_blank">
+                <Link
+                  component="button"
+                  type="button"
+                  onClick={() => void openUrl(safeHref)}
+                >
                   {children}
-                </a>
+                </Link>
               )
             },
           }}

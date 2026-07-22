@@ -365,30 +365,14 @@ impl SilentUpdater {
     /// Show a small centered splash window indicating update is being installed.
     /// Injects HTML via eval() after window creation so it doesn't depend on any
     /// external file in the bundle.
-    fn show_update_splash(app_handle: &tauri::AppHandle, version: &str) {
-        use tauri::{WebviewUrl, WebviewWindowBuilder};
+    fn update_splash_script(version: &str) -> String {
+        let version_text = serde_json::to_string(&format!("v{version}"))
+            .unwrap_or_else(|_| "\"v?\"".to_string())
+            .replace('<', "\\u003c")
+            .replace('>', "\\u003e")
+            .replace('&', "\\u0026");
 
-        let window = match WebviewWindowBuilder::new(app_handle, "update-splash", WebviewUrl::App("index.html".into()))
-            .title("XXLink - Updating")
-            .inner_size(300.0, 180.0)
-            .resizable(false)
-            .maximizable(false)
-            .minimizable(false)
-            .closable(false)
-            .decorations(false)
-            .center()
-            .always_on_top(true)
-            .visible(true)
-            .build()
-        {
-            Ok(w) => w,
-            Err(e) => {
-                logging!(warn, Type::System, "Failed to create update splash: {e}");
-                return;
-            }
-        };
-
-        let js = format!(
+        format!(
             r#"
             document.documentElement.innerHTML = `
             <head><meta charset="utf-8"/><style>
@@ -415,11 +399,38 @@ impl SilentUpdater {
                 <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
               <div class="title">Installing Update...</div>
-              <div class="sub">v{version}</div>
+              <div class="sub"></div>
               <div class="bar"><div class="fill"></div></div>
             </body>`;
+            document.querySelector('.sub').textContent = {version_text};
             "#
-        );
+        )
+    }
+
+    fn show_update_splash(app_handle: &tauri::AppHandle, version: &str) {
+        use tauri::{WebviewUrl, WebviewWindowBuilder};
+
+        let window = match WebviewWindowBuilder::new(app_handle, "update-splash", WebviewUrl::App("index.html".into()))
+            .title("XXLink - Updating")
+            .inner_size(300.0, 180.0)
+            .resizable(false)
+            .maximizable(false)
+            .minimizable(false)
+            .closable(false)
+            .decorations(false)
+            .center()
+            .always_on_top(true)
+            .visible(true)
+            .build()
+        {
+            Ok(w) => w,
+            Err(e) => {
+                logging!(warn, Type::System, "Failed to create update splash: {e}");
+                return;
+            }
+        };
+
+        let js = Self::update_splash_script(version);
 
         // Retry eval a few times — the webview may not be ready immediately
         std::thread::spawn(move || {
@@ -609,6 +620,17 @@ mod tests {
         assert!(version_lte("2.4", "2.4.1"));
         assert!(!version_lte("2.4.1", "2.4"));
         assert!(version_lte("2.4.0", "2.4"));
+    }
+
+    #[test]
+    fn update_splash_encodes_remote_version_as_text() {
+        let hostile = "2.5.0`; globalThis.compromised = true; // </div><script>bad()</script>";
+        let script = SilentUpdater::update_splash_script(hostile);
+
+        assert!(script.contains("textContent"));
+        assert!(!script.contains("<div class=\"sub\">v2.5.0"));
+        assert!(!script.contains("globalThis.compromised = true; // </div>"));
+        assert!(script.contains("globalThis.compromised = true; // \\u003c/div\\u003e"));
     }
 
     // ─── Cache metadata tests ───────────────────────────────────────────────
