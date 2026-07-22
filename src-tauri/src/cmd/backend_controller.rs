@@ -610,10 +610,9 @@ fn validated_subscription_url(value: &str) -> BackendResult<Url> {
 
 fn is_managed_item(item: &PrfItem, api_base: &Url) -> bool {
     if item.name.as_deref() == Some(MANAGED_PROFILE_NAME)
-        && item
-            .desc
-            .as_deref()
-            .is_some_and(|desc| desc == MANAGED_PROFILE_MARKER || desc.starts_with(&format!("{MANAGED_PROFILE_MARKER}:")))
+        && item.desc.as_deref().is_some_and(|desc| {
+            desc == MANAGED_PROFILE_MARKER || desc.starts_with(&format!("{MANAGED_PROFILE_MARKER}:"))
+        })
     {
         return true;
     }
@@ -632,9 +631,9 @@ fn is_managed_item(item: &PrfItem, api_base: &Url) -> bool {
 fn managed_profile_marker(subject_id: &str) -> std::string::String {
     const FNV_OFFSET_BASIS: u128 = 0x6c62272e07bb014262b821756295c58d;
     const FNV_PRIME: u128 = 0x0000000001000000000000000000013b;
-    let fingerprint = subject_id
-        .bytes()
-        .fold(FNV_OFFSET_BASIS, |hash, byte| (hash ^ u128::from(byte)).wrapping_mul(FNV_PRIME));
+    let fingerprint = subject_id.bytes().fold(FNV_OFFSET_BASIS, |hash, byte| {
+        (hash ^ u128::from(byte)).wrapping_mul(FNV_PRIME)
+    });
     format!("{MANAGED_PROFILE_MARKER}:{fingerprint:032x}")
 }
 
