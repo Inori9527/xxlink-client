@@ -549,16 +549,14 @@ pub async fn secure_session_logout() -> Result<(), BackendError> {
     let secret = take_session_for_logout().await.map_err(|_| BackendError::Unknown)?;
     if let Some(secret) = secret {
         let refresh_token = secret.refresh_token().to_owned();
-        tauri::async_runtime::spawn(async move {
-            if let Ok(client) = HTTP_CLIENT.as_ref() {
-                let _ = client
-                    .post(endpoint("/auth/logout"))
-                    .header(reqwest::header::CONTENT_TYPE, "application/json")
-                    .json(&serde_json::json!({ "refreshToken": refresh_token }))
-                    .send()
-                    .await;
-            }
-        });
+        if let Ok(client) = HTTP_CLIENT.as_ref() {
+            let revoke = client
+                .post(endpoint("/auth/logout"))
+                .header(reqwest::header::CONTENT_TYPE, "application/json")
+                .json(&serde_json::json!({ "refreshToken": refresh_token }))
+                .send();
+            let _ = tokio::time::timeout(std::time::Duration::from_secs(5), revoke).await;
+        }
     }
     Ok(())
 }

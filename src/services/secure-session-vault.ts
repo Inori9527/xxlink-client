@@ -152,13 +152,12 @@ export async function signInWithSecureSession(
 }
 
 export async function manualLogout(): Promise<boolean> {
-  let cleaned = true
+  const cleanup = invoke('secure_session_logout')
+  authStore.clearAuth()
   try {
-    await invoke('secure_session_logout')
+    await cleanup
+    return true
   } catch {
-    cleaned = false
-  } finally {
-    authStore.clearAuth()
+    return false
   }
-  return cleaned
 }
