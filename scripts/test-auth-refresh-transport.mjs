@@ -73,7 +73,7 @@ test('legacy token access is isolated to the one-time migration bridge', () => {
   assert.doesNotMatch(vault, /return\s+\{\s*accessToken:\s*secret\./)
 })
 
-test('manual logout atomically takes the vault before detached server cleanup', () => {
+test('manual logout atomically takes the vault before bounded server revocation', () => {
   const logoutStart = rustController.indexOf(
     'pub async fn secure_session_logout()',
   )
@@ -81,10 +81,24 @@ test('manual logout atomically takes the vault before detached server cleanup', 
   assert.ok(logoutStart >= 0)
   assert.ok(
     logoutSource.indexOf('take_session_for_logout().await') <
-      logoutSource.indexOf('tauri::async_runtime::spawn'),
+      logoutSource.indexOf('post(endpoint("/auth/logout"))'),
   )
+  assert.match(
+    logoutSource,
+    /tokio::time::timeout\(std::time::Duration::from_secs\(5\), revoke\)\.await/,
+  )
+  assert.doesNotMatch(logoutSource, /tauri::async_runtime::spawn/)
   assert.doesNotMatch(
     vault,
     /withVaultTimeout\(invoke\('secure_session_logout'\)\)/,
+  )
+
+  const rendererLogout = vault.slice(
+    vault.indexOf('export async function manualLogout()'),
+  )
+  assert.ok(
+    rendererLogout.indexOf('authStore.clearAuth()') <
+      rendererLogout.indexOf('await cleanup'),
+    'manual logout must clear the local shell before bounded server revocation',
   )
 })
