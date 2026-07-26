@@ -17,6 +17,8 @@ scripts/_env.sh
 .eslintcache
 .changelog_backups
 target
+/target-review/
+/.tmp/
 CLAUDE.md
 .vfox.toml
 .vfox/

@@ -37,6 +37,9 @@ for (const forbidden of [
   'http:default',
   'shell:default',
   'core:default',
+  'mihomo:allow-get-rules',
+  'mihomo:allow-get-rule-providers',
+  'mihomo:allow-get-version',
 ]) {
   assert.equal(
     [...desktopPermissions, ...windowCapability.permissions].includes(
@@ -56,6 +59,12 @@ assert.deepEqual(httpPermission?.allow, [{ url: 'https://api.xxlink.net/**' }])
 assert.equal(
   tauriConfig.plugins.shell.open,
   '^https://(?:(?:www\\.)?xxlink\\.net(?:/.*)?|api\\.xxlink\\.net(?:/.*)?|github\\.com/Inori9527/xxlink-client(?:/.*)?)$',
+)
+assert.equal(tauriConfig.app.security.assetProtocol, undefined)
+assert.equal(
+  read('src-tauri/Cargo.toml').includes('"protocol-asset"'),
+  false,
+  'unused filesystem asset protocol remains enabled',
 )
 
 for (const permission of [
@@ -118,6 +127,9 @@ for (const command of [
   'reinstall_service',
   'repair_service',
   'exit_lightweight_mode',
+  'get_clash_info',
+  'get_runtime_config',
+  'patch_clash_config',
 ]) {
   assert.doesNotMatch(
     lib,
@@ -136,6 +148,8 @@ for (const command of [
   'runtime_set_connection_mode',
   'runtime_set_tun_enabled',
   'runtime_set_system_proxy_enabled',
+  'runtime_get_tun_settings',
+  'runtime_update_tun_settings',
   'runtime_select_node',
   'runtime_check_update',
   'runtime_install_update',

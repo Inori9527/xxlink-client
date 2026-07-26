@@ -3,14 +3,13 @@ use crate::{
     core::{CoreManager, autostart, handle, logger::Logger, sysopt, tray},
     module::lightweight,
 };
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use bitflags::bitflags;
+use serde_yaml_ng::Mapping;
 use xxlink_draft::SharedDraft;
 use xxlink_logging::{Type, logging};
-use serde_yaml_ng::Mapping;
 
-/// Patch Clash configuration
-pub async fn patch_clash(patch: &Mapping) -> Result<()> {
+pub(crate) async fn patch_clash_in_transaction(patch: &Mapping) -> Result<()> {
     Config::clash().await.edit_draft(|d| d.patch_config(patch));
 
     let res = {
@@ -23,7 +22,7 @@ pub async fn patch_clash(patch: &Mapping) -> Result<()> {
                 tray::Tray::global().update_menu_and_icon().await;
             }
             Config::runtime().await.edit_draft(|d| d.patch_config(patch));
-            CoreManager::global().update_config().await?;
+            CoreManager::global().force_update_config_in_transaction().await?;
         }
         handle::Handle::refresh_clash();
         <Result<()>>::Ok(())
@@ -185,7 +184,7 @@ async fn process_terminated_flags(update_flags: UpdateFlags, patch: &IVerge) -> 
         CoreManager::global().restart_core().await?;
     }
     if update_flags.contains(UpdateFlags::CLASH_CONFIG) {
-        CoreManager::global().update_config().await?;
+        CoreManager::global().force_update_config_in_transaction().await?;
         handle::Handle::refresh_clash();
     }
     if update_flags.contains(UpdateFlags::VERGE_CONFIG) {
@@ -236,26 +235,39 @@ async fn process_terminated_flags(update_flags: UpdateFlags, patch: &IVerge) -> 
 }
 
 pub async fn patch_verge(patch: &IVerge, not_save_file: bool) -> Result<()> {
+    let _transaction_guard = CoreManager::begin_config_transaction().await;
+    patch_verge_in_transaction(patch, not_save_file).await
+}
+
+pub(crate) async fn patch_verge_in_transaction(patch: &IVerge, not_save_file: bool) -> Result<()> {
+    let previous_verge = Config::verge().await.data_arc();
     Config::verge().await.edit_draft(|d| d.patch_config(patch));
 
     let update_flags = determine_update_flags(patch);
     logging!(debug, Type::Setup, "Determined update flags: {:?}", update_flags);
-    let process_flag_result: std::result::Result<(), anyhow::Error> = {
-        process_terminated_flags(update_flags, patch).await?;
-        Ok(())
-    };
-
-    if let Err(err) = process_flag_result {
+    if !not_save_file {
+        // 分离数据获取和异步调用
+        let verge_data = Config::verge().await.latest_arc();
+        logging!(debug, Type::Setup, "Saving Verge configuration to file...");
+        if let Err(err) = verge_data.save_file().await {
+            Config::verge().await.discard();
+            return Err(err);
+        }
+    }
+    if let Err(err) = process_terminated_flags(update_flags, patch).await {
         Config::verge().await.discard();
+        let file_rollback = if not_save_file {
+            Ok(())
+        } else {
+            previous_verge.save_file().await
+        };
+        let side_effect_rollback = process_terminated_flags(update_flags, &previous_verge).await;
+        if file_rollback.is_err() || side_effect_rollback.is_err() {
+            return Err(anyhow!("failed to roll back Verge configuration"));
+        }
         return Err(err);
     }
     Config::verge().await.apply();
-    if !not_save_file {
-        // 分离数据获取和异步调用
-        let verge_data = Config::verge().await.data_arc();
-        logging!(debug, Type::Setup, "Saving Verge configuration to file...");
-        verge_data.save_file().await?;
-    }
     Ok(())
 }
 

@@ -7,9 +7,3 @@ use xxlink_draft::SharedDraft;
 pub async fn get_verge_config() -> CmdResult<SharedDraft<IVerge>> {
     feat::fetch_verge_config().await.stringify_err()
 }
-
-/// 修改Verge配置
-#[tauri::command]
-pub async fn patch_verge_config(payload: IVerge) -> CmdResult {
-    feat::patch_verge(&payload, false).await.stringify_err()
-}

@@ -270,7 +270,11 @@ test('consumer proxy, TUN, and update controls remain without PAC or raw-error e
   assert.match(sysproxySource, /patch\.pac_file_content = pacContent/)
   assert.match(
     sysproxySource,
-    /patchVergeConfig\(\{ enable_system_proxy: false \}\)/,
+    /runtimeActionController\.refreshSystemProxy\(\)/,
+  )
+  assert.doesNotMatch(
+    sysproxySource,
+    /setSystemProxyEnabled\(false\)[\s\S]{0,500}setSystemProxyEnabled\(true\)/,
   )
   assert.match(sysproxySource, /reportSafeClientFailure/)
   assert.match(sysproxySource, /toSafeClientErrorMessage/)
@@ -371,19 +375,45 @@ test('manual node selection persists while automatic recovery remains transient'
   )
 })
 
-test('proxy selection awaits queued persistence and reports errors safely', () => {
+test('proxy selection awaits typed persistence and reports errors safely', () => {
   const selectionSource = readFileSync(
     resolve(repoRoot, 'src/hooks/use-proxy-selection.ts'),
     'utf8',
   )
+  const controllerSource = readFileSync(
+    resolve(repoRoot, 'src/services/runtime-action-controller.ts'),
+    'utf8',
+  )
+  const rustControllerSource = readFileSync(
+    resolve(repoRoot, 'src-tauri/src/cmd/runtime_action_controller.rs'),
+    'utf8',
+  )
 
   assert.match(selectionSource, /import \{ reportSafeClientFailure \}/)
-  assert.match(selectionSource, /await patchCurrent\(\{ selected \}\)/)
+  assert.match(selectionSource, /await runtimeActionController\.selectNode\(\{/)
+  assert.match(selectionSource, /persist:\s*!skipConfigSave/)
   assert.match(
-    selectionSource,
-    /await persistSelection\(groupName, proxyName, skipConfigSave\)/,
+    controllerSource,
+    /await invoke<void>\('runtime_select_node', \{ groupName, proxyName, persist \}\)/,
   )
-  assert.equal(selectionSource.includes('void persistSelection'), false)
+  assert.match(
+    rustControllerSource,
+    /Some\(persist_node_selection\(&group_name, &proxy_name\)\.await\?\)/,
+  )
+  assert.match(
+    rustControllerSource,
+    /profiles_patch_item_safe\(&profile_id, &previous_item\)\.await\.is_err\(\)/,
+  )
+  assert.doesNotMatch(rustControllerSource, /get_proxy_by_name\(&group_name\)/)
+  assert.match(rustControllerSource, /static NODE_SELECTION_LOCK: Mutex<\(\)>/)
+  assert.match(
+    rustControllerSource,
+    /pub async fn runtime_select_node[\s\S]*wait_profile_switch_guard\(\)\.await;[\s\S]*NODE_SELECTION_LOCK\.lock\(\)\.await/,
+  )
+  assert.doesNotMatch(
+    rustControllerSource,
+    /let _ = persist_node_selection\(&group_name, &proxy_name\)\.await/,
+  )
   assert.doesNotMatch(
     selectionSource,
     /console\.(?:warn|error)\s*\([^)]*\b(?:error|fallbackError)\b/,

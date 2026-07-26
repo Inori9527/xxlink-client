@@ -11,6 +11,35 @@ export type ApprovedUpdateView = {
   date: string | null
 }
 
+export type TunSettingsView = {
+  stack: 'gvisor' | 'system' | 'mixed'
+  device: string
+  autoRoute: boolean
+  autoRedirect: boolean
+  autoDetectInterface: boolean
+  dnsHijack: string[]
+  routeExcludeAddress: string[]
+  strictRoute: boolean
+  mtu: number
+}
+
+export type RuntimeProxySettingsView = {
+  mixedPort: number
+}
+
+export type RuntimePreferencesUpdate = {
+  collapse_navbar?: boolean
+  language?: string
+  enable_proxy_guard?: boolean
+  enable_bypass_check?: boolean
+  proxy_guard_duration?: number
+  system_proxy_bypass?: string
+  proxy_auto_config?: boolean
+  use_default_bypass?: boolean
+  pac_file_content?: string
+  proxy_host?: string
+}
+
 type NodeSelection = {
   groupName: string
   proxyName: string
@@ -52,6 +81,26 @@ export const runtimeActionController = {
 
   setSystemProxyEnabled(enabled: boolean) {
     return invoke<void>('runtime_set_system_proxy_enabled', { enabled })
+  },
+
+  getProxySettings() {
+    return invoke<RuntimeProxySettingsView>('runtime_get_proxy_settings')
+  },
+
+  getTunSettings() {
+    return invoke<TunSettingsView>('runtime_get_tun_settings')
+  },
+
+  updateTunSettings(settings: TunSettingsView) {
+    return invoke<TunSettingsView>('runtime_update_tun_settings', { settings })
+  },
+
+  updatePreferences(preferences: RuntimePreferencesUpdate) {
+    return invoke<void>('runtime_update_preferences', { preferences })
+  },
+
+  refreshSystemProxy() {
+    return invoke<void>('runtime_refresh_system_proxy')
   },
 
   startCore() {

@@ -16,72 +16,6 @@ type Platform =
  */
 declare const OS_PLATFORM: Platform
 
-/**
- * Some interface for clash api
- */
-interface IConfigData {
-  port: number
-  mode: string
-  ipv6: boolean
-  'socket-port': number
-  'allow-lan': boolean
-  'log-level': string
-  'mixed-port': number
-  'redir-port': number
-  'socks-port': number
-  'tproxy-port': number
-  'external-controller': string
-  'external-controller-cors': {
-    'allow-private-network': boolean
-    'allow-origins': string[]
-  }
-  secret: string
-  'unified-delay': boolean
-  tun: {
-    stack: string
-    device: string
-    'auto-route': boolean
-    'auto-redirect'?: boolean
-    'auto-detect-interface': boolean
-    'dns-hijack': string[]
-    'route-exclude-address'?: string[]
-    'strict-route': boolean
-    mtu: number
-  }
-  dns?: {
-    enable?: boolean
-    listen?: string
-    'enhanced-mode'?: 'fake-ip' | 'redir-host'
-    'fake-ip-range'?: string
-    'fake-ip-filter'?: string[]
-    'fake-ip-filter-mode'?: 'blacklist' | 'whitelist'
-    'prefer-h3'?: boolean
-    'respect-rules'?: boolean
-    nameserver?: string[]
-    fallback?: string[]
-    'default-nameserver'?: string[]
-    'proxy-server-nameserver'?: string[]
-    'direct-nameserver'?: string[]
-    'direct-nameserver-follow-policy'?: boolean
-    'nameserver-policy'?: Record<string, any>
-    'use-hosts'?: boolean
-    'use-system-hosts'?: boolean
-    'fallback-filter'?: {
-      geoip?: boolean
-      'geoip-code'?: string
-      ipcidr?: string[]
-      domain?: string[]
-    }
-  }
-  tunnels?: {
-    network: string[]
-    address: string
-    target: string
-    proxy?: string
-  }[]
-  'proxy-groups'?: IProxyGroupItem[]
-}
-
 interface IProxyItem {
   name: string
   type: string
@@ -247,17 +181,6 @@ interface IConnectionSetting {
 /**
  * Some interface for command
  */
-
-interface IClashInfo {
-  // status: string;
-  mixed_port?: number // clash mixed port
-  socks_port?: number // clash socks port
-  redir_port?: number // clash redir port
-  tproxy_port?: number // clash tproxy port
-  port?: number // clash http port
-  server?: string // external-controller
-  secret?: string
-}
 
 interface IProfileItem {
   uid: string

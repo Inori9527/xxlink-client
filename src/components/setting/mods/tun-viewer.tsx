@@ -7,9 +7,10 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import { useQuery } from '@tanstack/react-query'
 import { useLockFn } from 'ahooks'
 import type { Ref } from 'react'
-import { useImperativeHandle, useState } from 'react'
+import { useImperativeHandle, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -19,9 +20,12 @@ import {
   DialogRef,
   Switch,
 } from '@/components/base'
-import { useClash } from '@/hooks/use-clash'
 import { enhanceProfiles } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
+import {
+  runtimeActionController,
+  TunSettingsView,
+} from '@/services/runtime-action-controller'
 import {
   classifyClientError,
   reportSafeClientFailure,
@@ -34,19 +38,63 @@ import { StackModeSwitch } from './stack-mode-switch'
 
 const OS = getSystem()
 
+type TunSettingsForm = Omit<TunSettingsView, 'routeExcludeAddress'> & {
+  routeExcludeAddress: string
+}
+
+const toTunSettingsForm = (
+  settings: TunSettingsView | undefined,
+): TunSettingsForm => {
+  const nextAutoRoute = settings?.autoRoute ?? true
+  const rawAutoRedirect = settings?.autoRedirect ?? false
+  return {
+    stack: settings?.stack ?? 'gvisor',
+    device: settings?.device ?? (OS === 'macos' ? 'utun1024' : 'Mihomo'),
+    autoRoute: nextAutoRoute,
+    routeExcludeAddress: (settings?.routeExcludeAddress ?? []).join(','),
+    autoRedirect:
+      OS === 'linux' ? (nextAutoRoute ? rawAutoRedirect : false) : false,
+    autoDetectInterface: settings?.autoDetectInterface ?? true,
+    dnsHijack: settings?.dnsHijack ?? ['any:53'],
+    strictRoute: settings?.strictRoute ?? false,
+    mtu: settings?.mtu ?? 1500,
+  }
+}
+
 const splitRouteExcludeAddress = (value: string) =>
   value
     .split(/[,\n;\r]+/)
     .map((item) => item.trim())
     .filter(Boolean)
 
+const defaultTunSettings = (): TunSettingsView => ({
+  stack: 'gvisor',
+  device: OS === 'macos' ? 'utun1024' : 'Mihomo',
+  autoRoute: true,
+  autoRedirect: false,
+  autoDetectInterface: true,
+  dnsHijack: ['any:53'],
+  routeExcludeAddress: [],
+  strictRoute: false,
+  mtu: 1500,
+})
+
 export function TunViewer({ ref }: { ref?: Ref<DialogRef> }) {
   const { t } = useTranslation()
 
-  const { clash, mutateClash, patchClash } = useClash()
+  const { data: tunSettings, refetch: refreshTunSettings } = useQuery({
+    queryKey: ['runtimeTunSettings'],
+    queryFn: runtimeActionController.getTunSettings,
+    enabled: false,
+  })
 
   const [open, setOpen] = useState(false)
-  const [values, setValues] = useState({
+  const [refreshing, setRefreshing] = useState(false)
+  const [mutating, setMutating] = useState(false)
+  const [authoritativeLoaded, setAuthoritativeLoaded] = useState(false)
+  const refreshRequestRef = useRef(0)
+  const mutationInFlightRef = useRef(false)
+  const [values, setValues] = useState<TunSettingsForm>({
     stack: 'mixed',
     device: OS === 'macos' ? 'utun1024' : 'Mihomo',
     autoRoute: true,
@@ -62,38 +110,66 @@ export function TunViewer({ ref }: { ref?: Ref<DialogRef> }) {
     values.routeExcludeAddress,
   )
   const routeExcludeAddressError =
-    values.autoRoute &&
     routeExcludeAddressItems.length > 0 &&
     !areValidIpCidrs(routeExcludeAddressItems)
   const routeExcludeAddressHelperText = routeExcludeAddressError
     ? t('settings.modals.tun.messages.invalidRouteExcludeAddress')
     : t('settings.modals.tun.messages.routeExcludeAddressHint')
+  const busy = refreshing || mutating
+
+  const closeDialog = () => {
+    if (mutationInFlightRef.current) return
+    refreshRequestRef.current += 1
+    setRefreshing(false)
+    setOpen(false)
+  }
 
   useImperativeHandle(ref, () => ({
     open: () => {
+      if (mutationInFlightRef.current) return
+      const requestId = ++refreshRequestRef.current
       setOpen(true)
-      const nextAutoRoute = clash?.tun['auto-route'] ?? true
-      const rawAutoRedirect = clash?.tun['auto-redirect'] ?? false
-      const computedAutoRedirect =
-        OS === 'linux' ? (nextAutoRoute ? rawAutoRedirect : false) : false
-      setValues({
-        stack: clash?.tun.stack ?? 'gvisor',
-        device: clash?.tun.device ?? (OS === 'macos' ? 'utun1024' : 'Mihomo'),
-        autoRoute: nextAutoRoute,
-        routeExcludeAddress: (clash?.tun['route-exclude-address'] ?? []).join(
-          ',',
-        ),
-        autoRedirect: computedAutoRedirect,
-        autoDetectInterface: clash?.tun['auto-detect-interface'] ?? true,
-        dnsHijack: clash?.tun['dns-hijack'] ?? ['any:53'],
-        strictRoute: clash?.tun['strict-route'] ?? false,
-        mtu: clash?.tun.mtu ?? 1500,
-      })
+      setRefreshing(true)
+      setAuthoritativeLoaded(false)
+      setValues(toTunSettingsForm(tunSettings))
+      void refreshTunSettings()
+        .then(({ data, error }) => {
+          if (requestId !== refreshRequestRef.current) return
+          if (data) {
+            setValues(toTunSettingsForm(data))
+            setAuthoritativeLoaded(true)
+          }
+          if (error || !data) {
+            const failure = error ?? new Error('tun_settings_unavailable')
+            reportSafeClientFailure('tun-settings-refresh', failure)
+            showNotice.error(
+              toSafeClientErrorMessage(classifyClientError(failure).kind, t),
+            )
+          }
+        })
+        .catch((error: unknown) => {
+          if (requestId === refreshRequestRef.current) {
+            reportSafeClientFailure('tun-settings-refresh', error)
+            showNotice.error(
+              toSafeClientErrorMessage(classifyClientError(error).kind, t),
+            )
+          }
+        })
+        .finally(() => {
+          if (requestId === refreshRequestRef.current) setRefreshing(false)
+        })
     },
-    close: () => setOpen(false),
+    close: () => {
+      closeDialog()
+    },
   }))
 
   const onSave = useLockFn(async () => {
+    if (mutationInFlightRef.current || busy || !authoritativeLoaded) {
+      return
+    }
+    mutationInFlightRef.current = true
+    setMutating(true)
     try {
       const routeExcludeAddress = routeExcludeAddressItems
 
@@ -104,7 +180,7 @@ export function TunViewer({ ref }: { ref?: Ref<DialogRef> }) {
         return
       }
 
-      const tun: IConfigData['tun'] = {
+      const tun: TunSettingsView = {
         stack: values.stack,
         device:
           values.device === ''
@@ -112,26 +188,21 @@ export function TunViewer({ ref }: { ref?: Ref<DialogRef> }) {
               ? 'utun1024'
               : 'Mihomo'
             : values.device,
-        'auto-route': values.autoRoute,
-        'route-exclude-address': routeExcludeAddress,
+        autoRoute: values.autoRoute,
+        routeExcludeAddress,
         ...(OS === 'linux'
           ? {
-              'auto-redirect': values.autoRedirect,
+              autoRedirect: values.autoRedirect,
             }
-          : {}),
-        'auto-detect-interface': values.autoDetectInterface,
-        'dns-hijack': values.dnsHijack[0] === '' ? [] : values.dnsHijack,
-        'strict-route': values.strictRoute,
+          : { autoRedirect: false }),
+        autoDetectInterface: values.autoDetectInterface,
+        dnsHijack: values.dnsHijack[0] === '' ? [] : values.dnsHijack,
+        strictRoute: values.strictRoute,
         mtu: values.mtu ?? 1500,
       }
-      await patchClash({ tun })
-      await mutateClash(
-        (old) => ({
-          ...old!,
-          tun,
-        }),
-        false,
-      )
+      const applied = await runtimeActionController.updateTunSettings(tun)
+      setValues(toTunSettingsForm(applied))
+      refreshRequestRef.current += 1
       setOpen(false)
       showNotice.success('settings.modals.tun.messages.applied')
       void enhanceProfiles().catch((err: unknown) => {
@@ -145,6 +216,29 @@ export function TunViewer({ ref }: { ref?: Ref<DialogRef> }) {
       showNotice.error(
         toSafeClientErrorMessage(classifyClientError(err).kind, t),
       )
+    } finally {
+      mutationInFlightRef.current = false
+      setMutating(false)
+    }
+  })
+
+  const onReset = useLockFn(async () => {
+    if (mutationInFlightRef.current || busy) return
+    mutationInFlightRef.current = true
+    setMutating(true)
+    try {
+      const applied =
+        await runtimeActionController.updateTunSettings(defaultTunSettings())
+      setValues(toTunSettingsForm(applied))
+      setAuthoritativeLoaded(true)
+    } catch (err: unknown) {
+      reportSafeClientFailure('tun-reset', err)
+      showNotice.error(
+        toSafeClientErrorMessage(classifyClientError(err).kind, t),
+      )
+    } finally {
+      mutationInFlightRef.current = false
+      setMutating(false)
     }
   })
 
@@ -157,42 +251,8 @@ export function TunViewer({ ref }: { ref?: Ref<DialogRef> }) {
           <Button
             variant="outlined"
             size="small"
-            onClick={async () => {
-              const tun: IConfigData['tun'] = {
-                stack: 'gvisor',
-                device: OS === 'macos' ? 'utun1024' : 'Mihomo',
-                'auto-route': true,
-                ...(OS === 'linux'
-                  ? {
-                      'auto-redirect': false,
-                    }
-                  : {}),
-                'auto-detect-interface': true,
-                'dns-hijack': ['any:53'],
-                'route-exclude-address': [],
-                'strict-route': false,
-                mtu: 1500,
-              }
-              setValues({
-                stack: 'gvisor',
-                device: OS === 'macos' ? 'utun1024' : 'Mihomo',
-                autoRoute: true,
-                routeExcludeAddress: '',
-                autoRedirect: false,
-                autoDetectInterface: true,
-                dnsHijack: ['any:53'],
-                strictRoute: false,
-                mtu: 1500,
-              })
-              await patchClash({ tun })
-              await mutateClash(
-                (old) => ({
-                  ...old!,
-                  tun,
-                }),
-                false,
-              )
-            }}
+            disabled={busy}
+            onClick={onReset}
           >
             {t('shared.actions.resetToDefault')}
           </Button>
@@ -201,11 +261,17 @@ export function TunViewer({ ref }: { ref?: Ref<DialogRef> }) {
       contentSx={{ width: 450 }}
       okBtn={t('shared.actions.save')}
       cancelBtn={t('shared.actions.cancel')}
-      onClose={() => setOpen(false)}
-      onCancel={() => setOpen(false)}
+      loading={mutating}
+      disableOk={busy || !authoritativeLoaded}
+      disableCancel={mutating}
+      onClose={closeDialog}
+      onCancel={closeDialog}
       onOk={onSave}
     >
-      <List>
+      <List
+        inert={busy || !authoritativeLoaded ? true : undefined}
+        aria-busy={busy}
+      >
         <ListItem sx={{ padding: '5px 2px' }}>
           <ListItemText primary={t('settings.modals.tun.fields.stack')} />
           <StackModeSwitch
@@ -310,7 +376,10 @@ export function TunViewer({ ref }: { ref?: Ref<DialogRef> }) {
             value={values.dnsHijack.join(',')}
             placeholder={t('settings.modals.tun.tooltips.dnsHijack')}
             onChange={(e) =>
-              setValues((v) => ({ ...v, dnsHijack: e.target.value.split(',') }))
+              setValues((v) => ({
+                ...v,
+                dnsHijack: e.target.value.split(','),
+              }))
             }
           />
         </ListItem>

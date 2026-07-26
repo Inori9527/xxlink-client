@@ -1,28 +1,18 @@
 import { createContext, use } from 'react'
-import {
-  BaseConfig,
-  ProxyProvider,
-  Rule,
-  RuleProvider,
-} from 'tauri-plugin-mihomo-api'
+
+import type { RuntimeProxySettingsView } from '@/services/runtime-action-controller'
 
 export interface AppDataContextType {
   proxies: any
-  clashConfig: BaseConfig
-  rules: Rule[]
+  proxySettings?: RuntimeProxySettingsView
   sysproxy: any
   runningMode?: string
   uptime: number
-  proxyProviders: Record<string, ProxyProvider>
-  ruleProviders: Record<string, RuleProvider>
   systemProxyAddress: string
 
   refreshProxy: () => Promise<any>
-  refreshClashConfig: () => Promise<any>
-  refreshRules: () => Promise<any>
+  refreshProxySettings: () => Promise<any>
   refreshSysproxy: () => Promise<any>
-  refreshProxyProviders: () => Promise<any>
-  refreshRuleProviders: () => Promise<any>
   refreshAll: () => Promise<any>
 }
 
