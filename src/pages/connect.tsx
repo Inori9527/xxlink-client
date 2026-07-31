@@ -241,7 +241,7 @@ const ConnectPage = () => {
   const theme = useTheme()
   const navigate = useNavigate()
   const pageVisible = useVisibility()
-  const { verge } = useVerge()
+  const { verge, preferencesReady } = useVerge()
   const { proxies, refreshProxy } = useAppData()
   const currentUserId = authStore.getState().user?.id ?? null
   const initialAccountCache = useMemo(
@@ -436,8 +436,8 @@ const ConnectPage = () => {
     }
   }, [])
 
-  const tunEnabled = verge?.enable_tun_mode ?? false
-  const sysEnabled = verge?.enable_system_proxy ?? false
+  const tunEnabled = preferencesReady && verge?.enable_tun_mode === true
+  const sysEnabled = preferencesReady && verge?.enable_system_proxy === true
 
   // Runtime state per selected mode. User-facing "connected" still waits for
   // the selected-node data-plane readiness check below.
@@ -643,6 +643,7 @@ const ConnectPage = () => {
   // Self-healing: re-fires whenever the selection becomes invalid (e.g. after
   // a force-rebuild) but is idempotent when the current selection is valid.
   useEffect(() => {
+    if (!preferencesReady) return
     const groupName = globalGroup?.name
     if (!groupName) return
     const currentSelectionValid = Boolean(
@@ -661,10 +662,11 @@ const ConnectPage = () => {
       nodeEntries.find((entry) => entry.displayName.toLowerCase() === 'auto') ??
       nodeEntries[0]
     if (target && target.name !== currentNode) {
-      changeProxy(groupName, target.name, currentNode, true)
+      changeProxy(groupName, target.name, true)
     }
   }, [
     runtimeConnected,
+    preferencesReady,
     globalGroup?.name,
     nodeEntries,
     currentNode,
@@ -679,7 +681,7 @@ const ConnectPage = () => {
 
   const handleModeChange = useCallback(
     (next: ConnectMode) => {
-      if (next === mode || modeChanging) return
+      if (!preferencesReady || next === mode || modeChanging) return
 
       const requestId = ++modeChangeGenerationRef.current
       setMode(next)
@@ -719,15 +721,15 @@ const ConnectPage = () => {
 
       modeChangeQueueRef.current = queuedChange
     },
-    [mode, modeChanging, refreshProxy, t, triggerErrorFlash],
+    [mode, modeChanging, preferencesReady, refreshProxy, t, triggerErrorFlash],
   )
 
   const handleNodeMenuOpen = useCallback(
     (event: MouseEvent<HTMLElement>) => {
-      if (busy || modeChanging) return
+      if (!preferencesReady || busy || modeChanging) return
       setNodeMenuAnchor(event.currentTarget)
     },
-    [busy, modeChanging],
+    [busy, modeChanging, preferencesReady],
   )
 
   const handleNodeMenuClose = useCallback(() => {
@@ -737,22 +739,18 @@ const ConnectPage = () => {
   const handleNodeSelect = useCallback(
     (entry: DisplayProxyEntry) => {
       handleNodeMenuClose()
-      if (busy || modeChanging) return
+      if (!preferencesReady || busy || modeChanging) return
       if (!globalGroup?.name || entry.name === currentNode) return
-      changeProxy(
-        globalGroup.name,
-        entry.name,
-        currentRuntimeNode || currentNode,
-      )
+      changeProxy(globalGroup.name, entry.name)
     },
     [
       changeProxy,
       currentNode,
-      currentRuntimeNode,
       busy,
       globalGroup?.name,
       handleNodeMenuClose,
       modeChanging,
+      preferencesReady,
     ],
   )
 
@@ -810,8 +808,9 @@ const ConnectPage = () => {
       return true
     }
 
-    setReadinessStatus('ready')
-    return true
+    setReadinessStatus('failed')
+    triggerErrorFlash()
+    return false
   }, [
     currentNode,
     currentRuntimeNode,
@@ -820,6 +819,12 @@ const ConnectPage = () => {
   ])
 
   useEffect(() => {
+    if (!preferencesReady) {
+      readinessAttemptRef.current += 1
+      lastReadinessNodeRef.current = null
+      Promise.resolve().then(() => setReadinessStatus('validating'))
+      return
+    }
     if (!runtimeConnected) {
       readinessAttemptRef.current += 1
       lastReadinessNodeRef.current = null
@@ -838,12 +843,14 @@ const ConnectPage = () => {
   }, [
     currentNode,
     currentRuntimeNode,
+    preferencesReady,
     runtimeConnected,
     validateSelectedNodeReadiness,
   ])
 
   const handleToggle = useLockFn(async () => {
     if (
+      !preferencesReady ||
       busy ||
       modeChanging ||
       readinessStatus === 'connecting' ||
@@ -985,6 +992,7 @@ const ConnectPage = () => {
   }, [connected, currentNodeId, disconnectForTrafficExceeded])
 
   const connectionBusy =
+    !preferencesReady ||
     busy ||
     modeChanging ||
     readinessStatus === 'connecting' ||
@@ -1245,21 +1253,21 @@ const ConnectPage = () => {
               <Button
                 variant={mode === 'system' ? 'contained' : 'text'}
                 onClick={() => handleModeChange('system')}
-                disabled={modeChanging}
+                disabled={!preferencesReady || modeChanging}
               >
                 {t('layout.components.connect.mode.system')}
               </Button>
               <Button
                 variant={mode === 'both' ? 'contained' : 'text'}
                 onClick={() => handleModeChange('both')}
-                disabled={modeChanging}
+                disabled={!preferencesReady || modeChanging}
               >
                 {t('layout.components.connect.mode.both')}
               </Button>
               <Button
                 variant={mode === 'smart' ? 'contained' : 'text'}
                 onClick={() => handleModeChange('smart')}
-                disabled={modeChanging}
+                disabled={!preferencesReady || modeChanging}
               >
                 {t('layout.components.connect.mode.smart')}
               </Button>

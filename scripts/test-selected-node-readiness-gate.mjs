@@ -61,8 +61,10 @@ function loadTsModule(relativePath, stubs = {}, cache = new Map()) {
 
 function loadReadinessModule(stubs = {}) {
   return loadTsModule('src/services/selected-node-readiness.ts', {
-    'tauri-plugin-mihomo-api': {
-      delayProxyByName: async () => ({ delay: 42 }),
+    '@/services/runtime-node-controller': {
+      runtimeNodeController: {
+        probeDelay: async () => 42,
+      },
     },
     ...stubs,
   })
@@ -138,6 +140,10 @@ test('readiness probes use selected proxy targets and never api.xxlink.net', asy
     ),
     false,
   )
+  assert.equal(
+    readiness.isReadinessProbeTargetSafe('https://example.com/generate_204'),
+    false,
+  )
 
   const result = await readiness.checkSelectedNodeReadiness({
     proxyName: '东京-免费/轻量-01',
@@ -181,7 +187,7 @@ test('readiness failure keeps selected node and blocks false connected state', a
   assert.equal(selectedNode, '日本-ISP专线-01')
 })
 
-test('readiness probe failure keeps runtime enabled without prominent warning', () => {
+test('readiness probe failure keeps runtime enabled without false connected state', () => {
   const readiness = loadReadinessModule()
 
   const payload = readiness.getReadinessFailureDisconnectPayload()
@@ -291,13 +297,18 @@ test('probe timeout does not stop or switch the selected route', () => {
     probeFailureBlock.includes('stopFailedReadinessConnection'),
     false,
   )
-  assert.equal(probeFailureBlock.includes("setReadinessStatus('ready')"), true)
+  const readinessFailureBranch = probeFailureBlock.slice(
+    probeFailureBlock.indexOf("setReadinessStatus('failed')"),
+  )
   assert.equal(
-    probeFailureBlock.includes("setReadinessStatus('degraded')"),
+    readinessFailureBranch.includes("setReadinessStatus('ready')"),
     false,
   )
+  assert.equal(
+    readinessFailureBranch.includes("setReadinessStatus('failed')"),
+    true,
+  )
   assert.equal(source.includes('selectedNodeProbeWarning'), false)
-  assert.equal(source.includes("'degraded'"), false)
   assert.equal(source.includes('showReadinessRetryAction'), true)
   assert.equal(source.includes('layout.components.connect.actions.retry'), true)
   assert.equal(source.includes('onClick={validateSelectedNodeReadiness}'), true)

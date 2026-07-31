@@ -10,11 +10,7 @@
       "allow": [{ "url": "https://api.xxlink.net/**" }]
     },
     "shell:allow-open",
-    "mihomo:allow-get-connections",
-    "mihomo:allow-close-connection",
-    "mihomo:allow-get-proxy-providers",
     "mihomo:allow-get-proxies",
-    "mihomo:allow-delay-proxy-by-name",
     "mihomo:allow-ws-traffic",
     "mihomo:allow-ws-memory",
     "mihomo:allow-ws-disconnect",

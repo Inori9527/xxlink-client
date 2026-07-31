@@ -49,12 +49,22 @@ pub fn resolve_setup_async() {
     AsyncHandler::spawn(|| async {
         logging!(info, Type::XXLink, "Version: {}", env!("CARGO_PKG_VERSION"));
 
-        init_verge_config().await;
-        Config::verify_config_initialization().await;
-        apply_auto_connect_on_launch().await;
+        let runtime_config_ready = init_verge_config().await;
+        if runtime_config_ready {
+            Config::verify_config_initialization().await;
+            apply_auto_connect_on_launch().await;
+        }
         init_window().await;
 
-        let core_init = AsyncHandler::spawn(|| async {
+        let core_init = AsyncHandler::spawn(move || async move {
+            if !runtime_config_ready {
+                logging!(
+                    error,
+                    Type::Setup,
+                    "Runtime startup skipped because configuration is unavailable"
+                );
+                return;
+            }
             init_service_manager().await;
             init_core_manager().await;
             init_system_proxy().await;
@@ -153,14 +163,23 @@ pub(super) async fn init_tray() {
     logging_error!(Type::Setup, Tray::global().init().await);
 }
 
-pub(super) async fn init_verge_config() {
-    logging_error!(Type::Setup, Config::init_config().await);
+pub(super) async fn init_verge_config() -> bool {
+    match Config::init_config().await {
+        Ok(()) => true,
+        Err(_) => {
+            logging!(error, Type::Setup, "Runtime configuration initialization failed");
+            false
+        }
+    }
 }
 
 /// If the user opted out of auto-connect on launch, clear the persisted
 /// TUN / system proxy flags before the core manager, sysopt and tray read them.
 /// Default (None) preserves legacy behavior: restore last state.
 pub(super) async fn apply_auto_connect_on_launch() {
+    if !Config::runtime_sources_readable().await {
+        return;
+    }
     let verge = Config::verge().await;
     let auto_connect = verge.latest_arc().auto_connect_on_launch.unwrap_or(true);
     if auto_connect {
@@ -194,6 +213,9 @@ pub(super) async fn init_core_manager() {
 }
 
 pub(super) async fn init_system_proxy() {
+    if !Config::runtime_sources_readable().await {
+        return;
+    }
     logging_error!(Type::Setup, sysopt::Sysopt::global().update_sysproxy().await);
 }
 

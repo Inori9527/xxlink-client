@@ -331,6 +331,14 @@ test('raw runtime reads are retired behind typed TUN actions', () => {
     'install_service',
     'uninstall_service',
   ]) {
+    assert.equal(runtimeControllerSource.includes(`'${command}'`), false)
+    assert.doesNotMatch(libSource, new RegExp(`\\bcmd::${command}\\b`))
+  }
+
+  for (const command of [
+    'runtime_install_service_and_restart_core',
+    'runtime_uninstall_service_and_restart_core',
+  ]) {
     assert.equal(runtimeControllerSource.includes(`'${command}'`), true)
     assert.match(libSource, new RegExp(`\\bcmd::${command}\\b`))
   }

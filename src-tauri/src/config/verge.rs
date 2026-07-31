@@ -3,7 +3,7 @@ use crate::{
     config::DEFAULT_PAC,
     utils::{dirs, help},
 };
-use anyhow::Result;
+use anyhow::{Result, bail};
 use log::LevelFilter;
 use serde::{Deserialize, Serialize};
 use smartstring::alias::String;
@@ -12,6 +12,9 @@ use xxlink_logging::{Type, logging};
 /// ### `verge.yaml` schema
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
 pub struct IVerge {
+    #[serde(skip)]
+    pub(crate) source_read_failed: bool,
+
     /// app log level
     /// silent | error | warn | info | debug | trace
     pub app_log_level: Option<String>,
@@ -199,10 +202,7 @@ impl IVerge {
     /// 验证并修正配置文件中的clash_core值
     pub async fn validate_and_fix_config() -> Result<()> {
         let config_path = dirs::verge_path()?;
-        let mut config = match help::read_yaml::<Self>(&config_path).await {
-            Ok(config) => config,
-            Err(_) => Self::template(),
-        };
+        let mut config = help::read_yaml::<Self>(&config_path).await?;
 
         let mut needs_fix = false;
 
@@ -277,14 +277,18 @@ impl IVerge {
                     }
                     config
                 }
-                Err(err) => {
-                    logging!(error, Type::Config, "{err}");
-                    Self::template()
+                Err(_) => {
+                    logging!(error, Type::Config, "Verge configuration could not be loaded");
+                    let mut fallback = Self::template();
+                    fallback.source_read_failed = !matches!(tokio::fs::try_exists(&path).await, Ok(false));
+                    fallback
                 }
             },
-            Err(err) => {
-                logging!(error, Type::Config, "{err}");
-                Self::template()
+            Err(_) => {
+                logging!(error, Type::Config, "Verge configuration path is unavailable");
+                let mut fallback = Self::template();
+                fallback.source_read_failed = true;
+                fallback
             }
         }
     }
@@ -350,6 +354,9 @@ impl IVerge {
 
     /// Save IVerge App Config
     pub async fn save_file(&self) -> Result<()> {
+        if self.source_read_failed {
+            bail!("refusing to overwrite an unreadable Verge configuration");
+        }
         help::save_yaml(&dirs::verge_path()?, &self, Some("# XXLink Config")).await
     }
 

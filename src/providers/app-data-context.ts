@@ -5,7 +5,9 @@ import type { RuntimeProxySettingsView } from '@/services/runtime-action-control
 export interface AppDataContextType {
   proxies: any
   proxySettings?: RuntimeProxySettingsView
+  proxySettingsReady: boolean
   sysproxy: any
+  sysproxyReady: boolean
   runningMode?: string
   uptime: number
   systemProxyAddress: string

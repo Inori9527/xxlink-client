@@ -79,6 +79,7 @@ export const SAFE_CLIENT_FAILURE_SCOPES = [
   'sysproxy-network-interfaces',
   'sysproxy-port-refresh',
   'sysproxy-save',
+  'sysproxy-settings-refresh',
   'sysproxy-state-refresh',
   'system-tun-disable',
   'theme-create',

@@ -267,7 +267,7 @@ test('consumer proxy, TUN, and update controls remain without PAC or raw-error e
     /console\.(?:warn|error)\s*\([^)]*\b(?:err|error)\b/,
   )
   assert.match(sysproxySource, /proxy_auto_config/)
-  assert.match(sysproxySource, /patch\.pac_file_content = pacContent/)
+  assert.doesNotMatch(sysproxySource, /pac_file_content|pac_content/)
   assert.match(
     sysproxySource,
     /runtimeActionController\.refreshSystemProxy\(\)/,
@@ -347,15 +347,15 @@ test('manual node selection persists while automatic recovery remains transient'
 
   assert.match(
     connectSource,
-    /changeProxy\(\s*groupName,\s*target\.name,\s*currentNode,\s*true,?\s*\)/,
+    /changeProxy\(\s*groupName,\s*target\.name,\s*true,?\s*\)/,
   )
   assert.match(
     connectSource,
-    /changeProxy\(\s*globalGroup\.name,\s*entry\.name,\s*currentRuntimeNode \|\| currentNode,?\s*\)/,
+    /changeProxy\(\s*globalGroup\.name,\s*entry\.name,?\s*\)/,
   )
   assert.doesNotMatch(
     connectSource,
-    /changeProxy\(\s*globalGroup\.name,\s*entry\.name,\s*currentRuntimeNode \|\| currentNode,\s*true,?\s*\)/,
+    /changeProxy\(\s*globalGroup\.name,\s*entry\.name,\s*true,?\s*\)/,
   )
   assert.match(
     connectSource,
@@ -363,11 +363,11 @@ test('manual node selection persists while automatic recovery remains transient'
   )
   assert.match(
     nodesSource,
-    /changeProxy\(\s*globalGroup\.name,\s*node\.name,\s*currentRuntimeNode \|\| currentNode,?\s*\)/,
+    /changeProxy\(\s*globalGroup\.name,\s*node\.name,?\s*\)/,
   )
   assert.doesNotMatch(
     nodesSource,
-    /changeProxy\(\s*globalGroup\.name,\s*node\.name,\s*currentRuntimeNode \|\| currentNode,\s*true,?\s*\)/,
+    /changeProxy\(\s*globalGroup\.name,\s*node\.name,\s*true,?\s*\)/,
   )
   assert.match(
     nodesSource,
@@ -394,17 +394,26 @@ test('proxy selection awaits typed persistence and reports errors safely', () =>
   assert.match(selectionSource, /persist:\s*!skipConfigSave/)
   assert.match(
     controllerSource,
-    /await invoke<void>\('runtime_select_node', \{ groupName, proxyName, persist \}\)/,
+    /invoke<void>\('runtime_select_node', \{[\s\S]*groupName,[\s\S]*proxyName,[\s\S]*persist,[\s\S]*closePreviousConnections,[\s\S]*\}\)/,
   )
+  assert.doesNotMatch(controllerSource, /getConnections|closeConnection/)
   assert.match(
     rustControllerSource,
     /Some\(persist_node_selection\(&group_name, &proxy_name\)\.await\?\)/,
   )
   assert.match(
     rustControllerSource,
-    /profiles_patch_item_safe\(&profile_id, &previous_item\)\.await\.is_err\(\)/,
+    /profiles_replace_item_selected_safe\(&profile_id, previous_selected\)[\s\S]*\.await[\s\S]*\.is_err\(\)/,
   )
   assert.doesNotMatch(rustControllerSource, /get_proxy_by_name\(&group_name\)/)
+  assert.match(
+    rustControllerSource,
+    /current_runtime_node\(&group_name\)\.await/,
+  )
+  assert.match(
+    rustControllerSource,
+    /schedule_previous_node_connection_cleanup\(group_name\.to_string\(\), expected_current_proxy, previous_proxy\)/,
+  )
   assert.match(rustControllerSource, /static NODE_SELECTION_LOCK: Mutex<\(\)>/)
   assert.match(
     rustControllerSource,

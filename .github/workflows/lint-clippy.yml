@@ -90,7 +90,15 @@ jobs:
 
       - name: Run Clippy
         if: steps.rust_scope.outputs.has_rust_impact == 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          TAURI_CONFIG: '{"bundle":{"externalBin":[],"resources":[]}}'
         run: node scripts/ci/check-scope.mjs clippy --target-triple ${{ matrix.target }}
+
+      - name: Run runtime boundary unit tests
+        if: steps.rust_scope.outputs.has_rust_impact == 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          TAURI_CONFIG: '{"bundle":{"externalBin":[],"resources":[]}}'
+        run: cargo test --target ${{ matrix.target }} --workspace --all-features --lib runtime_boundary_tests
 
       - name: Run Logging Check
         if: steps.rust_scope.outputs.has_rust_impact == 'true' || github.event_name == 'workflow_dispatch'

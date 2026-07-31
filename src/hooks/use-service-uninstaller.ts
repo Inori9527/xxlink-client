@@ -5,7 +5,11 @@ import {
   showSafeClientFailureNotice,
 } from '@/services/notice-service'
 import { runtimeActionController } from '@/services/runtime-action-controller'
-import type { SafeClientFailureScope } from '@/services/safe-client-error'
+import { executeWithStateRefresh } from '@/services/runtime-state-policy'
+import {
+  reportSafeClientFailure,
+  type SafeClientFailureScope,
+} from '@/services/safe-client-error'
 
 import { useSystemState } from './use-system-state'
 
@@ -31,28 +35,18 @@ export const useServiceUninstaller = () => {
   const { mutateSystemState } = useSystemState()
 
   const uninstallServiceAndRestartCore = useCallback(async () => {
-    try {
-      await executeWithErrorHandling(
-        () => runtimeActionController.stopCore(),
-        'service-stop-before-uninstall',
-        'settings.statuses.clash.stopping',
-      )
-      await executeWithErrorHandling(
-        () => runtimeActionController.uninstallService(),
-        'service-uninstall',
-        'settings.statuses.clashService.uninstalling',
-        'settings.feedback.notifications.clashService.uninstallSuccess',
-      )
-    } catch (ignore) {
-    } finally {
-      await executeWithErrorHandling(
-        () => runtimeActionController.restartCore(),
-        'service-restart-after-uninstall',
-        'settings.statuses.clash.restarting',
-        'settings.feedback.notifications.clash.restartSuccess',
-      )
-      await mutateSystemState()
-    }
+    await executeWithStateRefresh({
+      operation: () =>
+        executeWithErrorHandling(
+          () => runtimeActionController.uninstallServiceAndRestartCore(),
+          'service-uninstall',
+          'settings.statuses.clashService.uninstalling',
+          'settings.feedback.notifications.clashService.uninstallSuccess',
+        ),
+      refresh: mutateSystemState,
+      onRefreshError: (error) =>
+        reportSafeClientFailure('service-uninstall', error),
+    })
   }, [mutateSystemState])
 
   return { uninstallServiceAndRestartCore }

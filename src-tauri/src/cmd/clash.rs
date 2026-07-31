@@ -1,42 +1,4 @@
-use super::CmdResult;
-use crate::{
-    cmd::StringifyErr as _,
-    config::Config,
-    core::{CoreManager, handle},
-};
-use xxlink_logging::{Type, logging_error};
-
-/// 启动核心
-#[tauri::command]
-pub async fn start_core() -> CmdResult {
-    let result = CoreManager::global().start_core().await.stringify_err();
-    if result.is_ok() {
-        handle::Handle::refresh_clash();
-    }
-    result
-}
-
-/// 关闭核心
-#[tauri::command]
-pub async fn stop_core() -> CmdResult {
-    logging_error!(Type::Core, Config::profiles().await.data_arc().save_file().await);
-    let result = CoreManager::global().stop_core().await.stringify_err();
-    if result.is_ok() {
-        handle::Handle::refresh_clash();
-    }
-    result
-}
-
-/// 重启核心
-#[tauri::command]
-pub async fn restart_core() -> CmdResult {
-    logging_error!(Type::Core, Config::profiles().await.data_arc().save_file().await);
-    let result = CoreManager::global().restart_core().await.stringify_err();
-    if result.is_ok() {
-        handle::Handle::refresh_clash();
-    }
-    result
-}
+use crate::core::CoreManager;
 
 pub(super) async fn diagnostics_log_summary(
     max_items: usize,

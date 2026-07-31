@@ -1,4 +1,4 @@
-use super::{PrfOption, prfitem::PrfItem};
+use super::{PrfOption, PrfSelected, prfitem::PrfItem};
 use crate::utils::{
     dirs::{self, PathBufExec as _},
     help,
@@ -43,6 +43,16 @@ macro_rules! patch {
 }
 
 impl IProfiles {
+    fn replace_item_selected(&mut self, uid: &String, selected: Option<Vec<PrfSelected>>) -> Result<()> {
+        let items = self.items.as_mut().context("profile list is unavailable")?;
+        let item = items
+            .iter_mut()
+            .find(|item| item.uid.as_ref() == Some(uid))
+            .with_context(|| format!("failed to find the profile item \"uid:{uid}\""))?;
+        item.selected = selected;
+        Ok(())
+    }
+
     // Helper to find and remove an item by uid from the items vec, returning its file name (if any).
     fn take_item_file_by_uid(items: &mut Vec<PrfItem>, target_uid: Option<&str>) -> Option<String> {
         let index = items.iter().position(|item| item.uid.as_deref() == target_uid)?;
@@ -569,6 +579,17 @@ pub async fn profiles_patch_item_safe(index: &String, item: &PrfItem) -> Result<
         .await
 }
 
+pub async fn profiles_replace_item_selected_safe(index: &String, selected: Option<Vec<PrfSelected>>) -> Result<()> {
+    Config::profiles()
+        .await
+        .with_data_modify(|mut profiles| async move {
+            profiles.replace_item_selected(index, selected)?;
+            profiles.save_file().await?;
+            Ok((profiles, ()))
+        })
+        .await
+}
+
 pub async fn profiles_delete_item_safe(index: &String) -> Result<bool> {
     Config::profiles()
         .await
@@ -723,6 +744,34 @@ mod tests {
 
         assert!(profiles.current.is_none());
         assert_eq!(profiles.items.as_ref().map(Vec::len), Some(1));
+        Ok(())
+    }
+
+    #[test]
+    fn exact_selected_replacement_can_restore_none() -> Result<()> {
+        let uid: String = "managed".into();
+        let mut profiles = IProfiles {
+            current: Some(uid.clone()),
+            items: Some(vec![PrfItem {
+                uid: Some(uid.clone()),
+                selected: Some(vec![PrfSelected {
+                    name: Some("GLOBAL".into()),
+                    now: Some("Node A".into()),
+                }]),
+                ..Default::default()
+            }]),
+        };
+
+        profiles.replace_item_selected(&uid, None)?;
+
+        assert!(
+            profiles
+                .items
+                .as_ref()
+                .and_then(|items| items.first())
+                .and_then(|item| item.selected.as_ref())
+                .is_none()
+        );
         Ok(())
     }
 }

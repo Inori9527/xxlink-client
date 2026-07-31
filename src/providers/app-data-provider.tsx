@@ -83,7 +83,11 @@ export const AppDataProvider = ({
     ...TQ_MIHOMO,
   })
 
-  const { data: proxySettings, refetch: refreshProxySettings } = useQuery({
+  const {
+    data: proxySettings,
+    isError: proxySettingsReadFailed,
+    refetch: refreshProxySettings,
+  } = useQuery({
     queryKey: ['getProxySettings'],
     queryFn: () =>
       withStartupTimeout(
@@ -216,7 +220,11 @@ export const AppDataProvider = ({
     }
   }, [refreshProxy, refreshProxySettings])
 
-  const { data: sysproxy, refetch: refreshSysproxy } = useQuery({
+  const {
+    data: sysproxy,
+    isError: sysproxyReadFailed,
+    refetch: refreshSysproxy,
+  } = useQuery({
     queryKey: ['getSystemProxy'],
     queryFn: () => withStartupTimeout('getSystemProxy', getSystemProxy()),
     enabled: startupQueriesEnabled,
@@ -255,13 +263,15 @@ export const AppDataProvider = ({
       if (!verge || !proxySettings) return '-'
 
       const isPacMode = verge.proxy_auto_config ?? false
+      const configuredProxyHost =
+        verge.proxy_host_valid === true ? verge.proxy_host || '127.0.0.1' : null
 
       if (isPacMode) {
         // PAC模式：显示我们期望设置的代理地址
-        const proxyHost = verge.proxy_host || '127.0.0.1'
+        if (!configuredProxyHost) return '-'
         const proxyPort =
           verge.verge_mixed_port || proxySettings.mixedPort || 7897
-        return `${proxyHost}:${proxyPort}`
+        return `${configuredProxyHost}:${proxyPort}`
       } else {
         // HTTP代理模式：优先使用系统地址，但如果格式不正确则使用期望地址
         const systemServer = sysproxy?.server
@@ -273,10 +283,10 @@ export const AppDataProvider = ({
           return systemServer
         } else {
           // 系统地址无效，返回期望的代理地址
-          const proxyHost = verge.proxy_host || '127.0.0.1'
+          if (!configuredProxyHost) return '-'
           const proxyPort =
             verge.verge_mixed_port || proxySettings.mixedPort || 7897
-          return `${proxyHost}:${proxyPort}`
+          return `${configuredProxyHost}:${proxyPort}`
         }
       }
     }
@@ -291,6 +301,9 @@ export const AppDataProvider = ({
 
       // 提供者数据
       systemProxyAddress: calculateSystemProxyAddress(),
+      proxySettingsReady:
+        proxySettings !== undefined && !proxySettingsReadFailed,
+      sysproxyReady: sysproxy !== undefined && !sysproxyReadFailed,
 
       // 刷新方法
       refreshProxy,
@@ -301,7 +314,9 @@ export const AppDataProvider = ({
   }, [
     proxiesData,
     proxySettings,
+    proxySettingsReadFailed,
     sysproxy,
+    sysproxyReadFailed,
     runningMode,
     uptimeData,
     verge,

@@ -14,19 +14,16 @@ pub mod runtime_action_controller;
 pub mod secure_session;
 pub mod service;
 pub mod system;
-pub mod verge;
 
 // Re-export all command functions for backwards compatibility
 pub use app::*;
 pub use backend_controller::*;
-pub use clash::*;
 pub use network::*;
 pub use profile::*;
 pub use runtime_action_controller::*;
 pub use secure_session::*;
 pub use service::*;
 pub use system::*;
-pub use verge::*;
 
 pub trait StringifyErr<T> {
     fn stringify_err(self) -> CmdResult<T>;

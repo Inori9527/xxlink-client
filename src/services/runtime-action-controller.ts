@@ -1,9 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
-import { closeConnection, getConnections } from 'tauri-plugin-mihomo-api'
 
 import delayManager from '@/services/delay'
 import { copyDiagnosticsBundleToClipboard } from '@/services/diagnostics-bundle'
-import { reportSafeClientFailure } from '@/services/safe-client-error'
 
 export type ApprovedUpdateView = {
   version: string
@@ -27,6 +25,35 @@ export type RuntimeProxySettingsView = {
   mixedPort: number
 }
 
+export type RuntimePreferencesView = {
+  language?: string | null
+  theme_mode?: 'light' | 'dark' | 'system' | null
+  traffic_graph?: boolean | null
+  enable_memory_usage?: boolean | null
+  menu_icon?: 'monochrome' | 'colorful' | 'disable' | null
+  notice_position?:
+    | 'top-left'
+    | 'top-right'
+    | 'bottom-left'
+    | 'bottom-right'
+    | null
+  collapse_navbar?: boolean | null
+  enable_tun_mode: boolean
+  enable_system_proxy: boolean
+  enable_proxy_guard?: boolean | null
+  enable_bypass_check?: boolean | null
+  use_default_bypass?: boolean | null
+  system_proxy_bypass?: string | null
+  proxy_guard_duration?: number | null
+  proxy_auto_config?: boolean | null
+  proxy_host?: string | null
+  proxy_host_valid: boolean
+  verge_mixed_port?: number | null
+  auto_close_connection?: boolean | null
+  auto_check_update?: boolean | null
+  default_latency_timeout?: number | null
+}
+
 export type RuntimePreferencesUpdate = {
   collapse_navbar?: boolean
   language?: string
@@ -36,14 +63,12 @@ export type RuntimePreferencesUpdate = {
   system_proxy_bypass?: string
   proxy_auto_config?: boolean
   use_default_bypass?: boolean
-  pac_file_content?: string
   proxy_host?: string
 }
 
 type NodeSelection = {
   groupName: string
   proxyName: string
-  previousProxy?: string
   closePreviousConnections?: boolean
   persist?: boolean
 }
@@ -55,15 +80,6 @@ type LatencyTest = {
   groupName: string
   timeoutMs: number
   concurrency?: number
-}
-
-const cleanupPreviousConnections = async (previousProxy: string) => {
-  const { connections } = await getConnections()
-  await Promise.allSettled(
-    (connections ?? [])
-      .filter((connection) => connection.chains.includes(previousProxy))
-      .map((connection) => closeConnection(connection.id)),
-  )
 }
 
 export const runtimeActionController = {
@@ -79,12 +95,20 @@ export const runtimeActionController = {
     return invoke<void>('runtime_set_tun_enabled', { enabled })
   },
 
+  disableTunIfUnavailable() {
+    return invoke<boolean>('runtime_disable_tun_if_unavailable')
+  },
+
   setSystemProxyEnabled(enabled: boolean) {
     return invoke<void>('runtime_set_system_proxy_enabled', { enabled })
   },
 
   getProxySettings() {
     return invoke<RuntimeProxySettingsView>('runtime_get_proxy_settings')
+  },
+
+  getPreferences() {
+    return invoke<RuntimePreferencesView>('runtime_get_preferences')
   },
 
   getTunSettings() {
@@ -103,41 +127,26 @@ export const runtimeActionController = {
     return invoke<void>('runtime_refresh_system_proxy')
   },
 
-  startCore() {
-    return invoke<void>('start_core')
+  installServiceAndRestartCore() {
+    return invoke<void>('runtime_install_service_and_restart_core')
   },
 
-  stopCore() {
-    return invoke<void>('stop_core')
+  uninstallServiceAndRestartCore() {
+    return invoke<void>('runtime_uninstall_service_and_restart_core')
   },
 
-  restartCore() {
-    return invoke<void>('restart_core')
-  },
-
-  installService() {
-    return invoke<void>('install_service')
-  },
-
-  uninstallService() {
-    return invoke<void>('uninstall_service')
-  },
-
-  async selectNode({
+  selectNode({
     groupName,
     proxyName,
-    previousProxy,
     closePreviousConnections = false,
     persist = true,
   }: NodeSelection) {
-    await invoke<void>('runtime_select_node', { groupName, proxyName, persist })
-    if (closePreviousConnections && previousProxy) {
-      setTimeout(() => {
-        void cleanupPreviousConnections(previousProxy).catch((error) => {
-          reportSafeClientFailure('proxy-selection-cleanup', error)
-        })
-      }, 0)
-    }
+    return invoke<void>('runtime_select_node', {
+      groupName,
+      proxyName,
+      persist,
+      closePreviousConnections,
+    })
   },
 
   testNodeLatency({
