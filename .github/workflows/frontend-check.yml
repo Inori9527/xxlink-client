@@ -108,6 +108,10 @@ jobs:
         if: steps.check_frontend.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         run: pnpm typecheck
 
+      - name: Validate packaged CSP and Tauri build guard
+        if: steps.check_frontend.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
+        run: node --test scripts/test-tauri-cli-arguments.mjs && node scripts/validate-csp-policy.mjs
+
       - name: Validate runtime action boundary
         if: steps.check_frontend.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         run: node scripts/validate-runtime-action-boundary.mjs

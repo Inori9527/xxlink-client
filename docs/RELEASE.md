@@ -268,12 +268,12 @@ ssh root@108.61.207.72 "rm /opt/vps-airport/infra/nginx/downloads/XXLink_1.0.2_x
 
 ## 六、常见坑
 
-| 现象                                                           | 原因                                  | 修法                                             |
-| -------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------ |
-| Release build 登录页样式全无                                   | MUI emotion CSS-in-JS 被 CSP nonce 拦 | `tauri.conf.json` 里保持 `"csp": null`（已固化） |
-| NSIS 报 `sidecar/...aarch64-pc-windows-msvc.exe doesn't exist` | 默认 tauri build 尝试打包全架构       | 必须加 `--target x86_64-pc-windows-gnu`          |
-| `manualChunks is not a function`                               | Rolldown 要求函数形式                 | `vite.config.mts` 已配好，别改成对象             |
-| 退出码 1 但 setup.exe 已生成                                   | tauri updater 缺私钥                  | 假错误，按启用自动更新一节配                     |
+| 现象                                                           | 原因                                       | 修法                                                           |
+| -------------------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------- |
+| Release build 登录页样式全无                                   | MUI emotion CSS-in-JS 未使用打包 CSP nonce | 保持 CSP 启用，并通过 `pnpm web:build` 与 CSP build guard 验证 |
+| NSIS 报 `sidecar/...aarch64-pc-windows-msvc.exe doesn't exist` | 默认 tauri build 尝试打包全架构            | 必须加 `--target x86_64-pc-windows-gnu`                        |
+| `manualChunks is not a function`                               | Rolldown 要求函数形式                      | `vite.config.mts` 已配好，别改成对象                           |
+| 退出码 1 但 setup.exe 已生成                                   | tauri updater 缺私钥                       | 假错误，按启用自动更新一节配                                   |
 
 ---
 

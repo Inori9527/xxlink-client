@@ -31,5 +31,10 @@
       },
       "infoPlist": "packages/macos/info_merge.plist"
     }
+  },
+  "app": {
+    "security": {
+      "dangerousDisableAssetCspModification": ["style-src"]
+    }
   }
 }

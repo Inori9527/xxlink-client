@@ -238,7 +238,7 @@ jobs:
           releaseBody: 'Draft release, will be updated later.'
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-rc') }}
-          tauriScript: pnpm
+          tauriScript: pnpm tauri
           args: --target ${{ matrix.target }}
           includeUpdaterJson: true
 
@@ -357,7 +357,7 @@ jobs:
             export PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig/:$PKG_CONFIG_PATH
             export PKG_CONFIG_SYSROOT_DIR=/usr/arm-linux-gnueabihf/
           fi
-          pnpm build --target ${{ matrix.target }}
+          node scripts/tauri-cli.mjs build --target ${{ matrix.target }}
         env:
           NODE_OPTIONS: '--max_old_space_size=4096'
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
@@ -459,7 +459,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
-          tauriScript: pnpm
+          tauriScript: pnpm tauri
           args: --target ${{ matrix.target }}
 
       - name: Rename
