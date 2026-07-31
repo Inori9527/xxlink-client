@@ -65,10 +65,13 @@ const getCspNonce = (): string | undefined => {
     'meta[property="csp-nonce"]',
   )?.content
   if (metaNonce) return metaNonce
-  const scriptNonce = document
-    .querySelector<HTMLScriptElement>('script[nonce]')
-    ?.getAttribute('nonce')
-  return scriptNonce ?? undefined
+
+  // Tauri injects the production style nonce into the bundled inline style.
+  // Read the DOM property because browsers hide nonce values from getAttribute.
+  const nonceElement = document.querySelector<HTMLElement>(
+    'style[nonce], script[nonce]',
+  )
+  return nonceElement?.nonce || undefined
 }
 
 const emotionCache = createCache({
