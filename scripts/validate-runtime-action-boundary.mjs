@@ -138,6 +138,18 @@ assert(
   tunViewer.includes('enabled: false') &&
     tunViewer.includes('refreshRequestRef') &&
     tunViewer.includes('mutationInFlightRef') &&
+    /if \(!error && data\) \{\s*setValues\(toTunSettingsForm\(data\)\)\s*setAuthoritativeLoaded\(true\)\s*return\s*\}\s*setAuthoritativeLoaded\(false\)/.test(
+      tunViewer,
+    ) &&
+    tunViewer.includes('setAuthoritativeLoaded(false)') &&
+    tunViewer.includes(
+      'if (mutationInFlightRef.current || busy || !authoritativeLoaded) return',
+    ) &&
+    tunViewer.includes(
+      'if (mutationInFlightRef.current || busy || !authoritativeLoaded) {',
+    ) &&
+    tunViewer.includes('disabled={busy || !authoritativeLoaded}') &&
+    tunViewer.includes('disableOk={busy || !authoritativeLoaded}') &&
     tunViewer.includes('.finally(() =>') &&
     tunViewer.includes(
       'inert={busy || !authoritativeLoaded ? true : undefined}',
@@ -173,9 +185,12 @@ assert(
   'TUN settings refresh can overwrite edits or leave the dialog locked',
 )
 assert(
-  tunViewer.includes('disabled={busy}') &&
-    tunViewer.includes('if (mutationInFlightRef.current || busy) return') &&
-    tunViewer.includes('setAuthoritativeLoaded(true)'),
+  tunViewer.includes('const defaultTunSettings = ()') &&
+    tunViewer.includes('settings?.stack ??') &&
+    tunViewer.includes('settings?.mtu ?? 1500') &&
+    tunViewer.includes(
+      'runtimeActionController.updateTunSettings(defaultTunSettings())',
+    ),
   'malformed persisted TUN settings cannot be recovered through typed defaults',
 )
 assert(

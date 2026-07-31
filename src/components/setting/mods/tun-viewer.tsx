@@ -135,20 +135,21 @@ export function TunViewer({ ref }: { ref?: Ref<DialogRef> }) {
       void refreshTunSettings()
         .then(({ data, error }) => {
           if (requestId !== refreshRequestRef.current) return
-          if (data) {
+          if (!error && data) {
             setValues(toTunSettingsForm(data))
             setAuthoritativeLoaded(true)
+            return
           }
-          if (error || !data) {
-            const failure = error ?? new Error('tun_settings_unavailable')
-            reportSafeClientFailure('tun-settings-refresh', failure)
-            showNotice.error(
-              toSafeClientErrorMessage(classifyClientError(failure).kind, t),
-            )
-          }
+          setAuthoritativeLoaded(false)
+          const failure = error ?? new Error('tun_settings_unavailable')
+          reportSafeClientFailure('tun-settings-refresh', failure)
+          showNotice.error(
+            toSafeClientErrorMessage(classifyClientError(failure).kind, t),
+          )
         })
         .catch((error: unknown) => {
           if (requestId === refreshRequestRef.current) {
+            setAuthoritativeLoaded(false)
             reportSafeClientFailure('tun-settings-refresh', error)
             showNotice.error(
               toSafeClientErrorMessage(classifyClientError(error).kind, t),
@@ -223,7 +224,7 @@ export function TunViewer({ ref }: { ref?: Ref<DialogRef> }) {
   })
 
   const onReset = useLockFn(async () => {
-    if (mutationInFlightRef.current || busy) return
+    if (mutationInFlightRef.current || busy || !authoritativeLoaded) return
     mutationInFlightRef.current = true
     setMutating(true)
     try {
@@ -251,7 +252,7 @@ export function TunViewer({ ref }: { ref?: Ref<DialogRef> }) {
           <Button
             variant="outlined"
             size="small"
-            disabled={busy}
+            disabled={busy || !authoritativeLoaded}
             onClick={onReset}
           >
             {t('shared.actions.resetToDefault')}
