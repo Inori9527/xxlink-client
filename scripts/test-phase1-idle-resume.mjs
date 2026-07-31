@@ -332,6 +332,7 @@ test('resume recovery refreshes safe account state without exposing secrets', as
     '@/services/backend-controller': {
       isBackendSubjectCurrent: (subjectId) =>
         subjectId === authStore.getState().user?.id,
+      isSubscriptionActiveNow: () => false,
       backendController: {
         userProfile: async () => {
           calls.profile += 1
@@ -440,6 +441,7 @@ test('resume recovery discards a batch after the active account changes', async 
     '@/services/auth-store': { authStore },
     '@/services/backend-controller': {
       isBackendSubjectCurrent: (subjectId) => subjectId === userId,
+      isSubscriptionActiveNow: () => false,
       backendController: {
         userProfile: async () => {
           userId = 'user-b'
@@ -488,6 +490,7 @@ test('failed resume recovery persists classification without raw client material
     '@/services/subscription-sync': { syncSubscription: async () => {} },
     '@/services/backend-controller': {
       isBackendSubjectCurrent: (subjectId) => subjectId === 'user-id',
+      isSubscriptionActiveNow: () => false,
       backendController: {
         plans: async () => [],
         subscription: async () => null,
@@ -611,8 +614,12 @@ test('display helpers distinguish unknown usage and confirmed empty plans', () =
     'utf8',
   )
   const plansFailureBlock = plansSource.slice(
-    plansSource.indexOf("if (plansResult.status === 'fulfilled')"),
-    plansSource.indexOf("if (subResult.status === 'fulfilled')"),
+    plansSource.indexOf(
+      "if (plansResult.status === 'fulfilled' && plansKnown)",
+    ),
+    plansSource.indexOf(
+      "if (subResult.status === 'fulfilled' && subscriptionKnown)",
+    ),
   )
   assert.equal(plansFailureBlock.includes('!hasLastKnownGood'), true)
   assert.equal(plansFailureBlock.includes('setError('), true)
@@ -630,7 +637,7 @@ test('mine page uses LKG usage and does not render transient failures as false z
   assert.match(mineSource, /setUsageRefreshFailed\(true\)/)
   assert.match(
     mineSource,
-    /writeAccountLkgCache\(user\.id, \{ usage: value \}\)/,
+    /writeAccountLkgCache\(user\.id, \{[\s\S]*usage: value,[\s\S]*accessDecision:/,
   )
   const mineUsageRefreshStart = mineSource.search(
     /backendController\s*\.usage\(\)/,

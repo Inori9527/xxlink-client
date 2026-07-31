@@ -27,7 +27,7 @@ import {
 } from '@mui/material'
 import { open } from '@tauri-apps/plugin-shell'
 import { useLockFn } from 'ahooks'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { BasePage } from '@/components/base'
@@ -40,9 +40,20 @@ import {
 import {
   ACCOUNT_LKG_CHANGED_EVENT,
   readAccountLkgCache,
+  readLatestAccountAccessDecision,
   type SafeSubscriptionSnapshot,
   writeAccountLkgCache,
 } from '@/services/account-lkg-cache'
+import { runAccountRefreshExclusive } from '@/services/account-refresh-coordinator'
+import {
+  getUsageAuthorizationEvidence,
+  isRecognizedPlansSnapshot,
+  isRecognizedPublicBenefitSnapshot,
+  isRecognizedSubscriptionSnapshot,
+  isRecognizedUsageSnapshot,
+  parseAuthoritativeBytes,
+  resolveAccountAccessDecision,
+} from '@/services/account-state-validation'
 import { authStore } from '@/services/auth-store'
 import {
   backendController,
@@ -200,6 +211,7 @@ const PlansPage = () => {
   const [error, setError] = useState<string | null>(null)
   const [preferredBillingPeriod, setPreferredBillingPeriod] =
     useState<BillingPeriod>('month')
+  const loadGenerationRef = useRef(0)
   const cooldownLabels = useMemo(
     () => ({
       available: t('plans.trial.available'),
@@ -210,61 +222,113 @@ const PlansPage = () => {
   )
 
   const loadPlans = useCallback(async () => {
+    const requestId = ++loadGenerationRef.current
     setError(null)
     const subjectId = captureBackendSubject()
     if (!subjectId) return
-    const [plansResult, subResult, usageResult, benefitResult] =
-      await Promise.allSettled([
-        backendController.plans(),
-        backendController.subscription(),
-        backendController.usage(),
-        backendController.publicBenefit(),
-      ])
-    if (!isBackendSubjectCurrent(subjectId)) return
-    const userId = subjectId
-    const hasLastKnownGood = Boolean(
-      userId ? readAccountLkgCache(userId) : initialAccountCache,
-    )
+    await runAccountRefreshExclusive(async () => {
+      if (
+        requestId !== loadGenerationRef.current ||
+        !isBackendSubjectCurrent(subjectId)
+      ) {
+        return
+      }
+      const [plansResult, subResult, usageResult, benefitResult] =
+        await Promise.allSettled([
+          backendController.plans(),
+          backendController.subscription(),
+          backendController.usage(),
+          backendController.publicBenefit(),
+        ])
+      if (
+        requestId !== loadGenerationRef.current ||
+        !isBackendSubjectCurrent(subjectId)
+      ) {
+        return
+      }
+      const userId = subjectId
+      const hasLastKnownGood = Boolean(
+        userId ? readAccountLkgCache(userId) : initialAccountCache,
+      )
 
-    if (plansResult.status === 'fulfilled') {
-      setPlans(plansResult.value)
-    } else if (!hasLastKnownGood) {
-      setError(t('plans.page.feedback.errors.loadFailed'))
-    }
-
-    if (subResult.status === 'fulfilled') setSubscription(subResult.value)
-    if (usageResult.status === 'fulfilled') setUsage(usageResult.value)
-    if (benefitResult.status === 'fulfilled')
-      setPublicBenefit(benefitResult.value)
-
-    if (userId) {
-      writeAccountLkgCache(userId, {
-        plans:
-          plansResult.status === 'fulfilled' ? plansResult.value : undefined,
-        subscription:
-          subResult.status === 'fulfilled' ? subResult.value : undefined,
-        usage:
-          usageResult.status === 'fulfilled' ? usageResult.value : undefined,
-        publicBenefit:
-          benefitResult.status === 'fulfilled'
-            ? benefitResult.value
-            : undefined,
+      const plansKnown =
+        plansResult.status === 'fulfilled' &&
+        isRecognizedPlansSnapshot(plansResult.value)
+      const subscriptionKnown =
+        subResult.status === 'fulfilled' &&
+        isRecognizedSubscriptionSnapshot(subResult.value)
+      const usageKnown =
+        usageResult.status === 'fulfilled' &&
+        isRecognizedUsageSnapshot(usageResult.value)
+      const publicBenefitKnown =
+        benefitResult.status === 'fulfilled' &&
+        isRecognizedPublicBenefitSnapshot(benefitResult.value)
+      const usageAuthorization = usageKnown
+        ? getUsageAuthorizationEvidence(usageResult.value)
+        : { known: false, authorized: false }
+      const accessDecision = resolveAccountAccessDecision({
+        previousDecision: readLatestAccountAccessDecision(userId),
+        subscriptionKnown,
+        subscriptionActive:
+          subscriptionKnown && isSubscriptionActiveNow(subResult.value),
+        publicBenefitKnown,
+        activeBenefitBytes: publicBenefitKnown
+          ? (parseAuthoritativeBytes(benefitResult.value.activeBonusBytes) ?? 0)
+          : 0,
+        usageKnown,
+        usageAuthorizationKnown: usageAuthorization.known,
+        usageAuthorized: usageAuthorization.authorized,
+        trafficRemaining: usageKnown
+          ? (parseAuthoritativeBytes(usageResult.value.trafficRemaining) ?? 0)
+          : 0,
       })
-    }
 
-    const hadFailure = [
-      plansResult,
-      subResult,
-      usageResult,
-      benefitResult,
-    ].some((result) => result.status === 'rejected')
-    setAccountLoadFailed(hadFailure)
-    setShowRefreshFailureNotice(
-      shouldShowRefreshFailureNotice({
-        refreshFailed: hadFailure,
-        hasLastKnownGood,
-      }),
-    )
+      if (plansResult.status === 'fulfilled' && plansKnown) {
+        setPlans(plansResult.value)
+      } else if (!hasLastKnownGood) {
+        setError(t('plans.page.feedback.errors.loadFailed'))
+      }
+
+      if (subResult.status === 'fulfilled' && subscriptionKnown)
+        setSubscription(subResult.value)
+      if (usageResult.status === 'fulfilled' && usageKnown)
+        setUsage(usageResult.value)
+      if (benefitResult.status === 'fulfilled' && publicBenefitKnown)
+        setPublicBenefit(benefitResult.value)
+
+      if (userId) {
+        writeAccountLkgCache(userId, {
+          plans:
+            plansResult.status === 'fulfilled' && plansKnown
+              ? plansResult.value
+              : undefined,
+          subscription:
+            subResult.status === 'fulfilled' && subscriptionKnown
+              ? subResult.value
+              : undefined,
+          usage:
+            usageResult.status === 'fulfilled' && usageKnown
+              ? usageResult.value
+              : undefined,
+          publicBenefit:
+            benefitResult.status === 'fulfilled' && publicBenefitKnown
+              ? benefitResult.value
+              : undefined,
+          accessDecision:
+            accessDecision === 'unknown' ? undefined : accessDecision,
+        })
+      }
+
+      const hadFailure =
+        !plansKnown || !subscriptionKnown || !usageKnown || !publicBenefitKnown
+      setAccountLoadFailed(hadFailure)
+      setShowRefreshFailureNotice(
+        shouldShowRefreshFailureNotice({
+          refreshFailed: hadFailure,
+          hasLastKnownGood,
+        }),
+      )
+    })
   }, [initialAccountCache, t])
 
   useEffect(() => {
@@ -369,6 +433,9 @@ const PlansPage = () => {
     setError(null)
     try {
       const benefitData = await backendController.claimPublicBenefit()
+      if (!isRecognizedPublicBenefitSnapshot(benefitData)) {
+        throw new Error('invalid_account_state')
+      }
       setPublicBenefit(benefitData)
       await loadPlans()
       showNotice.success(t('plans.trial.claimSuccess'))

@@ -660,6 +660,7 @@ test('reachable safety-tail sinks never display, persist, copy, or log raw error
     'src/services/i18n.ts',
     'src/services/cmds.ts',
     'src/components/layout/notice-manager.tsx',
+    'src/services/account-runtime-enforcement.ts',
   ]
 
   for (const relativePath of paths) {
@@ -706,7 +707,7 @@ test('reachable safety-tail sinks never display, persist, copy, or log raw error
   const resumeSource = readFileSync(resolve(repoRoot, paths[2]), 'utf8')
   assert.match(resumeSource, /toSafeClientFailureRecord/)
   assert.doesNotMatch(resumeSource, /message:\s*(?:error|String\()/)
-  assert.match(resumeSource, /lastFailureAt = Date\.now\(\)/)
+  assert.match(resumeSource, /lastFailure = \{ userId, at: Date\.now\(\) \}/)
   assert.doesNotMatch(resumeSource, /clearAuth\(/)
 
   const mainSource = readFileSync(resolve(repoRoot, paths[3]), 'utf8')

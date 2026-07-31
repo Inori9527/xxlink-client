@@ -28,7 +28,7 @@ test('Mine promo panel keeps redemption, forced sync, proxy refresh, and safe er
   const source = readSource(panelPath)
 
   assert.match(source, /code\.trim\(\)/)
-  assert.match(source, /api\.promo\.redeemCode\(normalizedCode\)/)
+  assert.match(source, /backendController\.redeemPromo\(normalizedCode\)/)
   assert.match(source, /syncSubscription\(\{ force: true \}\)/)
   assert.match(source, /await refreshProxy\(\)/)
   assert.match(source, /reportSafeClientFailure\('promo-sync', syncError\)/)
@@ -49,7 +49,7 @@ test('Mine promo panel keeps redemption, forced sync, proxy refresh, and safe er
 test('Mine copies the redacted diagnostics bundle with localized safe feedback', () => {
   const source = readSource('src/pages/mine.tsx')
 
-  assert.match(source, /copyDiagnosticsBundleToClipboard/)
+  assert.match(source, /runtimeActionController\.copyDiagnostics\(\)/)
   assert.match(
     source,
     /reportSafeClientFailure\('mine-copy-diagnostics', error\)/,

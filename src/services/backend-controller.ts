@@ -51,11 +51,11 @@ export interface UsageView {
   percentUsed: number
   plan: { id: string; name: string; duration: number } | null
   entitlement?: {
-    speedLimitMbps?: number | null
+    speedLimitMbps?: string | number | null
     maxDevices?: number | null
     accessTier?: string | null
     nodeTier?: string | null
-  }
+  } | null
   status: string
   expireAt: string
   startAt: string

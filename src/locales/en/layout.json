@@ -56,6 +56,8 @@
         "download": "Download",
         "connecting": "Connecting",
         "validating": "Validating",
+        "connectionUnverified": "Connection unverified",
+        "connectionUnverifiedHint": "Protection remains enabled, but the reachability check was inconclusive. You can retry.",
         "connectionFailed": "Connection failed",
         "connected": "Connected",
         "disconnected": "Disconnected",

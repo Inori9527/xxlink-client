@@ -18,6 +18,7 @@ import {
 import { hideInitialOverlay } from './pages/_layout/utils'
 import { router } from './pages/_routers'
 import { WindowProvider } from './providers/window'
+import { startAccountRuntimeEnforcement } from './services/account-runtime-enforcement'
 import { AuthProvider, authStore } from './services/auth-store'
 import { FALLBACK_LANGUAGE, initializeLanguage } from './services/i18n'
 import {
@@ -191,6 +192,7 @@ const rememberStartupTimeout = (error: unknown) => {
 }
 
 const startBackgroundStartupTasks = () => {
+  startAccountRuntimeEnforcement()
   startSubscriptionAutoSync()
   startResumeRecoveryListeners()
 

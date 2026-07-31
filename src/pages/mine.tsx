@@ -44,6 +44,13 @@ import {
   readAccountLkgCache,
   writeAccountLkgCache,
 } from '@/services/account-lkg-cache'
+import { runAccountRefreshExclusive } from '@/services/account-refresh-coordinator'
+import {
+  getUsageAuthorizationEvidence,
+  isRecognizedUsageSnapshot,
+  parseAuthoritativeBytes,
+  resolveAccountAccessDecision,
+} from '@/services/account-state-validation'
 import { useAuth } from '@/services/auth-store'
 import {
   backendController,
@@ -256,19 +263,36 @@ const MinePage = () => {
 
     let cancelled = false
 
-    backendController
-      .usage()
-      .then((value) => {
-        if (cancelled || !isBackendSubjectCurrent(user.id)) return
-        setUsage(value)
-        setUsageRefreshFailed(false)
-        writeAccountLkgCache(user.id, { usage: value })
+    void runAccountRefreshExclusive(async () => {
+      if (cancelled || !isBackendSubjectCurrent(user.id)) return
+      const value = await backendController.usage()
+      if (cancelled || !isBackendSubjectCurrent(user.id)) return
+      if (!isRecognizedUsageSnapshot(value)) {
+        throw new Error('invalid_usage_snapshot')
+      }
+      const authorization = getUsageAuthorizationEvidence(value)
+      const accessDecision = resolveAccountAccessDecision({
+        subscriptionKnown: false,
+        subscriptionActive: false,
+        publicBenefitKnown: false,
+        activeBenefitBytes: 0,
+        usageKnown: true,
+        usageAuthorizationKnown: authorization.known,
+        usageAuthorized: authorization.authorized,
+        trafficRemaining: parseAuthoritativeBytes(value.trafficRemaining) ?? 0,
       })
-      .catch(() => {
-        if (!cancelled && isBackendSubjectCurrent(user.id)) {
-          setUsageRefreshFailed(true)
-        }
+      setUsage(value)
+      setUsageRefreshFailed(false)
+      writeAccountLkgCache(user.id, {
+        usage: value,
+        accessDecision:
+          accessDecision === 'unknown' ? undefined : accessDecision,
       })
+    }).catch(() => {
+      if (!cancelled && isBackendSubjectCurrent(user.id)) {
+        setUsageRefreshFailed(true)
+      }
+    })
 
     return () => {
       cancelled = true
