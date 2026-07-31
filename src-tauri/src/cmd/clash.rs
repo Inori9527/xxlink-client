@@ -1,24 +1,10 @@
 use super::CmdResult;
-use crate::feat;
 use crate::{
     cmd::StringifyErr as _,
-    config::{ClashInfo, Config},
+    config::Config,
     core::{CoreManager, handle},
 };
-use serde_yaml_ng::Mapping;
 use xxlink_logging::{Type, logging_error};
-
-/// 获取Clash信息
-#[tauri::command]
-pub async fn get_clash_info() -> CmdResult<ClashInfo> {
-    Ok(Config::clash().await.data_arc().get_client_info())
-}
-
-/// 修改Clash配置
-#[tauri::command]
-pub async fn patch_clash_config(payload: Mapping) -> CmdResult {
-    feat::patch_clash(&payload).await.stringify_err()
-}
 
 /// 启动核心
 #[tauri::command]

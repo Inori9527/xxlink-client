@@ -37,12 +37,7 @@ xxlink-i18n = { workspace = true }
 xxlink-limiter = { workspace = true }
 tauri-plugin-xxlink-sysinfo = { workspace = true }
 tauri-plugin-clipboard-manager = { workspace = true }
-tauri = { workspace = true, features = [
-  "protocol-asset",
-  "tray-icon",
-  "image-ico",
-  "image-png",
-] }
+tauri = { workspace = true, features = ["tray-icon", "image-ico", "image-png"] }
 parking_lot = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }

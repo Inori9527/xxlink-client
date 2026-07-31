@@ -32,25 +32,15 @@ import {
 import { useSystemProxyState } from '@/hooks/use-system-proxy-state'
 import { useVerge } from '@/hooks/use-verge'
 import { useAppData } from '@/providers/app-data-context'
-import {
-  getAutotemProxy,
-  getNetworkInterfacesInfo,
-  getSystemHostname,
-  getSystemProxy,
-  patchVergeConfig,
-} from '@/services/cmds'
+import { getNetworkInterfacesInfo, getSystemHostname } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
+import { runtimeActionController } from '@/services/runtime-action-controller'
 import {
   classifyClientError,
   reportSafeClientFailure,
   toSafeClientErrorMessage,
 } from '@/services/safe-client-error'
 import getSystem from '@/utils/get-system'
-
-const sleep = (ms: number) =>
-  new Promise<void>((resolve) => {
-    setTimeout(resolve, ms)
-  })
 
 const DEFAULT_PAC = `function FindProxyForURL(url, host) {
   return "PROXY %proxy_host%:%mixed-port%; SOCKS5 %proxy_host%:%mixed-port%; DIRECT;";
@@ -106,7 +96,7 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
   const { verge, patchVerge, mutateVerge } = useVerge()
   const [hostOptions, setHostOptions] = useState<string[]>([])
 
-  const { clashConfig } = useAppData()
+  const { proxySettings } = useAppData()
   const { indicator: isProxyReallyEnabled, invalidateProxyState } =
     useSystemProxyState()
 
@@ -145,10 +135,10 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
     return '127.0.0.1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,localhost,*.local,*.crashlytics.com,<local>'
   }
 
-  const prevMixedPortRef = useRef(clashConfig?.mixedPort)
+  const prevMixedPortRef = useRef(proxySettings?.mixedPort)
 
   useEffect(() => {
-    const mixedPort = clashConfig?.mixedPort
+    const mixedPort = proxySettings?.mixedPort
     if (!mixedPort || mixedPort === prevMixedPortRef.current) {
       return
     }
@@ -157,15 +147,8 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
 
     const updateProxy = async () => {
       try {
-        const currentSysProxy = await getSystemProxy()
-        const currentAutoProxy = await getAutotemProxy()
-
-        if (value.pac ? currentAutoProxy?.enable : currentSysProxy?.enable) {
-          await patchVergeConfig({ enable_system_proxy: false })
-          await sleep(200)
-          await patchVergeConfig({ enable_system_proxy: true })
-          await invalidateProxyState()
-        }
+        await runtimeActionController.refreshSystemProxy()
+        await invalidateProxyState()
       } catch (err) {
         reportSafeClientFailure('sysproxy-port-refresh', err)
         showNotice.error(
@@ -175,19 +158,19 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
     }
 
     updateProxy()
-  }, [clashConfig?.mixedPort, value.pac, invalidateProxyState, t])
+  }, [proxySettings?.mixedPort, value.pac, invalidateProxyState, t])
 
   const { systemProxyAddress } = useAppData()
 
   // 为当前状态计算系统代理地址
   const getSystemProxyAddress = useMemo(() => {
-    if (!clashConfig) return '-'
+    if (!proxySettings) return '-'
 
     const isPacMode = value.pac ?? false
 
     if (isPacMode) {
       const host = value.proxy_host || '127.0.0.1'
-      const port = verge?.verge_mixed_port || clashConfig.mixedPort || 7897
+      const port = verge?.verge_mixed_port || proxySettings.mixedPort || 7897
       return `${host}:${port}`
     } else {
       return systemProxyAddress
@@ -196,7 +179,7 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
     value.pac,
     value.proxy_host,
     verge?.verge_mixed_port,
-    clashConfig,
+    proxySettings,
     systemProxyAddress,
   ])
   const getCurrentPacUrl = useMemo(() => {
@@ -317,10 +300,7 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
       return
     }
 
-    setSaving(true)
-    setOpen(false)
-    setSaving(false)
-    const patch: Partial<IVergeConfig> = {}
+    const patch: Parameters<typeof patchVerge>[0] = {}
 
     if (value.guard !== enable_proxy_guard) {
       patch.enable_proxy_guard = value.guard
@@ -345,7 +325,7 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
     if (pacContent) {
       pacContent = pacContent.replace(/%proxy_host%/g, value.proxy_host)
       // 将 mixed-port 转换为字符串
-      const mixedPortStr = (clashConfig?.mixedPort || '').toString()
+      const mixedPortStr = (proxySettings?.mixedPort || '').toString()
       pacContent = pacContent.replace(/%mixed-port%/g, mixedPortStr)
     }
 
@@ -375,50 +355,26 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
       value.bypass !== system_proxy_bypass ||
       value.use_default !== use_default_bypass
 
-    Promise.resolve().then(async () => {
-      try {
-        // 乐观更新本地状态
-        if (Object.keys(patch).length > 0) {
-          mutateVerge({ ...verge, ...patch }, false)
-        }
-        if (Object.keys(patch).length > 0) {
-          await patchVerge(patch)
-        }
-        setTimeout(async () => {
-          try {
-            await invalidateProxyState()
-
-            // 如果需要重置代理且代理当前启用
-            if (needResetProxy && enabled) {
-              const [currentSysProxy, currentAutoProxy] = await Promise.all([
-                getSystemProxy(),
-                getAutotemProxy(),
-              ])
-
-              const isProxyActive = value.pac
-                ? currentAutoProxy?.enable
-                : currentSysProxy?.enable
-
-              if (isProxyActive) {
-                await patchVergeConfig({ enable_system_proxy: false })
-                await new Promise((resolve) => setTimeout(resolve, 50))
-                await patchVergeConfig({ enable_system_proxy: true })
-                await invalidateProxyState()
-              }
-            }
-          } catch (err) {
-            reportSafeClientFailure('sysproxy-state-refresh', err)
-          }
-        }, 50)
-      } catch (err) {
-        reportSafeClientFailure('sysproxy-save', err)
-        mutateVerge()
-        showNotice.error(
-          toSafeClientErrorMessage(classifyClientError(err).kind, t),
-        )
-        // setOpen(true);
+    setSaving(true)
+    try {
+      if (Object.keys(patch).length > 0) {
+        mutateVerge({ ...verge, ...patch }, false)
+        await patchVerge(patch)
       }
-    })
+      if (needResetProxy && enabled) {
+        await runtimeActionController.refreshSystemProxy()
+      }
+      await invalidateProxyState()
+      setOpen(false)
+    } catch (err) {
+      reportSafeClientFailure('sysproxy-save', err)
+      mutateVerge()
+      showNotice.error(
+        toSafeClientErrorMessage(classifyClientError(err).kind, t),
+      )
+    } finally {
+      setSaving(false)
+    }
   })
 
   return (

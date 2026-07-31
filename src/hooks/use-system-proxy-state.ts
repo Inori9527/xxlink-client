@@ -10,7 +10,7 @@ import { runtimeActionController } from '@/services/runtime-action-controller'
 // 系统代理状态检测统一逻辑
 export const useSystemProxyState = () => {
   const { verge, mutateVerge } = useVerge()
-  const { sysproxy, clashConfig } = useAppData()
+  const { sysproxy, proxySettings } = useAppData()
   const { data: autoproxy } = useQuery({
     queryKey: ['getAutotemProxy'],
     queryFn: getAutotemProxy,
@@ -34,7 +34,7 @@ export const useSystemProxyState = () => {
       return autoproxy.url === `http://${host}:${pacPort}/commands/pac`
     } else {
       if (!sysproxy?.enable) return false
-      const port = verge_mixed_port || clashConfig?.mixedPort || 7897
+      const port = verge_mixed_port || proxySettings?.mixedPort || 7897
       return sysproxy.server === `${host}:${port}`
     }
   })()

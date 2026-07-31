@@ -1,26 +1,35 @@
 use super::CmdResult;
 use crate::{
     config::{Config, IVerge, PrfItem, PrfSelected, profiles::profiles_patch_item_safe},
-    core::{handle, tray},
+    core::{CoreManager, handle, sysopt, tray},
     feat,
 };
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
 use smartstring::alias::String;
-use std::time::Duration;
+use std::{net::IpAddr, str::FromStr as _, time::Duration};
 use tauri::AppHandle;
 use tauri_plugin_clipboard_manager::ClipboardExt as _;
 use tauri_plugin_updater::{Update, UpdaterExt as _};
 use tokio::sync::Mutex;
 
 const MAX_NODE_LABEL_BYTES: usize = 512;
+const MAX_TUN_DEVICE_BYTES: usize = 128;
+const MAX_TUN_LIST_ITEMS: usize = 64;
+const MAX_TUN_LIST_ITEM_BYTES: usize = 256;
+const MAX_PROXY_BYPASS_BYTES: usize = 32 * 1024;
+const MAX_PAC_CONTENT_BYTES: usize = 256 * 1024;
+const MAX_PROXY_HOST_BYTES: usize = 512;
+const MAX_PROXY_GUARD_DURATION_SECS: u64 = 86_400;
 const DEFAULT_MAX_LOG_ITEMS: i64 = 50;
 const MAX_LOG_ITEMS: i64 = 200;
 const MAX_DIAGNOSTIC_COUNT: u32 = 1_000_000;
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 const MAX_CLASSIFIABLE_TEXT_LENGTH: usize = 1024;
 static PENDING_UPDATE: Lazy<Mutex<Option<Update>>> = Lazy::new(|| Mutex::new(None));
+static TUN_SETTINGS_MUTATION_LOCK: Mutex<()> = Mutex::const_new(());
+static NODE_SELECTION_LOCK: Mutex<()> = Mutex::const_new(());
 
 #[derive(Clone, Copy, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -527,6 +536,273 @@ pub enum RuntimeConnectMode {
     Smart,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TunSettingsView {
+    stack: String,
+    device: String,
+    auto_route: bool,
+    auto_redirect: bool,
+    auto_detect_interface: bool,
+    dns_hijack: Vec<String>,
+    route_exclude_address: Vec<String>,
+    strict_route: bool,
+    mtu: u16,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct TunSettingsUpdate {
+    stack: String,
+    device: String,
+    auto_route: bool,
+    auto_redirect: bool,
+    auto_detect_interface: bool,
+    dns_hijack: Vec<String>,
+    route_exclude_address: Vec<String>,
+    strict_route: bool,
+    mtu: u16,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeProxySettingsView {
+    mixed_port: u16,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimePreferencesUpdate {
+    collapse_navbar: Option<bool>,
+    language: Option<String>,
+    enable_proxy_guard: Option<bool>,
+    enable_bypass_check: Option<bool>,
+    proxy_guard_duration: Option<u64>,
+    system_proxy_bypass: Option<String>,
+    proxy_auto_config: Option<bool>,
+    use_default_bypass: Option<bool>,
+    pac_file_content: Option<String>,
+    proxy_host: Option<String>,
+}
+
+fn validate_runtime_preferences(preferences: &RuntimePreferencesUpdate) -> CmdResult<()> {
+    if preferences
+        .language
+        .as_deref()
+        .is_some_and(|language| !matches!(language, "en" | "zh"))
+        || preferences
+            .proxy_guard_duration
+            .is_some_and(|duration| !(1..=MAX_PROXY_GUARD_DURATION_SECS).contains(&duration))
+        || preferences
+            .system_proxy_bypass
+            .as_deref()
+            .is_some_and(|value| value.len() > MAX_PROXY_BYPASS_BYTES || value.contains('\0'))
+        || preferences
+            .pac_file_content
+            .as_deref()
+            .is_some_and(|value| value.len() > MAX_PAC_CONTENT_BYTES || value.contains('\0'))
+        || preferences.proxy_host.as_deref().is_some_and(|value| {
+            value.is_empty() || value.len() > MAX_PROXY_HOST_BYTES || value.chars().any(char::is_control)
+        })
+    {
+        return Err("invalid_runtime_preferences".into());
+    }
+    Ok(())
+}
+
+fn runtime_preferences_patch(preferences: RuntimePreferencesUpdate) -> IVerge {
+    IVerge {
+        collapse_navbar: preferences.collapse_navbar,
+        language: preferences.language,
+        enable_proxy_guard: preferences.enable_proxy_guard,
+        enable_bypass_check: preferences.enable_bypass_check,
+        proxy_guard_duration: preferences.proxy_guard_duration,
+        system_proxy_bypass: preferences.system_proxy_bypass,
+        proxy_auto_config: preferences.proxy_auto_config,
+        use_default_bypass: preferences.use_default_bypass,
+        pac_file_content: preferences.pac_file_content,
+        proxy_host: preferences.proxy_host,
+        ..Default::default()
+    }
+}
+
+fn default_tun_device() -> String {
+    if cfg!(target_os = "macos") {
+        "utun1024".into()
+    } else {
+        "Mihomo".into()
+    }
+}
+
+fn mapping_tun_text(mapping: &Mapping, key: &str, fallback: String, max_bytes: usize) -> CmdResult<String> {
+    match mapping.get(key) {
+        None => Ok(fallback),
+        Some(value) => value
+            .as_str()
+            .filter(|value| validate_tun_text(value, max_bytes))
+            .map(Into::into)
+            .ok_or_else(|| "invalid_tun_settings".into()),
+    }
+}
+
+fn mapping_bool(mapping: &Mapping, key: &str, fallback: bool) -> CmdResult<bool> {
+    match mapping.get(key) {
+        None => Ok(fallback),
+        Some(value) => value.as_bool().ok_or_else(|| "invalid_tun_settings".into()),
+    }
+}
+
+fn mapping_tun_strings(
+    mapping: &Mapping,
+    key: &str,
+    fallback: Vec<String>,
+    require_cidr: bool,
+) -> CmdResult<Vec<String>> {
+    let Some(value) = mapping.get(key) else {
+        return Ok(fallback);
+    };
+    let values = value
+        .as_sequence()
+        .filter(|values| values.len() <= MAX_TUN_LIST_ITEMS)
+        .ok_or_else(|| String::from("invalid_tun_settings"))?;
+    values
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .filter(|value| {
+                    validate_tun_text(value, MAX_TUN_LIST_ITEM_BYTES) && (!require_cidr || is_valid_ip_cidr(value))
+                })
+                .map(Into::into)
+                .ok_or_else(|| String::from("invalid_tun_settings"))
+        })
+        .collect()
+}
+
+fn mapping_tun_stack(mapping: &Mapping) -> CmdResult<String> {
+    match mapping.get("stack") {
+        None => Ok("gvisor".into()),
+        Some(value) => match value.as_str() {
+            Some(stack @ ("gvisor" | "system" | "mixed")) => Ok(stack.into()),
+            _ => Err("invalid_tun_settings".into()),
+        },
+    }
+}
+
+fn tun_settings_from_mapping(mapping: Option<&Mapping>) -> CmdResult<TunSettingsView> {
+    let empty = Mapping::new();
+    let mapping = mapping.unwrap_or(&empty);
+    let mtu = match mapping.get("mtu") {
+        None => 1500,
+        Some(value) => value
+            .as_u64()
+            .and_then(|value| u16::try_from(value).ok())
+            .filter(|value| (576..=9000).contains(value))
+            .ok_or_else(|| String::from("invalid_tun_settings"))?,
+    };
+    Ok(TunSettingsView {
+        stack: mapping_tun_stack(mapping)?,
+        device: mapping_tun_text(mapping, "device", default_tun_device(), MAX_TUN_DEVICE_BYTES)?,
+        auto_route: mapping_bool(mapping, "auto-route", true)?,
+        auto_redirect: mapping_bool(mapping, "auto-redirect", false)?,
+        auto_detect_interface: mapping_bool(mapping, "auto-detect-interface", true)?,
+        dns_hijack: mapping_tun_strings(mapping, "dns-hijack", vec!["any:53".into()], false)?,
+        route_exclude_address: mapping_tun_strings(mapping, "route-exclude-address", Vec::new(), true)?,
+        strict_route: mapping_bool(mapping, "strict-route", false)?,
+        mtu,
+    })
+}
+
+fn validate_tun_text(value: &str, max_bytes: usize) -> bool {
+    !value.is_empty() && value.len() <= max_bytes && !value.chars().any(char::is_control)
+}
+
+fn validate_tun_list(values: &[String]) -> bool {
+    values.len() <= MAX_TUN_LIST_ITEMS
+        && values
+            .iter()
+            .all(|value| validate_tun_text(value, MAX_TUN_LIST_ITEM_BYTES))
+}
+
+fn is_valid_ip_cidr(value: &str) -> bool {
+    let Some((address, prefix)) = value.split_once('/') else {
+        return false;
+    };
+    let Ok(address) = IpAddr::from_str(address) else {
+        return false;
+    };
+    let Ok(prefix) = prefix.parse::<u8>() else {
+        return false;
+    };
+    prefix <= if address.is_ipv4() { 32 } else { 128 }
+}
+
+fn validate_tun_settings(settings: &TunSettingsUpdate) -> CmdResult<()> {
+    if !matches!(settings.stack.as_str(), "gvisor" | "system" | "mixed")
+        || !validate_tun_text(&settings.device, MAX_TUN_DEVICE_BYTES)
+        || !validate_tun_list(&settings.dns_hijack)
+        || settings.route_exclude_address.len() > MAX_TUN_LIST_ITEMS
+        || settings
+            .route_exclude_address
+            .iter()
+            .any(|value| !validate_tun_text(value, MAX_TUN_LIST_ITEM_BYTES) || !is_valid_ip_cidr(value))
+        || !(576..=9000).contains(&settings.mtu)
+    {
+        return Err("invalid_tun_settings".into());
+    }
+    Ok(())
+}
+
+fn tun_settings_patch(settings: TunSettingsUpdate, existing: Option<&Mapping>) -> Mapping {
+    let mut tun = existing.cloned().unwrap_or_default();
+    tun.insert("stack".into(), Value::from(settings.stack.as_str()));
+    tun.insert("device".into(), Value::from(settings.device.as_str()));
+    tun.insert("auto-route".into(), settings.auto_route.into());
+    if cfg!(target_os = "linux") {
+        tun.insert("auto-redirect".into(), settings.auto_redirect.into());
+    }
+    tun.insert("auto-detect-interface".into(), settings.auto_detect_interface.into());
+    tun.insert(
+        "dns-hijack".into(),
+        settings
+            .dns_hijack
+            .iter()
+            .map(|value| Value::from(value.as_str()))
+            .collect::<Vec<Value>>()
+            .into(),
+    );
+    tun.insert(
+        "route-exclude-address".into(),
+        settings
+            .route_exclude_address
+            .iter()
+            .map(|value| Value::from(value.as_str()))
+            .collect::<Vec<Value>>()
+            .into(),
+    );
+    tun.insert("strict-route".into(), settings.strict_route.into());
+    tun.insert("mtu".into(), settings.mtu.into());
+
+    let mut patch = Mapping::new();
+    patch.insert("tun".into(), tun.into());
+    patch
+}
+
+#[cfg(test)]
+fn tun_settings_view_from_update(settings: &TunSettingsUpdate) -> TunSettingsView {
+    TunSettingsView {
+        stack: settings.stack.clone(),
+        device: settings.device.clone(),
+        auto_route: settings.auto_route,
+        auto_redirect: cfg!(target_os = "linux") && settings.auto_redirect,
+        auto_detect_interface: settings.auto_detect_interface,
+        dns_hijack: settings.dns_hijack.clone(),
+        route_exclude_address: settings.route_exclude_address.clone(),
+        strict_route: settings.strict_route,
+        mtu: settings.mtu,
+    }
+}
+
 impl RuntimeConnectMode {
     const fn as_str(self) -> &'static str {
         match self {
@@ -548,6 +824,111 @@ fn safe_error() -> String {
     "runtime_action_failed".into()
 }
 
+fn rollback_error() -> String {
+    "runtime_action_rollback_failed".into()
+}
+
+#[tauri::command]
+pub async fn runtime_get_proxy_settings() -> CmdResult<RuntimeProxySettingsView> {
+    let clash = Config::clash().await.latest_arc();
+    Ok(RuntimeProxySettingsView {
+        mixed_port: clash.get_mixed_port(),
+    })
+}
+
+#[tauri::command]
+pub async fn runtime_get_tun_settings() -> CmdResult<TunSettingsView> {
+    let _transaction_guard = CoreManager::begin_config_transaction().await;
+    let clash = Config::clash().await.data_arc();
+    let tun = clash.0.get("tun").and_then(Value::as_mapping);
+    tun_settings_from_mapping(tun)
+}
+
+#[tauri::command]
+pub async fn runtime_update_preferences(preferences: RuntimePreferencesUpdate) -> CmdResult<()> {
+    validate_runtime_preferences(&preferences)?;
+    feat::patch_verge(&runtime_preferences_patch(preferences), false)
+        .await
+        .map_err(|_| safe_error())
+}
+
+#[tauri::command]
+pub async fn runtime_refresh_system_proxy() -> CmdResult<()> {
+    let _transaction_guard = CoreManager::begin_config_transaction().await;
+    let enabled = Config::verge().await.data_arc().enable_system_proxy.unwrap_or(false);
+    if !enabled {
+        return Ok(());
+    }
+    sysopt::Sysopt::global()
+        .update_sysproxy()
+        .await
+        .map_err(|_| safe_error())?;
+    sysopt::Sysopt::global().refresh_guard().await;
+    Ok(())
+}
+
+async fn rollback_staged_tun_settings() -> CmdResult<()> {
+    Config::clash().await.discard();
+    Config::runtime().await.discard();
+
+    Config::generate().await.map_err(|_| rollback_error())?;
+    let (valid, _) = CoreManager::global()
+        .apply_generate_config_in_transaction()
+        .await
+        .map_err(|_| rollback_error())?;
+    if !valid {
+        return Err(rollback_error());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn runtime_update_tun_settings(settings: TunSettingsUpdate) -> CmdResult<TunSettingsView> {
+    let _mutation_guard = TUN_SETTINGS_MUTATION_LOCK.lock().await;
+    let _transaction_guard = CoreManager::begin_config_transaction().await;
+    validate_tun_settings(&settings)?;
+    let clash = Config::clash().await.data_arc();
+    let existing_tun = clash.0.get("tun").and_then(Value::as_mapping);
+    let patch = tun_settings_patch(settings, existing_tun);
+    drop(clash);
+    Config::clash().await.edit_draft(|draft| draft.patch_config(&patch));
+
+    let applied = async {
+        Config::generate().await.map_err(|_| safe_error())?;
+        let (valid, _) = CoreManager::global()
+            .apply_generate_config_in_transaction()
+            .await
+            .map_err(|_| safe_error())?;
+        if !valid {
+            return Err(safe_error());
+        }
+
+        Ok(())
+    }
+    .await;
+
+    match applied {
+        Ok(()) => {
+            let clash = Config::clash().await.latest_arc();
+            if clash.save_config().await.is_err() {
+                return match rollback_staged_tun_settings().await {
+                    Ok(()) => Err(safe_error()),
+                    Err(_) => Err(rollback_error()),
+                };
+            }
+            Config::clash().await.apply();
+            handle::Handle::refresh_clash();
+            let clash = Config::clash().await.data_arc();
+            let tun = clash.0.get("tun").and_then(Value::as_mapping);
+            tun_settings_from_mapping(tun)
+        }
+        Err(error) => match rollback_staged_tun_settings().await {
+            Ok(()) => Err(error),
+            Err(_) => Err(rollback_error()),
+        },
+    }
+}
+
 fn validate_node_label(value: &str) -> CmdResult<()> {
     if value.is_empty() || value.len() > MAX_NODE_LABEL_BYTES || value.chars().any(char::is_control) {
         Err("invalid_node_selection".into())
@@ -556,21 +937,50 @@ fn validate_node_label(value: &str) -> CmdResult<()> {
     }
 }
 
-async fn patch_clash_mode(mode: RuntimeConnectMode) -> CmdResult<()> {
+async fn patch_clash_mode_in_transaction(mode: &str) -> CmdResult<()> {
     let mut patch = Mapping::new();
-    patch.insert(Value::from("mode"), Value::from(mode.clash_mode()));
-    feat::patch_clash(&patch).await.map_err(|_| safe_error())
+    patch.insert(Value::from("mode"), Value::from(mode));
+    feat::patch_clash_in_transaction(&patch).await.map_err(|_| safe_error())
 }
 
-async fn patch_connection_state(mode: RuntimeConnectMode, enabled: bool) -> CmdResult<()> {
-    if enabled {
-        patch_clash_mode(mode).await?;
+async fn rollback_connection_state_in_transaction(previous_mode: &str, previous_verge: &IVerge) -> CmdResult<()> {
+    let mode_rollback = patch_clash_mode_in_transaction(previous_mode).await;
+    let verge_rollback = feat::patch_verge_in_transaction(previous_verge, false).await;
+    if mode_rollback.is_err() || verge_rollback.is_err() {
+        return Err(rollback_error());
+    }
+    Ok(())
+}
+
+async fn patch_connection_state_in_transaction(mode: RuntimeConnectMode, enabled: bool) -> CmdResult<()> {
+    let previous_mode = Config::clash()
+        .await
+        .data_arc()
+        .0
+        .get("mode")
+        .and_then(Value::as_str)
+        .unwrap_or("rule")
+        .to_owned();
+    let previous_verge = Config::verge().await.data_arc();
+    let previous_connection_state = IVerge {
+        enable_tun_mode: previous_verge.enable_tun_mode,
+        enable_system_proxy: previous_verge.enable_system_proxy,
+        connect_mode: previous_verge.connect_mode.clone(),
+        ..IVerge::default()
+    };
+    drop(previous_verge);
+
+    if enabled && patch_clash_mode_in_transaction(mode.clash_mode()).await.is_err() {
+        return match rollback_connection_state_in_transaction(&previous_mode, &previous_connection_state).await {
+            Ok(()) => Err(safe_error()),
+            Err(error) => Err(error),
+        };
     }
     let (enable_tun_mode, enable_system_proxy) = match mode {
         RuntimeConnectMode::System => (false, enabled),
         RuntimeConnectMode::Both | RuntimeConnectMode::Smart => (enabled, enabled),
     };
-    feat::patch_verge(
+    let verge_result = feat::patch_verge_in_transaction(
         &IVerge {
             enable_tun_mode: Some(enable_tun_mode),
             enable_system_proxy: Some(enable_system_proxy),
@@ -579,26 +989,33 @@ async fn patch_connection_state(mode: RuntimeConnectMode, enabled: bool) -> CmdR
         },
         false,
     )
-    .await
-    .map_err(|_| safe_error())?;
+    .await;
+    if verge_result.is_err() {
+        return match rollback_connection_state_in_transaction(&previous_mode, &previous_connection_state).await {
+            Ok(()) => Err(safe_error()),
+            Err(error) => Err(error),
+        };
+    }
     handle::Handle::refresh_verge();
     Ok(())
 }
 
 #[tauri::command]
 pub async fn runtime_set_connection_enabled(mode: RuntimeConnectMode, enabled: bool) -> CmdResult<()> {
-    patch_connection_state(mode, enabled).await
+    let _transaction_guard = CoreManager::begin_config_transaction().await;
+    patch_connection_state_in_transaction(mode, enabled).await
 }
 
 #[tauri::command]
 pub async fn runtime_set_connection_mode(mode: RuntimeConnectMode) -> CmdResult<()> {
-    let verge = Config::verge().await.latest_arc();
+    let _transaction_guard = CoreManager::begin_config_transaction().await;
+    let verge = Config::verge().await.data_arc();
     let enabled = verge.enable_tun_mode.unwrap_or(false) || verge.enable_system_proxy.unwrap_or(false);
     drop(verge);
     if enabled {
-        return patch_connection_state(mode, true).await;
+        return patch_connection_state_in_transaction(mode, true).await;
     }
-    feat::patch_verge(
+    feat::patch_verge_in_transaction(
         &IVerge {
             connect_mode: Some(mode.as_str().into()),
             ..IVerge::default()
@@ -631,9 +1048,6 @@ pub async fn runtime_set_system_proxy_enabled(enabled: bool) -> CmdResult<()> {
     let verge = Config::verge().await.latest_arc();
     let close_connections = !enabled && verge.auto_close_connection.unwrap_or(false);
     drop(verge);
-    if close_connections {
-        let _ = handle::Handle::mihomo().await.close_all_connections().await;
-    }
     feat::patch_verge(
         &IVerge {
             enable_system_proxy: Some(enabled),
@@ -643,15 +1057,18 @@ pub async fn runtime_set_system_proxy_enabled(enabled: bool) -> CmdResult<()> {
     )
     .await
     .map_err(|_| safe_error())?;
+    if close_connections {
+        let _ = handle::Handle::mihomo().await.close_all_connections().await;
+    }
     handle::Handle::refresh_verge();
     Ok(())
 }
 
-async fn persist_node_selection(group_name: &str, proxy_name: &str) -> CmdResult<()> {
-    let _profile_guard = crate::cmd::wait_profile_switch_guard().await;
+async fn persist_node_selection(group_name: &str, proxy_name: &str) -> CmdResult<(String, PrfItem)> {
     let profiles = Config::profiles().await.data_arc();
     let current = profiles.current.clone().ok_or_else(safe_error)?;
-    let mut item: PrfItem = profiles.get_item(&current).map_err(|_| safe_error())?.clone();
+    let previous_item: PrfItem = profiles.get_item(&current).map_err(|_| safe_error())?.clone();
+    let mut item = previous_item.clone();
     drop(profiles);
 
     let selected = item.selected.get_or_insert_default();
@@ -668,23 +1085,42 @@ async fn persist_node_selection(group_name: &str, proxy_name: &str) -> CmdResult
     }
     profiles_patch_item_safe(&current, &item)
         .await
-        .map_err(|_| safe_error())
+        .map_err(|_| safe_error())?;
+    Ok((current, previous_item))
 }
 
-#[tauri::command]
-pub async fn runtime_select_node(group_name: String, proxy_name: String, persist: bool) -> CmdResult<()> {
-    validate_node_label(&group_name)?;
-    validate_node_label(&proxy_name)?;
+async fn select_runtime_node(group_name: &str, proxy_name: &str) -> CmdResult<()> {
     let mihomo = handle::Handle::mihomo().await;
-    if mihomo.select_node_for_group(&group_name, &proxy_name).await.is_err() {
+    if mihomo.select_node_for_group(group_name, proxy_name).await.is_err() {
         mihomo
-            .select_node_for_group(&group_name, &proxy_name)
+            .select_node_for_group(group_name, proxy_name)
             .await
             .map_err(|_| safe_error())?;
     }
     drop(mihomo);
-    if persist {
-        let _ = persist_node_selection(&group_name, &proxy_name).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn runtime_select_node(group_name: String, proxy_name: String, persist: bool) -> CmdResult<()> {
+    let _profile_guard = crate::cmd::wait_profile_switch_guard().await;
+    let _selection_guard = NODE_SELECTION_LOCK.lock().await;
+    validate_node_label(&group_name)?;
+    validate_node_label(&proxy_name)?;
+
+    let persisted_selection = if persist {
+        Some(persist_node_selection(&group_name, &proxy_name).await?)
+    } else {
+        None
+    };
+
+    if let Err(error) = select_runtime_node(&group_name, &proxy_name).await {
+        if let Some((profile_id, previous_item)) = persisted_selection
+            && profiles_patch_item_safe(&profile_id, &previous_item).await.is_err()
+        {
+            return Err(rollback_error());
+        }
+        return Err(error);
     }
     handle::Handle::refresh_clash();
     let _ = tray::Tray::global().update_menu().await;
@@ -723,6 +1159,191 @@ pub async fn runtime_install_update(app: AppHandle, expected_version: String) ->
         return Err(safe_error());
     }
     app.restart();
+}
+
+#[cfg(test)]
+mod runtime_boundary_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn valid_tun_update() -> TunSettingsUpdate {
+        TunSettingsUpdate {
+            stack: "gvisor".into(),
+            device: "Mihomo".into(),
+            auto_route: true,
+            auto_redirect: false,
+            auto_detect_interface: true,
+            dns_hijack: vec!["any:53".into()],
+            route_exclude_address: vec!["192.168.0.0/16".into()],
+            strict_route: false,
+            mtu: 1500,
+        }
+    }
+
+    fn empty_preferences() -> RuntimePreferencesUpdate {
+        RuntimePreferencesUpdate {
+            collapse_navbar: None,
+            language: None,
+            enable_proxy_guard: None,
+            enable_bypass_check: None,
+            proxy_guard_duration: None,
+            system_proxy_bypass: None,
+            proxy_auto_config: None,
+            use_default_bypass: None,
+            pac_file_content: None,
+            proxy_host: None,
+        }
+    }
+
+    #[test]
+    fn runtime_preferences_reject_unknown_or_invalid_values() {
+        assert!(
+            serde_json::from_value::<RuntimePreferencesUpdate>(json!({
+                "language": "en",
+                "enable_system_proxy": true
+            }))
+            .is_err()
+        );
+
+        let mut invalid = empty_preferences();
+        invalid.language = Some("unsupported".into());
+        assert!(validate_runtime_preferences(&invalid).is_err());
+
+        let mut invalid = empty_preferences();
+        invalid.proxy_guard_duration = Some(0);
+        assert!(validate_runtime_preferences(&invalid).is_err());
+
+        let mut invalid = empty_preferences();
+        invalid.proxy_host = Some("127.0.0.1\nunsafe".into());
+        assert!(validate_runtime_preferences(&invalid).is_err());
+
+        let mut valid = empty_preferences();
+        valid.language = Some("zh".into());
+        valid.pac_file_content = Some("function FindProxyForURL() {\n  return \"DIRECT\";\n}".into());
+        assert!(validate_runtime_preferences(&valid).is_ok());
+    }
+
+    #[test]
+    fn runtime_preferences_patch_contains_only_allowlisted_fields() -> Result<(), serde_json::Error> {
+        let mut preferences = empty_preferences();
+        preferences.collapse_navbar = Some(true);
+        preferences.proxy_auto_config = Some(false);
+        let serialized = serde_json::to_value(runtime_preferences_patch(preferences))?;
+
+        assert_eq!(serialized["collapse_navbar"], true);
+        assert_eq!(serialized["proxy_auto_config"], false);
+        assert!(serialized["enable_system_proxy"].is_null());
+        assert!(serialized["enable_tun_mode"].is_null());
+        assert!(serialized["clash_core"].is_null());
+        Ok(())
+    }
+
+    #[test]
+    fn tun_settings_reject_unapproved_fields_and_invalid_values() {
+        let with_secret = json!({
+            "stack": "gvisor",
+            "device": "Mihomo",
+            "autoRoute": true,
+            "autoRedirect": false,
+            "autoDetectInterface": true,
+            "dnsHijack": ["any:53"],
+            "routeExcludeAddress": [],
+            "strictRoute": false,
+            "mtu": 1500,
+            "secret": "must-not-enter-renderer-boundary"
+        });
+        assert!(serde_json::from_value::<TunSettingsUpdate>(with_secret).is_err());
+
+        let mut invalid = valid_tun_update();
+        invalid.stack = "unsupported".into();
+        assert_eq!(validate_tun_settings(&invalid), Err("invalid_tun_settings".into()));
+
+        let mut invalid = valid_tun_update();
+        invalid.mtu = 1;
+        assert_eq!(validate_tun_settings(&invalid), Err("invalid_tun_settings".into()));
+
+        let mut invalid = valid_tun_update();
+        invalid.route_exclude_address = vec!["not-a-cidr".into()];
+        assert_eq!(validate_tun_settings(&invalid), Err("invalid_tun_settings".into()));
+
+        let mut invalid = valid_tun_update();
+        invalid.route_exclude_address = vec!["192.168.0.0/33".into()];
+        assert_eq!(validate_tun_settings(&invalid), Err("invalid_tun_settings".into()));
+
+        let mut valid = valid_tun_update();
+        valid.route_exclude_address = vec!["2001:db8::/32".into()];
+        assert!(validate_tun_settings(&valid).is_ok());
+
+        let applied = tun_settings_view_from_update(&valid);
+        assert_eq!(applied.route_exclude_address, vec!["2001:db8::/32"]);
+        assert_eq!(applied.auto_redirect, cfg!(target_os = "linux") && valid.auto_redirect);
+    }
+
+    #[test]
+    fn tun_settings_view_and_patch_exclude_sensitive_runtime_fields() -> Result<(), serde_json::Error> {
+        let mut raw = Mapping::new();
+        raw.insert("stack".into(), "mixed".into());
+        raw.insert("device".into(), "Mihomo".into());
+        raw.insert("secret".into(), "not-visible".into());
+        raw.insert("external-controller".into(), "not-visible".into());
+        raw.insert("mtu".into(), 1500.into());
+        raw.insert("dns-hijack".into(), Value::Sequence(vec!["any:53".into()]));
+
+        let Some(view) = tun_settings_from_mapping(Some(&raw)).ok() else {
+            return Err(serde_json::Error::io(std::io::Error::other(
+                "valid TUN settings were rejected",
+            )));
+        };
+        let serialized = serde_json::to_value(view)?;
+        assert_eq!(serialized["stack"], "mixed");
+        assert_eq!(serialized["mtu"], 1500);
+        assert_eq!(serialized["dnsHijack"], json!(["any:53"]));
+        assert!(serialized.get("secret").is_none());
+        assert!(serialized.get("externalController").is_none());
+
+        let mut existing = Mapping::new();
+        existing.insert("inet4-route-address".into(), Value::Sequence(vec!["0.0.0.0/1".into()]));
+        existing.insert("strict-route".into(), true.into());
+        let patch = tun_settings_patch(valid_tun_update(), Some(&existing));
+        assert_eq!(patch.len(), 1);
+        assert!(matches!(
+            patch.get("tun").and_then(Value::as_mapping),
+            Some(tun)
+                if tun.get("secret").is_none()
+                    && tun.get("external-controller").is_none()
+                    && tun.get("inet4-route-address") == Some(&Value::Sequence(vec!["0.0.0.0/1".into()]))
+                    && tun.get("strict-route") == Some(&Value::from(false))
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn tun_settings_read_rejects_malformed_or_truncated_lists() {
+        let mut malformed = Mapping::new();
+        malformed.insert(
+            "dns-hijack".into(),
+            Value::Sequence(vec!["any:53".into(), "\ninvalid".into()]),
+        );
+        assert!(tun_settings_from_mapping(Some(&malformed)).is_err());
+
+        let mut overflow = Mapping::new();
+        overflow.insert(
+            "route-exclude-address".into(),
+            Value::Sequence(
+                (0..=MAX_TUN_LIST_ITEMS)
+                    .map(|index| Value::from(format!("10.{}.0.0/16", index % 256)))
+                    .collect(),
+            ),
+        );
+        assert!(tun_settings_from_mapping(Some(&overflow)).is_err());
+
+        let mut invalid_cidr = Mapping::new();
+        invalid_cidr.insert(
+            "route-exclude-address".into(),
+            Value::Sequence(vec!["not-a-cidr".into()]),
+        );
+        assert!(tun_settings_from_mapping(Some(&invalid_cidr)).is_err());
+    }
 }
 
 #[cfg(test)]

@@ -7,19 +7,6 @@ export async function enhanceProfiles() {
   return invoke<void>('enhance_profiles')
 }
 
-export async function getClashInfo() {
-  return invoke<IClashInfo | null>('get_clash_info')
-}
-
-// Get runtime config which controlled by verge
-export async function getRuntimeConfig() {
-  return invoke<IConfigData | null>('get_runtime_config')
-}
-
-export async function patchClashConfig(payload: Partial<IConfigData>) {
-  return invoke<void>('patch_clash_config', { payload })
-}
-
 export async function calcuProxies(): Promise<{
   global: IProxyGroupItem
   direct: IProxyItem
@@ -128,10 +115,6 @@ export async function calcuProxyProviders() {
 
 export async function getVergeConfig() {
   return invoke<IVergeConfig>('get_verge_config')
-}
-
-export async function patchVergeConfig(payload: IVergeConfig) {
-  return invoke<void>('patch_verge_config', { payload })
 }
 
 export async function getSystemProxy() {

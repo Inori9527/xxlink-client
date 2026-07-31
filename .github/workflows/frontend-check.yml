@@ -107,3 +107,7 @@ jobs:
       - name: Run TypeScript typecheck
         if: steps.check_frontend.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         run: pnpm typecheck
+
+      - name: Validate runtime action boundary
+        if: steps.check_frontend.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
+        run: node scripts/validate-runtime-action-boundary.mjs

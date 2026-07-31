@@ -1,8 +1,8 @@
 import { Button, ButtonGroup } from '@mui/material'
 
 interface Props {
-  value?: string
-  onChange?: (value: string) => void
+  value?: 'system' | 'gvisor' | 'mixed'
+  onChange?: (value: 'system' | 'gvisor' | 'mixed') => void
 }
 
 export const StackModeSwitch = (props: Props) => {

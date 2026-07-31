@@ -37,6 +37,7 @@ const retiredDeletedConsumerCommands = [
 ]
 
 const retiredRawConfigCommands = [
+  ['patchVergeConfig', 'patch_verge_config'],
   ['getRuntimeProxyChainConfig', 'get_runtime_proxy_chain_config'],
   ['updateProxyChainConfigInRuntime', 'update_proxy_chain_config_in_runtime'],
   [null, 'save_dns_config'],
@@ -292,27 +293,35 @@ test('managed profile UI commands are retired while internal enhancement remains
   }
 })
 
-test('approved runtime reads and Clash actions remain registered', () => {
+test('raw runtime reads are retired behind typed TUN actions', () => {
   for (const [wrapper, command] of [
     ['getRuntimeConfig', 'get_runtime_config'],
     ['getClashInfo', 'get_clash_info'],
     ['patchClashConfig', 'patch_clash_config'],
   ]) {
-    assert.match(
+    assert.doesNotMatch(
       cmdSource,
       new RegExp(`export\\s+(?:async\\s+)?function\\s+${wrapper}\\b`),
-      `${wrapper} wrapper must remain available`,
+      `${wrapper} wrapper must remain retired`,
     )
     assert.equal(
       cmdSource.includes(`'${command}'`),
-      true,
-      `${command} frontend invoke must remain available`,
+      false,
+      `${command} frontend invoke must remain retired`,
     )
-    assert.match(
+    assert.doesNotMatch(
       libSource,
       new RegExp(`\\bcmd::${command}\\b`),
-      `${command} must remain registered`,
+      `${command} must remain retired`,
     )
+  }
+
+  for (const command of [
+    'runtime_get_tun_settings',
+    'runtime_update_tun_settings',
+  ]) {
+    assert.equal(runtimeControllerSource.includes(`'${command}'`), true)
+    assert.match(libSource, new RegExp(`\\bcmd::${command}\\b`))
   }
 
   for (const command of [

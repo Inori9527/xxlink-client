@@ -9,11 +9,15 @@ use anyhow::{Result, anyhow};
 use smartstring::alias::String;
 use std::{collections::HashSet, path::PathBuf, time::Instant};
 use tauri_plugin_mihomo::Error as MihomoError;
-use tokio::time::{Duration, timeout};
+use tokio::{
+    sync::{Mutex, MutexGuard},
+    time::{Duration, timeout},
+};
 use xxlink_logging::{Type, logging};
 
 const CORE_RELOAD_TIMEOUT: Duration = Duration::from_secs(8);
 const CORE_RESTART_TIMEOUT: Duration = Duration::from_secs(12);
+static CONFIG_TRANSACTION_LOCK: Mutex<()> = Mutex::const_new(());
 
 impl CoreManager {
     pub async fn use_default_config(&self, error_key: &str, error_msg: &str) -> Result<()> {
@@ -36,15 +40,23 @@ impl CoreManager {
     }
 
     pub async fn update_config(&self) -> Result<(bool, String)> {
+        let _transaction_guard = Self::begin_config_transaction().await;
+        if !self.should_update_config() {
+            return Ok((true, String::new()));
+        }
+        self.force_update_config_in_transaction().await
+    }
+
+    pub(crate) async fn begin_config_transaction() -> MutexGuard<'static, ()> {
+        CONFIG_TRANSACTION_LOCK.lock().await
+    }
+
+    pub(crate) async fn force_update_config_in_transaction(&self) -> Result<(bool, String)> {
         if handle::Handle::global().is_exiting() {
             return Ok((true, String::new()));
         }
 
-        if !self.should_update_config() {
-            return Ok((true, String::new()));
-        }
-
-        self.perform_config_update().await
+        self.perform_config_update_in_transaction().await
     }
 
     fn should_update_config(&self) -> bool {
@@ -61,12 +73,12 @@ impl CoreManager {
         true
     }
 
-    async fn perform_config_update(&self) -> Result<(bool, String)> {
+    async fn perform_config_update_in_transaction(&self) -> Result<(bool, String)> {
         Config::generate().await?;
-        self.apply_generate_config().await
+        self.apply_generate_config_in_transaction().await
     }
 
-    pub async fn apply_generate_config(&self) -> Result<(bool, String)> {
+    pub(crate) async fn apply_generate_config_in_transaction(&self) -> Result<(bool, String)> {
         match CoreConfigValidator::global().validate_config().await {
             Ok((true, _)) => {
                 let run_path = Config::generate_file(ConfigType::Run).await?;

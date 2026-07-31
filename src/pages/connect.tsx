@@ -290,6 +290,9 @@ const ConnectPage = () => {
   )
   const [nodeMenuAnchor, setNodeMenuAnchor] = useState<HTMLElement | null>(null)
   const [modeChanging, setModeChanging] = useState(false)
+  const committedModeRef = useRef(mode)
+  const modeChangeGenerationRef = useRef(0)
+  const modeChangeQueueRef = useRef<Promise<void>>(Promise.resolve())
   const [durationNow, setDurationNow] = useState(() => Date.now())
   const [connectionSession, updateConnectionSession] = useReducer(
     connectionSessionReducer,
@@ -678,35 +681,43 @@ const ConnectPage = () => {
     (next: ConnectMode) => {
       if (next === mode || modeChanging) return
 
-      const previousMode = mode
+      const requestId = ++modeChangeGenerationRef.current
       setMode(next)
       persistConnectMode(next)
+      setModeChanging(true)
 
-      void (async () => {
+      const queuedChange = modeChangeQueueRef.current.then(async () => {
         try {
-          setModeChanging(true)
           await runtimeActionController.setConnectionMode(next)
-          await refreshProxy()
-        } catch (error) {
-          setMode(previousMode)
-          persistConnectMode(previousMode)
+          committedModeRef.current = next
 
-          try {
-            await runtimeActionController.setConnectionMode(previousMode)
-            await refreshProxy()
-          } catch (rollbackError) {
-            reportSafeClientFailure('connect-mode-rollback', rollbackError)
+          if (requestId === modeChangeGenerationRef.current) {
+            setMode(next)
+            persistConnectMode(next)
+            try {
+              await refreshProxy()
+            } catch (refreshError) {
+              reportSafeClientFailure('connect-mode-change', refreshError)
+            }
           }
-
+        } catch (error) {
           reportSafeClientFailure('connect-mode-change', error)
-          showNotice.error(
-            toSafeClientErrorMessage(classifyClientError(error).kind, t),
-          )
-          triggerErrorFlash()
+          if (requestId === modeChangeGenerationRef.current) {
+            setMode(committedModeRef.current)
+            persistConnectMode(committedModeRef.current)
+            showNotice.error(
+              toSafeClientErrorMessage(classifyClientError(error).kind, t),
+            )
+            triggerErrorFlash()
+          }
         } finally {
-          setModeChanging(false)
+          if (requestId === modeChangeGenerationRef.current) {
+            setModeChanging(false)
+          }
         }
-      })()
+      })
+
+      modeChangeQueueRef.current = queuedChange
     },
     [mode, modeChanging, refreshProxy, t, triggerErrorFlash],
   )

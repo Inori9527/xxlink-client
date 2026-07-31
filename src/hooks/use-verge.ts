@@ -1,8 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback } from 'react'
 
-import { getVergeConfig, patchVergeConfig } from '@/services/cmds'
+import { getVergeConfig } from '@/services/cmds'
 import { getPreloadConfig, setPreloadConfig } from '@/services/preload'
+import {
+  runtimeActionController,
+  RuntimePreferencesUpdate,
+} from '@/services/runtime-action-controller'
 
 export const useVerge = () => {
   const qc = useQueryClient()
@@ -40,8 +44,8 @@ export const useVerge = () => {
   }
 
   const patchVerge = useCallback(
-    async (value: Partial<IVergeConfig>) => {
-      await patchVergeConfig(value)
+    async (value: RuntimePreferencesUpdate) => {
+      await runtimeActionController.updatePreferences(value)
       await refetch()
     },
     [refetch],
