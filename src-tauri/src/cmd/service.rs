@@ -173,12 +173,10 @@ mod runtime_boundary_tests {
         );
         fs::remove_dir(&root)?;
 
-        assert_eq!(
-            result
-                .expect_err("directory was accepted as service registration")
-                .kind(),
-            io::ErrorKind::InvalidData
-        );
+        assert!(matches!(
+            result,
+            Err(error) if error.kind() == io::ErrorKind::InvalidData
+        ));
         Ok(())
     }
 }
