@@ -87,6 +87,16 @@ export const runtimeActionController = {
     return invoke<void>('runtime_set_connection_enabled', { mode, enabled })
   },
 
+  async disableConnection() {
+    const results = await Promise.allSettled([
+      invoke<void>('runtime_set_tun_enabled', { enabled: false }),
+      invoke<void>('runtime_set_system_proxy_enabled', { enabled: false }),
+    ])
+    if (results.some((result) => result.status === 'rejected')) {
+      throw new Error('runtime_connection_disable_failed')
+    }
+  },
+
   setConnectionMode(mode: RuntimeConnectMode) {
     return invoke<void>('runtime_set_connection_mode', { mode })
   },

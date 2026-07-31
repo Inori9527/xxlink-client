@@ -185,6 +185,8 @@ export interface TranslationResources {
             connectedHint: string
             connecting: string
             connectionFailed: string
+            connectionUnverified: string
+            connectionUnverifiedHint: string
             disconnected: string
             disconnectFirst: string
             download: string

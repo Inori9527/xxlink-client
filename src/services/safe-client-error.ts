@@ -5,6 +5,7 @@ export type SafeClientErrorKind = 'network' | 'auth' | 'service' | 'unknown'
 
 export const SAFE_CLIENT_FAILURE_SCOPES = [
   'admin-check',
+  'account-runtime-enforcement',
   'app-bootstrap',
   'app-data-clash-refresh',
   'app-data-cleanup',

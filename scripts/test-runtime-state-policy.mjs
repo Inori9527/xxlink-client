@@ -281,13 +281,27 @@ test('runtime controls reject failed reads and gate unsafe mutations', () => {
     /serviceAvailability === 'ready'[\s\S]{0,120}serviceAvailability === 'installed_unavailable'/,
   )
   assert.match(systemState, /systemState:\s*authoritativeSystemState/)
-  assert.match(connect, /const \{ verge, preferencesReady \} = useVerge\(\)/)
-  assert.match(connect, /if \(!preferencesReady\) return/)
-  assert.match(connect, /!preferencesReady \|\|\s*busy/)
-  assert.doesNotMatch(
+  assert.match(
     connect,
-    /const tunEnabled = verge\?\.enable_tun_mode \?\? false/,
+    /const \{ verge, preferencesReady, refreshVerge \} = useVerge\(\)/,
   )
+  assert.match(
+    connect,
+    /if \(!preferencesReady \|\| next === mode \|\| modeChanging\) return/,
+  )
+  assert.match(
+    connect,
+    /\(!preferencesReady && !runtimeMayRequireDisable\) \|\|\s*busy/,
+  )
+  assert.match(
+    connect,
+    /const tunEnabled = preferencesReady && lastKnownTunEnabled/,
+  )
+  assert.match(
+    connect,
+    /const sysEnabled = preferencesReady && lastKnownSystemProxyEnabled/,
+  )
+  assert.match(connect, /const next = !runtimeMayRequireDisable/)
   assert.match(
     runtimeController,
     /should_disable_tun_for_service_availability\(is_admin, service_availability\)/,

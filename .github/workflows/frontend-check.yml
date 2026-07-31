@@ -115,3 +115,7 @@ jobs:
       - name: Validate runtime and platform boundary
         if: steps.check_frontend.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         run: pnpm test:runtime-boundary
+
+      - name: Validate consumer continuity
+        if: steps.check_frontend.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
+        run: pnpm test:consumer-continuity

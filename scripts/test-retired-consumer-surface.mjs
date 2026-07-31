@@ -335,7 +335,7 @@ test('active consumer pages do not expose raw operation errors', () => {
   assert.match(connectSource, /reportSafeClientFailure\('connect-refresh'/)
 })
 
-test('manual node selection persists while automatic recovery remains transient', () => {
+test('manual node selection persists and automatic selection is absent', () => {
   const connectSource = readFileSync(
     resolve(repoRoot, 'src/pages/connect.tsx'),
     'utf8',
@@ -345,10 +345,8 @@ test('manual node selection persists while automatic recovery remains transient'
     'utf8',
   )
 
-  assert.match(
-    connectSource,
-    /changeProxy\(\s*groupName,\s*target\.name,\s*true,?\s*\)/,
-  )
+  assert.doesNotMatch(connectSource, /shouldAutoSelectNode/)
+  assert.doesNotMatch(connectSource, /nodeEntries\[0\]/)
   assert.match(
     connectSource,
     /changeProxy\(\s*globalGroup\.name,\s*entry\.name,?\s*\)/,

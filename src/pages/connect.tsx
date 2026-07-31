@@ -59,8 +59,22 @@ import {
 import {
   ACCOUNT_LKG_CHANGED_EVENT,
   readAccountLkgCache,
+  readLatestAccountAccessDecision,
   writeAccountLkgCache,
 } from '@/services/account-lkg-cache'
+import { runAccountRefreshExclusive } from '@/services/account-refresh-coordinator'
+import { ACCOUNT_RUNTIME_DISABLED_EVENT } from '@/services/account-runtime-enforcement'
+import {
+  type AccountAccessDecision,
+  getUsageAuthorizationEvidence,
+  isAccountAccessDenied,
+  isRecognizedNodesSnapshot,
+  isRecognizedPublicBenefitSnapshot,
+  isRecognizedSubscriptionSnapshot,
+  isRecognizedUsageSnapshot,
+  parseAuthoritativeBytes,
+  resolveAccountAccessDecision,
+} from '@/services/account-state-validation'
 import { authStore } from '@/services/auth-store'
 import {
   backendController,
@@ -87,7 +101,7 @@ import {
 import {
   checkSelectedNodeReadiness,
   isSelectedNodeConnected,
-  shouldAutoSelectNode,
+  resolveSelectedNodeReadinessStatus,
   shouldDisplayReadinessFailure,
   shouldShowReadinessRetryAction,
   type SelectedNodeReadinessStatus,
@@ -241,7 +255,7 @@ const ConnectPage = () => {
   const theme = useTheme()
   const navigate = useNavigate()
   const pageVisible = useVisibility()
-  const { verge, preferencesReady } = useVerge()
+  const { verge, preferencesReady, refreshVerge } = useVerge()
   const { proxies, refreshProxy } = useAppData()
   const currentUserId = authStore.getState().user?.id ?? null
   const initialAccountCache = useMemo(
@@ -315,76 +329,154 @@ const ConnectPage = () => {
   const wasConnectedRef = useRef(false)
   const currentTrafficRateRef = useRef({ up: 0, down: 0 })
   const heartbeatTrafficRef = useRef({ up: 0, down: 0 })
+  const accountAccessDecisionRef = useRef<{
+    subjectId: string | null
+    decision: AccountAccessDecision
+  }>({
+    subjectId: currentUserId,
+    decision: initialAccountCache?.accessDecision ?? 'unknown',
+  })
+  const accountRefreshGenerationRef = useRef(0)
+  const heartbeatInFlightRef = useRef(false)
   const lastTrafficSampleRef = useRef<{
     ts: number
     up: number
     down: number
   } | null>(null)
 
-  const refreshAccountState = useCallback(async () => {
-    const subjectId = captureBackendSubject()
-    if (!subjectId) return
-    const [subscriptionResult, benefitResult, usageResult, nodesResult] =
-      await Promise.allSettled([
-        backendController.subscription(),
-        backendController.publicBenefit(),
-        backendController.usage(),
-        backendController.nodes(),
-      ])
-    if (!isBackendSubjectCurrent(subjectId)) return
+  const commitAccountAccessDecision = useCallback(
+    (subjectId: string, decision: AccountAccessDecision) => {
+      const current = accountAccessDecisionRef.current
+      if (decision === 'unknown') {
+        return current.subjectId === subjectId ? current.decision : 'unknown'
+      }
+      accountAccessDecisionRef.current = { subjectId, decision }
+      return decision
+    },
+    [],
+  )
 
-    const refreshFailureState = getAccountRefreshFailureState({
-      subscriptionFailed: subscriptionResult.status === 'rejected',
-      benefitFailed: benefitResult.status === 'rejected',
-      usageFailed: usageResult.status === 'rejected',
-      nodesFailed: nodesResult.status === 'rejected',
-    })
+  const refreshAccountState =
+    useCallback(async (): Promise<AccountAccessDecision> => {
+      const subjectId = captureBackendSubject()
+      if (!subjectId) return 'unknown'
+      if (accountAccessDecisionRef.current.subjectId !== subjectId) {
+        accountAccessDecisionRef.current = { subjectId, decision: 'unknown' }
+      }
+      const generation = ++accountRefreshGenerationRef.current
+      return runAccountRefreshExclusive(async () => {
+        if (
+          !isBackendSubjectCurrent(subjectId) ||
+          generation !== accountRefreshGenerationRef.current
+        ) {
+          return accountAccessDecisionRef.current.subjectId === subjectId
+            ? accountAccessDecisionRef.current.decision
+            : 'unknown'
+        }
+        const [subscriptionResult, benefitResult, usageResult, nodesResult] =
+          await Promise.allSettled([
+            backendController.subscription(),
+            backendController.publicBenefit(),
+            backendController.usage(),
+            backendController.nodes(),
+          ])
+        if (
+          !isBackendSubjectCurrent(subjectId) ||
+          generation !== accountRefreshGenerationRef.current
+        ) {
+          return accountAccessDecisionRef.current.subjectId === subjectId
+            ? accountAccessDecisionRef.current.decision
+            : 'unknown'
+        }
 
-    setAccountRefreshFailed(refreshFailureState.accountDataRefreshFailed)
-    setNodeRefreshFailed(refreshFailureState.nodeListRefreshFailed)
+        const subscriptionKnown =
+          subscriptionResult.status === 'fulfilled' &&
+          isRecognizedSubscriptionSnapshot(subscriptionResult.value)
+        const publicBenefitKnown =
+          benefitResult.status === 'fulfilled' &&
+          isRecognizedPublicBenefitSnapshot(benefitResult.value)
+        const usageKnown =
+          usageResult.status === 'fulfilled' &&
+          isRecognizedUsageSnapshot(usageResult.value)
+        const nodesKnown =
+          nodesResult.status === 'fulfilled' &&
+          isRecognizedNodesSnapshot(nodesResult.value)
+        const usageAuthorization = usageKnown
+          ? getUsageAuthorizationEvidence(usageResult.value)
+          : { known: false, authorized: false }
 
-    if (subscriptionResult.status === 'fulfilled') {
-      setHasSubscription(isSubscriptionActiveNow(subscriptionResult.value))
-    }
-    if (benefitResult.status === 'fulfilled') {
-      setPublicBenefit(benefitResult.value)
-    }
-    if (usageResult.status === 'fulfilled') {
-      setPeriodUsage(toPeriodUsageState(usageResult.value))
-    }
-    if (nodesResult.status === 'fulfilled') {
-      setAccountNodes(nodesResult.value)
-    }
-    if (isBackendSubjectCurrent(subjectId)) {
-      writeAccountLkgCache(subjectId, {
-        subscription:
-          subscriptionResult.status === 'fulfilled'
-            ? subscriptionResult.value
-            : undefined,
-        publicBenefit:
-          benefitResult.status === 'fulfilled'
-            ? benefitResult.value
-            : undefined,
-        usage:
-          usageResult.status === 'fulfilled' ? usageResult.value : undefined,
-        nodes:
-          nodesResult.status === 'fulfilled' ? nodesResult.value : undefined,
+        const refreshFailureState = getAccountRefreshFailureState({
+          subscriptionFailed: !subscriptionKnown,
+          benefitFailed: !publicBenefitKnown,
+          usageFailed: !usageKnown,
+          nodesFailed: !nodesKnown,
+        })
+
+        setAccountRefreshFailed(refreshFailureState.accountDataRefreshFailed)
+        setNodeRefreshFailed(refreshFailureState.nodeListRefreshFailed)
+
+        if (subscriptionKnown) {
+          setHasSubscription(isSubscriptionActiveNow(subscriptionResult.value))
+        }
+        if (publicBenefitKnown) {
+          setPublicBenefit(benefitResult.value)
+        }
+        if (usageKnown) {
+          setPeriodUsage(toPeriodUsageState(usageResult.value))
+        }
+        if (nodesKnown) {
+          setAccountNodes(nodesResult.value)
+        }
+
+        const decision = resolveAccountAccessDecision({
+          previousDecision: readLatestAccountAccessDecision(subjectId),
+          subscriptionKnown,
+          subscriptionActive:
+            subscriptionKnown &&
+            isSubscriptionActiveNow(subscriptionResult.value),
+          publicBenefitKnown,
+          activeBenefitBytes: publicBenefitKnown
+            ? (parseAuthoritativeBytes(benefitResult.value.activeBonusBytes) ??
+              0)
+            : 0,
+          usageKnown,
+          usageAuthorizationKnown: usageAuthorization.known,
+          usageAuthorized: usageAuthorization.authorized,
+          trafficRemaining: usageKnown
+            ? (parseAuthoritativeBytes(usageResult.value.trafficRemaining) ?? 0)
+            : 0,
+        })
+        const committedDecision = commitAccountAccessDecision(
+          subjectId,
+          decision,
+        )
+
+        if (
+          isBackendSubjectCurrent(subjectId) &&
+          generation === accountRefreshGenerationRef.current
+        ) {
+          writeAccountLkgCache(subjectId, {
+            subscription: subscriptionKnown
+              ? subscriptionResult.value
+              : undefined,
+            publicBenefit: publicBenefitKnown ? benefitResult.value : undefined,
+            usage: usageKnown ? usageResult.value : undefined,
+            nodes: nodesKnown ? nodesResult.value : undefined,
+            accessDecision:
+              decision === 'unknown' ? undefined : committedDecision,
+          })
+        }
+        return committedDecision
       })
-    }
-  }, [])
+    }, [commitAccountAccessDecision])
 
-  // Probe current subscription status every time the page becomes visible.
-  // This ensures users who buy a plan on /plans and return to Connect see
-  // the refresh button appear. Failure => treat as "no subscription"
-  // (safer default — hide the refresh button).
+  // Refresh the managed profile before reading account state on visibility.
+  // A transient failure preserves the existing LKG and schedules recovery.
   useEffect(() => {
     if (!pageVisible) return
     let cancelled = false
     void runResumeRecovery('connect-visible')
-    refreshAccountState()
-      .then(() => {
-        if (cancelled) return
-      })
+      .then(() => (cancelled ? undefined : refreshAccountState()))
       .catch(() => {
         if (!cancelled) {
           setAccountRefreshFailed(true)
@@ -406,11 +498,15 @@ const ConnectPage = () => {
       setPublicBenefit(cache.publicBenefit)
       setPeriodUsage(cache.usage ? toPeriodUsageState(cache.usage) : null)
       setAccountNodes(cache.nodes)
+      const subjectId = authStore.getState().user?.id
+      if (subjectId) {
+        commitAccountAccessDecision(subjectId, cache.accessDecision)
+      }
     }
     window.addEventListener(ACCOUNT_LKG_CHANGED_EVENT, applyCache)
     return () =>
       window.removeEventListener(ACCOUNT_LKG_CHANGED_EVENT, applyCache)
-  }, [])
+  }, [commitAccountAccessDecision])
 
   // Listen for startup-sync-error changes (written async by main.tsx or
   // cleared by subscription-sync success). Keeps the Alert in sync with
@@ -436,8 +532,10 @@ const ConnectPage = () => {
     }
   }, [])
 
-  const tunEnabled = preferencesReady && verge?.enable_tun_mode === true
-  const sysEnabled = preferencesReady && verge?.enable_system_proxy === true
+  const lastKnownTunEnabled = verge?.enable_tun_mode === true
+  const lastKnownSystemProxyEnabled = verge?.enable_system_proxy === true
+  const tunEnabled = preferencesReady && lastKnownTunEnabled
+  const sysEnabled = preferencesReady && lastKnownSystemProxyEnabled
 
   // Runtime state per selected mode. User-facing "connected" still waits for
   // the selected-node data-plane readiness check below.
@@ -452,6 +550,21 @@ const ConnectPage = () => {
         return false
     }
   }, [mode, tunEnabled, sysEnabled])
+
+  // Failed preference reads are never presented as authoritative connection
+  // state. Last-known flags are used only to keep a safe disable action
+  // reachable when part of the runtime may still be active.
+  const runtimeMayRequireDisable = useMemo(() => {
+    switch (mode) {
+      case 'system':
+        return lastKnownSystemProxyEnabled
+      case 'both':
+      case 'smart':
+        return lastKnownTunEnabled || lastKnownSystemProxyEnabled
+      default:
+        return false
+    }
+  }, [lastKnownSystemProxyEnabled, lastKnownTunEnabled, mode])
 
   const connected = isSelectedNodeConnected(runtimeConnected, readinessStatus)
 
@@ -638,41 +751,6 @@ const ConnectPage = () => {
 
   const isEmpty = nodeOptions.length === 0
 
-  // Auto-select "auto" (url-test) when the current GLOBAL selection is empty
-  // or has been filtered out of the visible list (e.g. raw "proxy" group).
-  // Self-healing: re-fires whenever the selection becomes invalid (e.g. after
-  // a force-rebuild) but is idempotent when the current selection is valid.
-  useEffect(() => {
-    if (!preferencesReady) return
-    const groupName = globalGroup?.name
-    if (!groupName) return
-    const currentSelectionValid = Boolean(
-      currentNode && nodeEntries.some((entry) => entry.name === currentNode),
-    )
-    if (
-      !shouldAutoSelectNode({
-        runtimeConnected,
-        groupName,
-        nodeCount: nodeEntries.length,
-        currentSelectionValid,
-      })
-    )
-      return
-    const target =
-      nodeEntries.find((entry) => entry.displayName.toLowerCase() === 'auto') ??
-      nodeEntries[0]
-    if (target && target.name !== currentNode) {
-      changeProxy(groupName, target.name, true)
-    }
-  }, [
-    runtimeConnected,
-    preferencesReady,
-    globalGroup?.name,
-    nodeEntries,
-    currentNode,
-    changeProxy,
-  ])
-
   const triggerErrorFlash = useCallback(() => {
     setErrorFlash(true)
     if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
@@ -803,12 +881,12 @@ const ConnectPage = () => {
       return result.ok
     }
 
-    if (result.ok) {
-      setReadinessStatus('ready')
+    const nextStatus = resolveSelectedNodeReadinessStatus(result)
+    setReadinessStatus(nextStatus)
+    if (nextStatus === 'ready') {
       return true
     }
 
-    setReadinessStatus('failed')
     triggerErrorFlash()
     return false
   }, [
@@ -819,12 +897,6 @@ const ConnectPage = () => {
   ])
 
   useEffect(() => {
-    if (!preferencesReady) {
-      readinessAttemptRef.current += 1
-      lastReadinessNodeRef.current = null
-      Promise.resolve().then(() => setReadinessStatus('validating'))
-      return
-    }
     if (!runtimeConnected) {
       readinessAttemptRef.current += 1
       lastReadinessNodeRef.current = null
@@ -843,14 +915,13 @@ const ConnectPage = () => {
   }, [
     currentNode,
     currentRuntimeNode,
-    preferencesReady,
     runtimeConnected,
     validateSelectedNodeReadiness,
   ])
 
   const handleToggle = useLockFn(async () => {
     if (
-      !preferencesReady ||
+      (!preferencesReady && !runtimeMayRequireDisable) ||
       busy ||
       modeChanging ||
       readinessStatus === 'connecting' ||
@@ -859,10 +930,19 @@ const ConnectPage = () => {
       return
     setBusy(true)
     try {
-      const next = !runtimeConnected
+      const next = !runtimeMayRequireDisable
       if (next) {
         setReadinessStatus('connecting')
-        await refreshAccountState()
+        const decision = await refreshAccountState()
+        if (isAccountAccessDenied(decision)) {
+          setReadinessStatus('disconnected')
+          showNotice.error(
+            decision === 'quota_exhausted'
+              ? 'layout.components.connect.feedback.trafficExceeded'
+              : 'layout.components.connect.empty.noSubscription',
+          )
+          return
+        }
       } else {
         readinessAttemptRef.current += 1
         lastReadinessNodeRef.current = null
@@ -928,56 +1008,155 @@ const ConnectPage = () => {
     void open(DASHBOARD_URL)
   }, [])
 
-  const disconnectForTrafficExceeded = useCallback(async () => {
-    setBusy(true)
-    try {
-      await runtimeActionController.setConnectionEnabled(mode, false)
+  useEffect(() => {
+    const handleRuntimeDisabled = () => {
+      const subjectId = captureBackendSubject()
+      if (!subjectId) return
+      const currentDecision = readLatestAccountAccessDecision(subjectId)
+      if (!isAccountAccessDenied(currentDecision)) return
+      commitAccountAccessDecision(subjectId, currentDecision)
       readinessAttemptRef.current += 1
       lastReadinessNodeRef.current = null
       setReadinessStatus('disconnected')
       updateConnectionSession({ type: 'stop' })
       heartbeatTrafficRef.current = { up: 0, down: 0 }
       lastTrafficSampleRef.current = null
-      await refreshProxy()
-      await refreshAccountState()
-      showNotice.error('layout.components.connect.feedback.trafficExceeded')
-    } catch (error) {
-      reportSafeClientFailure('connect-traffic-exceeded-disconnect', error)
-      showNotice.error('layout.components.connect.feedback.trafficExceeded')
-    } finally {
-      setBusy(false)
+      showNotice.error(
+        currentDecision === 'quota_exhausted'
+          ? 'layout.components.connect.feedback.trafficExceeded'
+          : 'layout.components.connect.empty.noSubscription',
+      )
+      void Promise.allSettled([refreshVerge(), refreshProxy()]).then(
+        (refreshResults) => {
+          const failedRefresh = refreshResults.find(
+            (result) => result.status === 'rejected',
+          )
+          if (failedRefresh?.status === 'rejected') {
+            reportSafeClientFailure(
+              'connect-traffic-exceeded-disconnect',
+              failedRefresh.reason,
+            )
+          }
+        },
+      )
     }
-  }, [mode, refreshAccountState, refreshProxy])
+
+    window.addEventListener(
+      ACCOUNT_RUNTIME_DISABLED_EVENT,
+      handleRuntimeDisabled,
+    )
+    return () =>
+      window.removeEventListener(
+        ACCOUNT_RUNTIME_DISABLED_EVENT,
+        handleRuntimeDisabled,
+      )
+  }, [commitAccountAccessDecision, refreshProxy, refreshVerge])
 
   useEffect(() => {
     if (!connected || !currentNodeId) return
     const reportHeartbeat = async () => {
-      const bytes = heartbeatTrafficRef.current
-      const bytesUp = Math.floor(bytes.up)
-      const bytesDown = Math.floor(bytes.down)
-      heartbeatTrafficRef.current = {
-        up: Math.max(0, bytes.up - bytesUp),
-        down: Math.max(0, bytes.down - bytesDown),
-      }
+      if (heartbeatInFlightRef.current) return
+      heartbeatInFlightRef.current = true
+      const generation = ++accountRefreshGenerationRef.current
+      const subjectId = captureBackendSubject()
       try {
-        await backendController.reportTraffic({
-          nodeId: currentNodeId,
-          bytesUp,
-          bytesDown,
-          timestamp: Date.now(),
-        })
-        const usage = await backendController.usage().catch(() => null)
-        if (usage) setPeriodUsage(toPeriodUsageState(usage))
-      } catch (error) {
-        if (isTrafficExceededError(error)) {
-          await disconnectForTrafficExceeded()
+        const bytes = heartbeatTrafficRef.current
+        const bytesUp = Math.floor(bytes.up)
+        const bytesDown = Math.floor(bytes.down)
+        heartbeatTrafficRef.current = {
+          up: Math.max(0, bytes.up - bytesUp),
+          down: Math.max(0, bytes.down - bytesDown),
+        }
+        try {
+          await backendController.reportTraffic({
+            nodeId: currentNodeId,
+            bytesUp,
+            bytesDown,
+            timestamp: Date.now(),
+          })
+        } catch (error) {
+          if (isTrafficExceededError(error)) {
+            if (subjectId && isBackendSubjectCurrent(subjectId)) {
+              if (generation === accountRefreshGenerationRef.current) {
+                await runAccountRefreshExclusive(async () => {
+                  if (
+                    !isBackendSubjectCurrent(subjectId) ||
+                    generation !== accountRefreshGenerationRef.current
+                  ) {
+                    return
+                  }
+                  commitAccountAccessDecision(subjectId, 'quota_exhausted')
+                  writeAccountLkgCache(subjectId, {
+                    accessDecision: 'quota_exhausted',
+                  })
+                })
+              } else {
+                void refreshAccountState()
+              }
+            }
+            return
+          }
+          heartbeatTrafficRef.current = {
+            up: heartbeatTrafficRef.current.up + bytesUp,
+            down: heartbeatTrafficRef.current.down + bytesDown,
+          }
+          reportSafeClientFailure('connect-traffic-heartbeat', error)
           return
         }
-        heartbeatTrafficRef.current = {
-          up: heartbeatTrafficRef.current.up + bytesUp,
-          down: heartbeatTrafficRef.current.down + bytesDown,
+
+        if (!subjectId) return
+        await runAccountRefreshExclusive(async () => {
+          if (
+            !isBackendSubjectCurrent(subjectId) ||
+            generation !== accountRefreshGenerationRef.current
+          ) {
+            return
+          }
+          const usage = await backendController.usage()
+          if (
+            !isBackendSubjectCurrent(subjectId) ||
+            generation !== accountRefreshGenerationRef.current
+          ) {
+            return
+          }
+          if (!isRecognizedUsageSnapshot(usage)) {
+            throw new Error('invalid_usage_snapshot')
+          }
+          const authorization = getUsageAuthorizationEvidence(usage)
+          const decision = resolveAccountAccessDecision({
+            subscriptionKnown: false,
+            subscriptionActive: false,
+            publicBenefitKnown: false,
+            activeBenefitBytes: 0,
+            usageKnown: true,
+            usageAuthorizationKnown: authorization.known,
+            usageAuthorized: authorization.authorized,
+            trafficRemaining:
+              parseAuthoritativeBytes(usage.trafficRemaining) ?? 0,
+          })
+          setPeriodUsage(toPeriodUsageState(usage))
+          setAccountRefreshFailed(false)
+          const committedDecision = commitAccountAccessDecision(
+            subjectId,
+            decision,
+          )
+          writeAccountLkgCache(subjectId, {
+            usage,
+            accessDecision:
+              decision === 'unknown' ? undefined : committedDecision,
+          })
+        })
+      } catch (error) {
+        if (
+          subjectId &&
+          isBackendSubjectCurrent(subjectId) &&
+          generation === accountRefreshGenerationRef.current
+        ) {
+          setAccountRefreshFailed(true)
+          reportSafeClientFailure('connect-traffic-heartbeat', error)
         }
-        reportSafeClientFailure('connect-traffic-heartbeat', error)
+      } finally {
+        heartbeatInFlightRef.current = false
       }
     }
 
@@ -989,10 +1168,15 @@ const ConnectPage = () => {
       window.clearInterval(timer)
       void reportHeartbeat()
     }
-  }, [connected, currentNodeId, disconnectForTrafficExceeded])
+  }, [
+    commitAccountAccessDecision,
+    connected,
+    currentNodeId,
+    refreshAccountState,
+  ])
 
   const connectionBusy =
-    !preferencesReady ||
+    (!preferencesReady && !runtimeMayRequireDisable) ||
     busy ||
     modeChanging ||
     readinessStatus === 'connecting' ||
@@ -1013,6 +1197,8 @@ const ConnectPage = () => {
         return t('layout.components.connect.labels.connecting')
       case 'validating':
         return t('layout.components.connect.labels.validating')
+      case 'degraded':
+        return t('layout.components.connect.labels.connectionUnverified')
       case 'failed':
         return t('layout.components.connect.labels.connectionFailed')
       case 'ready':
@@ -1032,6 +1218,8 @@ const ConnectPage = () => {
         return t('layout.components.connect.labels.connecting')
       case 'validating':
         return t('layout.components.connect.labels.validating')
+      case 'degraded':
+        return t('layout.components.connect.labels.connectionUnverifiedHint')
       case 'failed':
         return t('layout.components.connect.feedback.selectedNodeFailed')
       case 'ready':
@@ -1048,6 +1236,7 @@ const ConnectPage = () => {
   const getButtonColor = () => {
     if (showReadinessFailure) return theme.palette.error.main
     if (connectionBusy) return theme.palette.warning.main
+    if (readinessStatus === 'degraded') return theme.palette.warning.main
     if (connected) return theme.palette.success.main
     return theme.palette.primary.main
   }
@@ -1334,11 +1523,13 @@ const ConnectPage = () => {
                   color={
                     errorFlash
                       ? 'error.main'
-                      : connected
-                        ? 'success.main'
-                        : readinessStatus === 'failed'
-                          ? 'error.main'
-                          : 'text.primary'
+                      : readinessStatus === 'degraded'
+                        ? 'warning.main'
+                        : connected
+                          ? 'success.main'
+                          : readinessStatus === 'failed'
+                            ? 'error.main'
+                            : 'text.primary'
                   }
                 >
                   {connectionStatusLabel}

@@ -121,6 +121,8 @@ export const translationKeys = [
   'layout.components.connect.labels.download',
   'layout.components.connect.labels.connecting',
   'layout.components.connect.labels.validating',
+  'layout.components.connect.labels.connectionUnverified',
+  'layout.components.connect.labels.connectionUnverifiedHint',
   'layout.components.connect.labels.connectionFailed',
   'layout.components.connect.labels.connected',
   'layout.components.connect.labels.disconnected',

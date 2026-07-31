@@ -8,6 +8,7 @@ export type SelectedNodeReadinessStatus =
   | 'connecting'
   | 'validating'
   | 'ready'
+  | 'degraded'
   | 'failed'
 
 export type SelectedNodeReadinessResult =
@@ -18,7 +19,12 @@ export type SelectedNodeReadinessResult =
     }
   | {
       ok: false
-      reason: 'missing-proxy' | 'unsafe-target' | 'timeout' | 'probe-error'
+      reason:
+        | 'missing-proxy'
+        | 'missing-probe'
+        | 'unsafe-target'
+        | 'timeout'
+        | 'probe-error'
       delays: number[]
       probeUrls: string[]
     }
@@ -44,12 +50,20 @@ const READINESS_PROBE_TARGET_BY_URL = new Map<string, RuntimeProbeTarget>([
 export const isSelectedNodeConnected = (
   runtimeConnected: boolean,
   readinessStatus: SelectedNodeReadinessStatus,
-) => runtimeConnected && readinessStatus === 'ready'
+) =>
+  runtimeConnected &&
+  (readinessStatus === 'ready' || readinessStatus === 'degraded')
 
-export const getReadinessFailureDisconnectPayload = () => ({
-  enable_tun_mode: false,
-  enable_system_proxy: false,
-})
+export const isReadinessFailureNonBlocking = (
+  reason: Extract<SelectedNodeReadinessResult, { ok: false }>['reason'],
+) => reason === 'timeout' || reason === 'probe-error'
+
+export const resolveSelectedNodeReadinessStatus = (
+  result: SelectedNodeReadinessResult,
+): Extract<SelectedNodeReadinessStatus, 'ready' | 'degraded' | 'failed'> => {
+  if (result.ok) return 'ready'
+  return isReadinessFailureNonBlocking(result.reason) ? 'degraded' : 'failed'
+}
 
 export const shouldDisplayReadinessFailure = (
   readinessStatus: SelectedNodeReadinessStatus,
@@ -61,23 +75,9 @@ export const shouldDisplayReadinessFailure = (
 export const shouldShowReadinessRetryAction = (
   runtimeConnected: boolean,
   readinessStatus: SelectedNodeReadinessStatus,
-) => runtimeConnected && readinessStatus === 'failed'
-
-export const shouldAutoSelectNode = ({
-  runtimeConnected,
-  groupName,
-  nodeCount,
-  currentSelectionValid,
-}: {
-  runtimeConnected: boolean
-  groupName?: string
-  nodeCount: number
-  currentSelectionValid: boolean
-}) =>
-  !runtimeConnected &&
-  Boolean(groupName) &&
-  nodeCount > 0 &&
-  !currentSelectionValid
+) =>
+  runtimeConnected &&
+  (readinessStatus === 'failed' || readinessStatus === 'degraded')
 
 type ProxyDelay = { delay: number }
 
@@ -90,7 +90,7 @@ export const isReadinessProbeTargetSafe = (url: string) =>
 export const assertReadinessProbeTargetsSafe = (
   probeUrls: readonly string[] = SELECTED_NODE_READINESS_PROBE_URLS,
 ) => {
-  if (!probeUrls.every(isReadinessProbeTargetSafe)) {
+  if (probeUrls.length === 0 || !probeUrls.every(isReadinessProbeTargetSafe)) {
     throw new Error('Unsafe selected-node readiness probe target')
   }
 }
@@ -119,6 +119,10 @@ export const checkSelectedNodeReadiness = async ({
   const trimmedProxyName = proxyName.trim()
   if (!trimmedProxyName) {
     return { ok: false, reason: 'missing-proxy', delays: [], probeUrls: [] }
+  }
+
+  if (probeUrls.length === 0) {
+    return { ok: false, reason: 'missing-probe', delays: [], probeUrls: [] }
   }
 
   try {
