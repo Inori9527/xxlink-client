@@ -1,6 +1,6 @@
-import { invoke } from '@tauri-apps/api/core'
 import { useEffect, useRef } from 'react'
 
+import { appLifecycleController } from '@/services/app-lifecycle-controller'
 import { reportSafeClientFailure } from '@/services/safe-client-error'
 
 import { hideInitialOverlay } from '../utils'
@@ -28,14 +28,16 @@ export const useAppInitialization = () => {
       return id
     }
 
-    const notifyBackend = async (stage?: string) => {
+    const notifyBackend = async (
+      stage?: 'Loading' | 'DomReady' | 'ResourcesLoaded',
+    ) => {
       if (isCancelled) return
 
       try {
         if (stage) {
-          await invoke('update_ui_stage', { stage })
+          await appLifecycleController.updateUiStage(stage)
         } else {
-          await invoke('notify_ui_ready')
+          await appLifecycleController.notifyUiReady()
         }
       } catch (err) {
         reportSafeClientFailure('app-init-backend-notify', err)
@@ -84,7 +86,7 @@ export const useAppInitialization = () => {
       try {
         if (isCancelled) return
 
-        await invoke('update_ui_stage', { stage: 'Loading' })
+        await appLifecycleController.updateUiStage('Loading')
         performInitialization()
       } catch {
         scheduleTimeout(performInitialization, 1500)

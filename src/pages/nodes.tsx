@@ -70,16 +70,6 @@ const NodesPage = () => {
   const currentNode = globalGroup?.now || ''
   const groupName = globalGroup?.name || ''
   const latencyTimeout = verge?.default_latency_timeout || 10000
-  const currentRuntimeNode = useMemo(() => {
-    let next = currentNode
-    for (let depth = 0; depth < 8; depth += 1) {
-      const current = next ? proxyRecords?.[next]?.now : undefined
-      if (!current || current === next) break
-      next = current
-    }
-    return next
-  }, [currentNode, proxyRecords])
-
   const nodes = useMemo<DisplayNode[]>(() => {
     const byKey = new Map<string, DisplayNode>()
 
@@ -124,7 +114,7 @@ const NodesPage = () => {
 
   const handleSelect = (node: DisplayNode) => {
     if (!globalGroup?.name || node.name === currentNode) return
-    changeProxy(globalGroup.name, node.name, currentRuntimeNode || currentNode)
+    changeProxy(globalGroup.name, node.name)
   }
 
   const handleTestDelay = useLockFn(async () => {

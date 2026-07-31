@@ -1,15 +1,18 @@
-import { getVergeConfig } from './cmds'
 import {
   cacheLanguage,
   getCachedLanguage,
   initializeLanguage,
   resolveLanguage,
 } from './i18n'
+import { runtimeActionController } from './runtime-action-controller'
+import type { RuntimePreferencesView } from './runtime-action-controller'
 import { reportSafeClientFailure } from './safe-client-error'
 
-let vergeConfigCache: IVergeConfig | null | undefined
+let vergeConfigCache: RuntimePreferencesView | null | undefined
 
-const getThemeModeFromWindow = (): IVergeConfig['theme_mode'] | undefined => {
+const getThemeModeFromWindow = ():
+  | RuntimePreferencesView['theme_mode']
+  | undefined => {
   if (typeof window === 'undefined') return undefined
   const mode = (
     window as typeof window & {
@@ -23,7 +26,7 @@ const getThemeModeFromWindow = (): IVergeConfig['theme_mode'] | undefined => {
 }
 
 export const resolveThemeMode = (
-  vergeConfig?: IVergeConfig | null,
+  vergeConfig?: RuntimePreferencesView | null,
 ): 'light' | 'dark' => {
   const initialMode = vergeConfig?.theme_mode ?? getThemeModeFromWindow()
   if (initialMode === 'dark' || initialMode === 'light') {
@@ -32,7 +35,7 @@ export const resolveThemeMode = (
   return 'light'
 }
 
-export const setPreloadConfig = (config: IVergeConfig | null) => {
+export const setPreloadConfig = (config: RuntimePreferencesView | null) => {
   vergeConfigCache = config
 }
 
@@ -40,7 +43,7 @@ export const getPreloadConfig = () => vergeConfigCache
 
 export const preloadConfig = async () => {
   try {
-    const config = await getVergeConfig()
+    const config = await runtimeActionController.getPreferences()
     setPreloadConfig(config)
     return config
   } catch (error) {
@@ -51,8 +54,8 @@ export const preloadConfig = async () => {
 }
 
 export const preloadLanguage = async (
-  vergeConfig?: IVergeConfig | null,
-  loadConfig: () => Promise<IVergeConfig | null> = preloadConfig,
+  vergeConfig?: RuntimePreferencesView | null,
+  loadConfig: () => Promise<RuntimePreferencesView | null> = preloadConfig,
 ) => {
   const cachedLanguage = getCachedLanguage()
   if (cachedLanguage) {

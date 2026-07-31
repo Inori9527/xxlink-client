@@ -5,7 +5,11 @@ import {
   showSafeClientFailureNotice,
 } from '@/services/notice-service'
 import { runtimeActionController } from '@/services/runtime-action-controller'
-import type { SafeClientFailureScope } from '@/services/safe-client-error'
+import { executeWithStateRefresh } from '@/services/runtime-state-policy'
+import {
+  reportSafeClientFailure,
+  type SafeClientFailureScope,
+} from '@/services/safe-client-error'
 
 import { useSystemState } from './use-system-state'
 
@@ -31,21 +35,18 @@ export const useServiceInstaller = () => {
   const { mutateSystemState } = useSystemState()
 
   const installServiceAndRestartCore = useCallback(async () => {
-    await executeWithErrorHandling(
-      () => runtimeActionController.installService(),
-      'service-install',
-      'settings.statuses.clashService.installing',
-      'settings.feedback.notifications.clashService.installSuccess',
-    )
-
-    await executeWithErrorHandling(
-      () => runtimeActionController.restartCore(),
-      'service-restart-after-install',
-      'settings.statuses.clash.restarting',
-      'settings.feedback.notifications.clash.restartSuccess',
-    )
-
-    await mutateSystemState()
+    await executeWithStateRefresh({
+      operation: () =>
+        executeWithErrorHandling(
+          () => runtimeActionController.installServiceAndRestartCore(),
+          'service-install',
+          'settings.statuses.clashService.installing',
+          'settings.feedback.notifications.clashService.installSuccess',
+        ),
+      refresh: mutateSystemState,
+      onRefreshError: (error) =>
+        reportSafeClientFailure('service-install', error),
+    })
   }, [mutateSystemState])
   return { installServiceAndRestartCore }
 }

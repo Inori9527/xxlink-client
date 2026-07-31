@@ -14,7 +14,6 @@ interface ProxySelectionOptions {
 interface ProxyChangeRequest {
   groupName: string
   proxyName: string
-  previousProxy?: string
   skipConfigSave: boolean
 }
 
@@ -45,12 +44,11 @@ export const useProxySelection = (options: ProxySelectionOptions = {}) => {
 
   const executeChange = useCallback(
     async (request: ProxyChangeRequest) => {
-      const { groupName, proxyName, previousProxy, skipConfigSave } = request
+      const { groupName, proxyName, skipConfigSave } = request
       try {
         await runtimeActionController.selectNode({
           groupName,
           proxyName,
-          previousProxy,
           persist: !skipConfigSave,
           closePreviousConnections:
             config.enableConnectionCleanup &&
@@ -81,16 +79,10 @@ export const useProxySelection = (options: ProxySelectionOptions = {}) => {
   }, [executeChange])
 
   const changeProxy = useCallback(
-    (
-      groupName: string,
-      proxyName: string,
-      previousProxy?: string,
-      skipConfigSave: boolean = false,
-    ) => {
+    (groupName: string, proxyName: string, skipConfigSave: boolean = false) => {
       pendingRequestRef.current = {
         groupName,
         proxyName,
-        previousProxy,
         skipConfigSave,
       }
       void flushChangeQueue()
@@ -99,24 +91,15 @@ export const useProxySelection = (options: ProxySelectionOptions = {}) => {
   )
 
   const handleSelectChange = useCallback(
-    (
-      groupName: string,
-      previousProxy?: string,
-      skipConfigSave: boolean = false,
-    ) =>
+    (groupName: string, skipConfigSave: boolean = false) =>
       (event: { target: { value: string } }) =>
-        changeProxy(
-          groupName,
-          event.target.value,
-          previousProxy,
-          skipConfigSave,
-        ),
+        changeProxy(groupName, event.target.value, skipConfigSave),
     [changeProxy],
   )
 
   const handleProxyGroupChange = useCallback(
     (group: { name: string; now?: string }, proxy: { name: string }) =>
-      changeProxy(group.name, proxy.name, group.now),
+      changeProxy(group.name, proxy.name),
     [changeProxy],
   )
 

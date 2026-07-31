@@ -35,16 +35,13 @@ import { useAppData } from '@/providers/app-data-context'
 import { getNetworkInterfacesInfo, getSystemHostname } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
 import { runtimeActionController } from '@/services/runtime-action-controller'
+import type { RuntimePreferencesView } from '@/services/runtime-action-controller'
 import {
   classifyClientError,
   reportSafeClientFailure,
   toSafeClientErrorMessage,
 } from '@/services/safe-client-error'
 import getSystem from '@/utils/get-system'
-
-const DEFAULT_PAC = `function FindProxyForURL(url, host) {
-  return "PROXY %proxy_host%:%mixed-port%; SOCKS5 %proxy_host%:%mixed-port%; DIRECT;";
-}`
 
 /** NO_PROXY validation */
 
@@ -85,6 +82,16 @@ const splitBypass = (value?: string) =>
     .map((item) => item.trim())
     .filter(Boolean)
 
+const toSystemProxyForm = (preferences?: RuntimePreferencesView) => ({
+  guard: preferences?.enable_proxy_guard ?? undefined,
+  enable_bypass_check: preferences?.enable_bypass_check ?? true,
+  bypass: preferences?.system_proxy_bypass ?? undefined,
+  duration: preferences?.proxy_guard_duration ?? 10,
+  use_default: preferences?.use_default_bypass ?? true,
+  pac: preferences?.proxy_auto_config ?? undefined,
+  proxy_host: preferences?.proxy_host ?? '127.0.0.1',
+})
+
 export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
   const { t } = useTranslation()
   const systemName = getSystem()
@@ -93,35 +100,36 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
 
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const { verge, patchVerge, mutateVerge } = useVerge()
+  const [refreshing, setRefreshing] = useState(false)
+  const [authoritativeLoaded, setAuthoritativeLoaded] = useState(false)
+  const [authoritativePreferences, setAuthoritativePreferences] =
+    useState<RuntimePreferencesView | null>(null)
+  const refreshRequestRef = useRef(0)
+  const mutationInFlightRef = useRef(false)
+  const { verge, patchVerge, refreshVerge } = useVerge()
   const [hostOptions, setHostOptions] = useState<string[]>([])
 
   const { proxySettings } = useAppData()
-  const { indicator: isProxyReallyEnabled, invalidateProxyState } =
-    useSystemProxyState()
+  const {
+    indicator: isProxyReallyEnabled,
+    ready: isProxyStateReady,
+    invalidateProxyState,
+  } = useSystemProxyState()
 
+  const activePreferences = authoritativePreferences ?? verge
   const {
     enable_system_proxy: enabled,
     proxy_auto_config,
-    pac_file_content,
     enable_proxy_guard,
     enable_bypass_check,
     use_default_bypass,
     system_proxy_bypass,
     proxy_guard_duration,
     proxy_host,
-  } = verge ?? {}
+  } = activePreferences ?? {}
 
-  const [value, setValue] = useState({
-    guard: enable_proxy_guard,
-    enable_bypass_check: enable_bypass_check ?? true,
-    bypass: system_proxy_bypass,
-    duration: proxy_guard_duration ?? 10,
-    use_default: use_default_bypass ?? true,
-    pac: proxy_auto_config,
-    pac_content: pac_file_content ?? DEFAULT_PAC,
-    proxy_host: proxy_host ?? '127.0.0.1',
-  })
+  const [value, setValue] = useState(() => toSystemProxyForm(verge))
+  const busy = saving || refreshing
 
   const separator = useMemo(() => (isWindows ? ';' : ','), [isWindows])
 
@@ -197,22 +205,43 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
       ? !validReg.test(value.bypass)
       : false
 
+  const closeDialog = () => {
+    if (mutationInFlightRef.current) return
+    refreshRequestRef.current += 1
+    setRefreshing(false)
+    setOpen(false)
+  }
+
   useImperativeHandle(ref, () => ({
     open: () => {
+      if (mutationInFlightRef.current) return
+      const requestId = ++refreshRequestRef.current
       setOpen(true)
-      setValue({
-        guard: enable_proxy_guard,
-        enable_bypass_check: enable_bypass_check ?? true,
-        bypass: system_proxy_bypass,
-        duration: proxy_guard_duration ?? 10,
-        use_default: use_default_bypass ?? true,
-        pac: proxy_auto_config,
-        pac_content: pac_file_content ?? DEFAULT_PAC,
-        proxy_host: proxy_host ?? '127.0.0.1',
-      })
-      fetchNetworkInterfaces()
+      setRefreshing(true)
+      setAuthoritativeLoaded(false)
+      setAuthoritativePreferences(null)
+      setValue(toSystemProxyForm(verge))
+      void refreshVerge()
+        .then((preferences) => {
+          if (requestId !== refreshRequestRef.current) return
+          setAuthoritativePreferences(preferences)
+          setValue(toSystemProxyForm(preferences))
+          setAuthoritativeLoaded(true)
+        })
+        .catch((error: unknown) => {
+          if (requestId !== refreshRequestRef.current) return
+          setAuthoritativeLoaded(false)
+          reportSafeClientFailure('sysproxy-settings-refresh', error)
+          showNotice.error(
+            toSafeClientErrorMessage(classifyClientError(error).kind, t),
+          )
+        })
+        .finally(() => {
+          if (requestId === refreshRequestRef.current) setRefreshing(false)
+        })
+      void fetchNetworkInterfaces()
     },
-    close: () => setOpen(false),
+    close: closeDialog,
   }))
 
   // 获取网络接口和主机名
@@ -268,6 +297,14 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
   }
 
   const onSave = useLockFn(async () => {
+    if (
+      mutationInFlightRef.current ||
+      busy ||
+      !authoritativeLoaded ||
+      !authoritativePreferences
+    ) {
+      return
+    }
     if (value.duration < 1) {
       showNotice.error('settings.modals.sysproxy.messages.durationTooShort')
       return
@@ -291,9 +328,14 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
     const hostnameRegex =
       /^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9-]*[A-Za-z0-9])$/
 
+    const unwrappedProxyHost =
+      value.proxy_host.startsWith('[') && value.proxy_host.endsWith(']')
+        ? value.proxy_host.slice(1, -1)
+        : value.proxy_host
+    const proxyHostIsIpv6 = ipv6Regex.test(unwrappedProxyHost)
     if (
       !ipv4Regex.test(value.proxy_host) &&
-      !ipv6Regex.test(value.proxy_host) &&
+      !proxyHostIsIpv6 &&
       !hostnameRegex.test(value.proxy_host)
     ) {
       showNotice.error('settings.modals.sysproxy.messages.invalidProxyHost')
@@ -321,58 +363,32 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
       patch.use_default_bypass = value.use_default
     }
 
-    let pacContent = value.pac_content
-    if (pacContent) {
-      pacContent = pacContent.replace(/%proxy_host%/g, value.proxy_host)
-      // 将 mixed-port 转换为字符串
-      const mixedPortStr = (proxySettings?.mixedPort || '').toString()
-      pacContent = pacContent.replace(/%mixed-port%/g, mixedPortStr)
-    }
-
-    if (pacContent !== pac_file_content) {
-      patch.pac_file_content = pacContent
-    }
-
-    // 处理IPv6地址，如果是IPv6地址但没有被方括号包围，则添加方括号
-    let proxyHost = value.proxy_host
-    if (
-      ipv6Regex.test(proxyHost) &&
-      !proxyHost.startsWith('[') &&
-      !proxyHost.endsWith(']')
-    ) {
-      proxyHost = `[${proxyHost}]`
-    }
+    const proxyHost = proxyHostIsIpv6
+      ? `[${unwrappedProxyHost}]`
+      : value.proxy_host
 
     if (proxyHost !== proxy_host) {
       patch.proxy_host = proxyHost
     }
 
-    // 判断是否需要重置系统代理
-    const needResetProxy =
-      value.pac !== proxy_auto_config ||
-      proxyHost !== proxy_host ||
-      pacContent !== pac_file_content ||
-      value.bypass !== system_proxy_bypass ||
-      value.use_default !== use_default_bypass
-
+    mutationInFlightRef.current = true
     setSaving(true)
     try {
       if (Object.keys(patch).length > 0) {
-        mutateVerge({ ...verge, ...patch }, false)
         await patchVerge(patch)
       }
-      if (needResetProxy && enabled) {
-        await runtimeActionController.refreshSystemProxy()
-      }
       await invalidateProxyState()
+      refreshRequestRef.current += 1
       setOpen(false)
     } catch (err) {
+      setAuthoritativeLoaded(false)
+      setAuthoritativePreferences(null)
       reportSafeClientFailure('sysproxy-save', err)
-      mutateVerge()
       showNotice.error(
         toSafeClientErrorMessage(classifyClientError(err).kind, t),
       )
     } finally {
+      mutationInFlightRef.current = false
       setSaving(false)
     }
   })
@@ -384,13 +400,17 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
       contentSx={{ width: 450, maxHeight: 565 }}
       okBtn={t('shared.actions.save')}
       cancelBtn={t('shared.actions.cancel')}
-      onClose={() => setOpen(false)}
-      onCancel={() => setOpen(false)}
+      onClose={closeDialog}
+      onCancel={closeDialog}
       onOk={onSave}
       loading={saving}
-      disableOk={saving}
+      disableOk={busy || !authoritativeLoaded}
+      disableCancel={saving}
     >
-      <List>
+      <List
+        inert={busy || !authoritativeLoaded ? true : undefined}
+        aria-busy={busy}
+      >
         <BaseFieldset
           label={t('settings.modals.sysproxy.fieldsets.currentStatus')}
           padding="15px 10px"
@@ -400,9 +420,11 @@ export const SysproxyViewer = forwardRef<DialogRef>((props, ref) => {
               {t('settings.modals.sysproxy.fields.enableStatus')}
             </Typography>
             <Typography className="value">
-              {isProxyReallyEnabled
-                ? t('shared.statuses.enabled')
-                : t('shared.statuses.disabled')}
+              {!isProxyStateReady
+                ? '-'
+                : isProxyReallyEnabled
+                  ? t('shared.statuses.enabled')
+                  : t('shared.statuses.disabled')}
             </Typography>
           </FlexBox>
           {!value.pac && (

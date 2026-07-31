@@ -1,5 +1,4 @@
-import { delayProxyByName, ProxyDelay } from 'tauri-plugin-mihomo-api'
-
+import { runtimeNodeController } from '@/services/runtime-node-controller'
 import { reportSafeClientFailure } from '@/services/safe-client-error'
 
 const hashKey = (name: string, group: string) => `${group ?? ''}::${name}`
@@ -14,7 +13,6 @@ const CACHE_TTL = 30 * 60 * 1000
 
 class DelayManager {
   private cache = new Map<string, DelayUpdate>()
-  private urlMap = new Map<string, string>()
 
   // 每个节点的监听
   private listenerMap = new Map<string, (update: DelayUpdate) => void>()
@@ -122,16 +120,6 @@ class DelayManager {
     this.queueGroupNotification(group)
   }
 
-  setUrl(group: string, url: string) {
-    this.urlMap.set(group, url)
-  }
-
-  getUrl(group: string) {
-    const url = this.urlMap.get(group)
-    // 如果未设置URL，返回默认URL
-    return url || 'http://cp.cloudflare.com/generate_204'
-  }
-
   setListener(
     name: string,
     group: string,
@@ -226,16 +214,14 @@ class DelayManager {
     const startTime = Date.now()
 
     try {
-      const url = this.getUrl(group)
-
       // 设置超时处理, delay = 0 为超时
-      const timeoutPromise = new Promise<ProxyDelay>((resolve) => {
-        setTimeout(() => resolve({ delay: 0 }), timeout)
+      const timeoutPromise = new Promise<number>((resolve) => {
+        setTimeout(() => resolve(0), timeout)
       })
 
       // 使用Promise.race来实现超时控制
-      const result = await Promise.race([
-        delayProxyByName(name, url, timeout),
+      const delay = await Promise.race([
+        runtimeNodeController.probeDelay(name, 'cloudflare', timeout),
         timeoutPromise,
       ])
 
@@ -245,7 +231,6 @@ class DelayManager {
         await new Promise((resolve) => setTimeout(resolve, 500 - elapsedTime))
       }
 
-      const delay = result.delay
       const elapsed = elapsedTime
       return this.setDelay(name, group, delay, { elapsed })
     } catch (error) {

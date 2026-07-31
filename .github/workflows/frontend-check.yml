@@ -112,6 +112,6 @@ jobs:
         if: steps.check_frontend.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         run: node --test scripts/test-tauri-cli-arguments.mjs && node scripts/validate-csp-policy.mjs
 
-      - name: Validate runtime action boundary
+      - name: Validate runtime and platform boundary
         if: steps.check_frontend.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
-        run: node scripts/validate-runtime-action-boundary.mjs
+        run: pnpm test:runtime-boundary

@@ -7,7 +7,6 @@ use crate::{
     utils::window_manager::WindowManager,
 };
 use anyhow::{Result, bail};
-use xxlink_logging::{Type, logging, logging_error};
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use reqwest::ClientBuilder;
@@ -15,6 +14,7 @@ use smartstring::alias::String;
 use std::time::Duration;
 use tokio::sync::oneshot;
 use warp::Filter as _;
+use xxlink_logging::{Type, logging, logging_error};
 
 #[derive(serde::Deserialize, Debug)]
 struct QueryParam {
@@ -81,17 +81,18 @@ pub fn embed_server() {
     let pac = warp::path!("commands" / "pac").and_then(|| async move {
         let verge_config = Config::verge().await;
         let clash_config = Config::clash().await;
+        let verge = verge_config.data_arc();
+        let clash = clash_config.data_arc();
 
-        let pac_content = verge_config
-            .data_arc()
-            .pac_file_content
-            .clone()
-            .unwrap_or_else(|| DEFAULT_PAC.into());
+        if verge.source_read_failed || (verge.verge_mixed_port.is_none() && clash.source_read_failed()) {
+            let mut response = warp::http::Response::new(std::string::String::new());
+            *response.status_mut() = warp::http::StatusCode::SERVICE_UNAVAILABLE;
+            return Ok::<_, warp::Rejection>(response);
+        }
 
-        let pac_port = verge_config
-            .data_arc()
-            .verge_mixed_port
-            .unwrap_or_else(|| clash_config.data_arc().get_mixed_port());
+        let pac_content = verge.pac_file_content.clone().unwrap_or_else(|| DEFAULT_PAC.into());
+
+        let pac_port = verge.verge_mixed_port.unwrap_or_else(|| clash.get_mixed_port());
         let processed_content = pac_content.replace("%mixed-port%", &format!("{pac_port}"));
         Ok::<_, warp::Rejection>(
             warp::http::Response::builder()

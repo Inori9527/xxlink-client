@@ -1,6 +1,6 @@
 use super::CmdResult;
 use crate::{
-    config::{Config, IVerge, PrfItem, PrfSelected, profiles::profiles_patch_item_safe},
+    config::{Config, IVerge, PrfSelected, profiles::profiles_replace_item_selected_safe},
     core::{CoreManager, handle, sysopt, tray},
     feat,
 };
@@ -12,15 +12,15 @@ use std::{net::IpAddr, str::FromStr as _, time::Duration};
 use tauri::AppHandle;
 use tauri_plugin_clipboard_manager::ClipboardExt as _;
 use tauri_plugin_updater::{Update, UpdaterExt as _};
+use tauri_plugin_xxlink_sysinfo::is_current_app_handle_admin;
 use tokio::sync::Mutex;
+use xxlink_logging::{Type, logging};
 
 const MAX_NODE_LABEL_BYTES: usize = 512;
 const MAX_TUN_DEVICE_BYTES: usize = 128;
 const MAX_TUN_LIST_ITEMS: usize = 64;
 const MAX_TUN_LIST_ITEM_BYTES: usize = 256;
 const MAX_PROXY_BYPASS_BYTES: usize = 32 * 1024;
-const MAX_PAC_CONTENT_BYTES: usize = 256 * 1024;
-const MAX_PROXY_HOST_BYTES: usize = 512;
 const MAX_PROXY_GUARD_DURATION_SECS: u64 = 86_400;
 const DEFAULT_MAX_LOG_ITEMS: i64 = 50;
 const MAX_LOG_ITEMS: i64 = 200;
@@ -30,6 +30,7 @@ const MAX_CLASSIFIABLE_TEXT_LENGTH: usize = 1024;
 static PENDING_UPDATE: Lazy<Mutex<Option<Update>>> = Lazy::new(|| Mutex::new(None));
 static TUN_SETTINGS_MUTATION_LOCK: Mutex<()> = Mutex::const_new(());
 static NODE_SELECTION_LOCK: Mutex<()> = Mutex::const_new(());
+static SERVICE_ACTION_LOCK: Mutex<()> = Mutex::const_new(());
 
 #[derive(Clone, Copy, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -536,6 +537,22 @@ pub enum RuntimeConnectMode {
     Smart,
 }
 
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeProbeTarget {
+    Cloudflare,
+    Gstatic,
+}
+
+impl RuntimeProbeTarget {
+    const fn url(self) -> &'static str {
+        match self {
+            Self::Cloudflare => "http://cp.cloudflare.com/generate_204",
+            Self::Gstatic => "https://www.gstatic.com/generate_204",
+        }
+    }
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TunSettingsView {
@@ -570,6 +587,32 @@ pub struct RuntimeProxySettingsView {
     mixed_port: u16,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct RuntimePreferencesView {
+    language: Option<String>,
+    theme_mode: Option<String>,
+    traffic_graph: Option<bool>,
+    enable_memory_usage: Option<bool>,
+    menu_icon: Option<String>,
+    notice_position: Option<String>,
+    collapse_navbar: Option<bool>,
+    enable_tun_mode: bool,
+    enable_system_proxy: bool,
+    enable_proxy_guard: Option<bool>,
+    enable_bypass_check: Option<bool>,
+    use_default_bypass: Option<bool>,
+    system_proxy_bypass: Option<String>,
+    proxy_guard_duration: Option<u64>,
+    proxy_auto_config: Option<bool>,
+    proxy_host: Option<String>,
+    proxy_host_valid: bool,
+    verge_mixed_port: Option<u16>,
+    auto_close_connection: Option<bool>,
+    auto_check_update: Option<bool>,
+    default_latency_timeout: Option<i16>,
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RuntimePreferencesUpdate {
@@ -581,11 +624,90 @@ pub struct RuntimePreferencesUpdate {
     system_proxy_bypass: Option<String>,
     proxy_auto_config: Option<bool>,
     use_default_bypass: Option<bool>,
-    pac_file_content: Option<String>,
     proxy_host: Option<String>,
 }
 
-fn validate_runtime_preferences(preferences: &RuntimePreferencesUpdate) -> CmdResult<()> {
+impl RuntimePreferencesUpdate {
+    const fn updates_system_proxy(&self) -> bool {
+        self.enable_proxy_guard.is_some()
+            || self.enable_bypass_check.is_some()
+            || self.proxy_guard_duration.is_some()
+            || self.system_proxy_bypass.is_some()
+            || self.proxy_auto_config.is_some()
+            || self.use_default_bypass.is_some()
+            || self.proxy_host.is_some()
+    }
+}
+
+fn configured_tun_enabled(verge: &IVerge) -> bool {
+    // Missing values in a readable legacy config are authoritatively disabled.
+    verge.enable_tun_mode == Some(true)
+}
+
+fn configured_system_proxy_enabled(verge: &IVerge) -> bool {
+    verge.enable_system_proxy == Some(true)
+}
+
+fn ensure_verge_source_readable(verge: &IVerge) -> CmdResult<()> {
+    if verge.source_read_failed {
+        Err("runtime_preferences_unavailable".into())
+    } else {
+        Ok(())
+    }
+}
+
+fn ensure_clash_source_readable(clash: &crate::config::IClashTemp) -> CmdResult<()> {
+    if clash.source_read_failed() {
+        Err("runtime_configuration_unavailable".into())
+    } else {
+        Ok(())
+    }
+}
+
+async fn ensure_system_proxy_runtime_source_readable(verge: &IVerge, enabled: bool) -> CmdResult<()> {
+    if enabled && verge.verge_mixed_port.is_none() {
+        ensure_clash_source_readable(&Config::clash().await.latest_arc())?;
+    }
+    Ok(())
+}
+
+const fn should_disable_tun_for_service_availability(
+    is_admin: bool,
+    service_availability: super::service::ServiceAvailabilityView,
+) -> bool {
+    !is_admin && matches!(service_availability, super::service::ServiceAvailabilityView::Absent)
+}
+
+fn runtime_preferences_view(verge: &IVerge) -> RuntimePreferencesView {
+    let normalized_proxy_host = verge.proxy_host.as_deref().and_then(sysopt::normalize_proxy_host);
+    let proxy_host_valid = verge.proxy_host.is_none() || normalized_proxy_host.is_some();
+
+    RuntimePreferencesView {
+        language: verge.language.clone(),
+        theme_mode: verge.theme_mode.clone(),
+        traffic_graph: verge.traffic_graph,
+        enable_memory_usage: verge.enable_memory_usage,
+        menu_icon: verge.menu_icon.clone(),
+        notice_position: verge.notice_position.clone(),
+        collapse_navbar: verge.collapse_navbar,
+        enable_tun_mode: configured_tun_enabled(verge),
+        enable_system_proxy: configured_system_proxy_enabled(verge),
+        enable_proxy_guard: verge.enable_proxy_guard,
+        enable_bypass_check: verge.enable_bypass_check,
+        use_default_bypass: verge.use_default_bypass,
+        system_proxy_bypass: verge.system_proxy_bypass.clone(),
+        proxy_guard_duration: verge.proxy_guard_duration,
+        proxy_auto_config: verge.proxy_auto_config,
+        proxy_host: normalized_proxy_host,
+        proxy_host_valid,
+        verge_mixed_port: verge.verge_mixed_port,
+        auto_close_connection: verge.auto_close_connection,
+        auto_check_update: verge.auto_check_update,
+        default_latency_timeout: verge.default_latency_timeout,
+    }
+}
+
+fn validate_runtime_preferences(mut preferences: RuntimePreferencesUpdate) -> CmdResult<RuntimePreferencesUpdate> {
     if preferences
         .language
         .as_deref()
@@ -596,21 +718,28 @@ fn validate_runtime_preferences(preferences: &RuntimePreferencesUpdate) -> CmdRe
         || preferences
             .system_proxy_bypass
             .as_deref()
-            .is_some_and(|value| value.len() > MAX_PROXY_BYPASS_BYTES || value.contains('\0'))
-        || preferences
-            .pac_file_content
-            .as_deref()
-            .is_some_and(|value| value.len() > MAX_PAC_CONTENT_BYTES || value.contains('\0'))
-        || preferences.proxy_host.as_deref().is_some_and(|value| {
-            value.is_empty() || value.len() > MAX_PROXY_HOST_BYTES || value.chars().any(char::is_control)
-        })
+            .is_some_and(|value| value.len() > MAX_PROXY_BYPASS_BYTES || value.chars().any(char::is_control))
     {
         return Err("invalid_runtime_preferences".into());
     }
-    Ok(())
+
+    if let Some(proxy_host) = preferences.proxy_host.as_deref() {
+        preferences.proxy_host =
+            Some(sysopt::normalize_proxy_host(proxy_host).ok_or_else(|| String::from("invalid_runtime_preferences"))?);
+    }
+
+    Ok(preferences)
+}
+
+fn managed_pac_content(proxy_host: &str) -> String {
+    format!(
+        "function FindProxyForURL(url, host) {{\n  return \"PROXY {proxy_host}:%mixed-port%; SOCKS5 {proxy_host}:%mixed-port%; DIRECT;\";\n}}\n"
+    )
+    .into()
 }
 
 fn runtime_preferences_patch(preferences: RuntimePreferencesUpdate) -> IVerge {
+    let managed_pac = preferences.proxy_host.as_deref().map(managed_pac_content);
     IVerge {
         collapse_navbar: preferences.collapse_navbar,
         language: preferences.language,
@@ -620,7 +749,7 @@ fn runtime_preferences_patch(preferences: RuntimePreferencesUpdate) -> IVerge {
         system_proxy_bypass: preferences.system_proxy_bypass,
         proxy_auto_config: preferences.proxy_auto_config,
         use_default_bypass: preferences.use_default_bypass,
-        pac_file_content: preferences.pac_file_content,
+        pac_file_content: managed_pac,
         proxy_host: preferences.proxy_host,
         ..Default::default()
     }
@@ -818,35 +947,121 @@ impl RuntimeConnectMode {
             Self::System | Self::Both => "global",
         }
     }
+
+    const fn requires_tun(self) -> bool {
+        matches!(self, Self::Both | Self::Smart)
+    }
 }
 
 fn safe_error() -> String {
     "runtime_action_failed".into()
 }
 
+const fn tun_enable_request_allowed(requests_tun: bool, is_admin: bool, service_available: bool) -> bool {
+    !requests_tun || is_admin || service_available
+}
+
+async fn ensure_tun_enable_allowed(requests_tun: bool) -> CmdResult<()> {
+    if !requests_tun {
+        return Ok(());
+    }
+
+    let is_admin = is_current_app_handle_admin(handle::Handle::app_handle());
+    let service_available = !is_admin && super::service::probe_service_availability().await?.is_ready();
+    if tun_enable_request_allowed(true, is_admin, service_available) {
+        Ok(())
+    } else {
+        Err("tun_runtime_unavailable".into())
+    }
+}
+
 fn rollback_error() -> String {
     "runtime_action_rollback_failed".into()
+}
+
+fn service_action_failure(service_rollback_succeeded: bool, core_rollback_succeeded: bool) -> String {
+    if service_rollback_succeeded && core_rollback_succeeded {
+        safe_error()
+    } else {
+        rollback_error()
+    }
+}
+
+fn service_rollback_class_matches(
+    expected: super::service::ServiceAvailabilityView,
+    actual: super::service::ServiceAvailabilityView,
+) -> bool {
+    match expected {
+        super::service::ServiceAvailabilityView::Absent => actual == super::service::ServiceAvailabilityView::Absent,
+        super::service::ServiceAvailabilityView::Ready => actual == super::service::ServiceAvailabilityView::Ready,
+        // InstalledUnavailable is a registration-presence class for rollback.
+        // Reinstalling may repair availability; do not recreate a broken helper
+        // merely to reproduce the pre-operation probe result.
+        super::service::ServiceAvailabilityView::InstalledUnavailable => actual.is_installed(),
+    }
+}
+
+async fn service_availability_is(expected: super::service::ServiceAvailabilityView) -> bool {
+    super::service::probe_service_availability()
+        .await
+        .map(|actual| service_rollback_class_matches(expected, actual))
+        .unwrap_or(false)
+}
+
+async fn restore_service_availability(expected: super::service::ServiceAvailabilityView) -> bool {
+    let Ok(current) = super::service::probe_service_availability().await else {
+        return false;
+    };
+    if service_rollback_class_matches(expected, current) {
+        return true;
+    }
+
+    let operation = match expected {
+        super::service::ServiceAvailabilityView::Absent => super::service::uninstall_service().await,
+        super::service::ServiceAvailabilityView::Ready
+        | super::service::ServiceAvailabilityView::InstalledUnavailable => super::service::install_service().await,
+    };
+    if operation.is_err() {
+        return false;
+    }
+    service_availability_is(expected).await
 }
 
 #[tauri::command]
 pub async fn runtime_get_proxy_settings() -> CmdResult<RuntimeProxySettingsView> {
     let clash = Config::clash().await.latest_arc();
+    ensure_clash_source_readable(&clash)?;
     Ok(RuntimeProxySettingsView {
         mixed_port: clash.get_mixed_port(),
     })
 }
 
 #[tauri::command]
+pub async fn runtime_get_preferences() -> CmdResult<RuntimePreferencesView> {
+    let _transaction_guard = CoreManager::begin_config_transaction().await;
+    let verge = Config::verge().await.data_arc();
+    ensure_verge_source_readable(&verge)?;
+    Ok(runtime_preferences_view(&verge))
+}
+
+#[tauri::command]
 pub async fn runtime_get_tun_settings() -> CmdResult<TunSettingsView> {
     let _transaction_guard = CoreManager::begin_config_transaction().await;
     let clash = Config::clash().await.data_arc();
+    ensure_clash_source_readable(&clash)?;
     let tun = clash.0.get("tun").and_then(Value::as_mapping);
     tun_settings_from_mapping(tun)
 }
 
 #[tauri::command]
 pub async fn runtime_update_preferences(preferences: RuntimePreferencesUpdate) -> CmdResult<()> {
-    validate_runtime_preferences(&preferences)?;
+    let preferences = validate_runtime_preferences(preferences)?;
+    let verge = Config::verge().await.data_arc();
+    ensure_verge_source_readable(&verge)?;
+    if preferences.updates_system_proxy() {
+        ensure_system_proxy_runtime_source_readable(&verge, configured_system_proxy_enabled(&verge)).await?;
+    }
+    drop(verge);
     feat::patch_verge(&runtime_preferences_patch(preferences), false)
         .await
         .map_err(|_| safe_error())
@@ -855,7 +1070,11 @@ pub async fn runtime_update_preferences(preferences: RuntimePreferencesUpdate) -
 #[tauri::command]
 pub async fn runtime_refresh_system_proxy() -> CmdResult<()> {
     let _transaction_guard = CoreManager::begin_config_transaction().await;
-    let enabled = Config::verge().await.data_arc().enable_system_proxy.unwrap_or(false);
+    let verge = Config::verge().await.data_arc();
+    ensure_verge_source_readable(&verge)?;
+    let enabled = configured_system_proxy_enabled(&verge);
+    ensure_system_proxy_runtime_source_readable(&verge, enabled).await?;
+    drop(verge);
     if !enabled {
         return Ok(());
     }
@@ -888,6 +1107,7 @@ pub async fn runtime_update_tun_settings(settings: TunSettingsUpdate) -> CmdResu
     let _transaction_guard = CoreManager::begin_config_transaction().await;
     validate_tun_settings(&settings)?;
     let clash = Config::clash().await.data_arc();
+    ensure_clash_source_readable(&clash)?;
     let existing_tun = clash.0.get("tun").and_then(Value::as_mapping);
     let patch = tun_settings_patch(settings, existing_tun);
     drop(clash);
@@ -953,15 +1173,14 @@ async fn rollback_connection_state_in_transaction(previous_mode: &str, previous_
 }
 
 async fn patch_connection_state_in_transaction(mode: RuntimeConnectMode, enabled: bool) -> CmdResult<()> {
-    let previous_mode = Config::clash()
-        .await
-        .data_arc()
-        .0
-        .get("mode")
-        .and_then(Value::as_str)
-        .unwrap_or("rule")
-        .to_owned();
+    ensure_tun_enable_allowed(enabled && mode.requires_tun()).await?;
+
+    let clash = Config::clash().await.data_arc();
+    ensure_clash_source_readable(&clash)?;
+    let previous_mode = clash.0.get("mode").and_then(Value::as_str).unwrap_or("rule").to_owned();
+    drop(clash);
     let previous_verge = Config::verge().await.data_arc();
+    ensure_verge_source_readable(&previous_verge)?;
     let previous_connection_state = IVerge {
         enable_tun_mode: previous_verge.enable_tun_mode,
         enable_system_proxy: previous_verge.enable_system_proxy,
@@ -1010,7 +1229,8 @@ pub async fn runtime_set_connection_enabled(mode: RuntimeConnectMode, enabled: b
 pub async fn runtime_set_connection_mode(mode: RuntimeConnectMode) -> CmdResult<()> {
     let _transaction_guard = CoreManager::begin_config_transaction().await;
     let verge = Config::verge().await.data_arc();
-    let enabled = verge.enable_tun_mode.unwrap_or(false) || verge.enable_system_proxy.unwrap_or(false);
+    ensure_verge_source_readable(&verge)?;
+    let enabled = configured_tun_enabled(&verge) || configured_system_proxy_enabled(&verge);
     drop(verge);
     if enabled {
         return patch_connection_state_in_transaction(mode, true).await;
@@ -1030,7 +1250,10 @@ pub async fn runtime_set_connection_mode(mode: RuntimeConnectMode) -> CmdResult<
 
 #[tauri::command]
 pub async fn runtime_set_tun_enabled(enabled: bool) -> CmdResult<()> {
-    feat::patch_verge(
+    let _transaction_guard = CoreManager::begin_config_transaction().await;
+    ensure_verge_source_readable(&Config::verge().await.data_arc())?;
+    ensure_tun_enable_allowed(enabled).await?;
+    feat::patch_verge_in_transaction(
         &IVerge {
             enable_tun_mode: Some(enabled),
             ..IVerge::default()
@@ -1044,8 +1267,39 @@ pub async fn runtime_set_tun_enabled(enabled: bool) -> CmdResult<()> {
 }
 
 #[tauri::command]
+pub async fn runtime_disable_tun_if_unavailable() -> CmdResult<bool> {
+    let _transaction_guard = CoreManager::begin_config_transaction().await;
+    let verge = Config::verge().await.data_arc();
+    ensure_verge_source_readable(&verge)?;
+    if !configured_tun_enabled(&verge) {
+        return Ok(false);
+    }
+    drop(verge);
+
+    let is_admin = is_current_app_handle_admin(handle::Handle::app_handle());
+    let service_availability = super::service::probe_service_availability().await?;
+    if !should_disable_tun_for_service_availability(is_admin, service_availability) {
+        return Ok(false);
+    }
+
+    feat::patch_verge_in_transaction(
+        &IVerge {
+            enable_tun_mode: Some(false),
+            ..IVerge::default()
+        },
+        false,
+    )
+    .await
+    .map_err(|_| safe_error())?;
+    handle::Handle::refresh_verge();
+    Ok(true)
+}
+
+#[tauri::command]
 pub async fn runtime_set_system_proxy_enabled(enabled: bool) -> CmdResult<()> {
     let verge = Config::verge().await.latest_arc();
+    ensure_verge_source_readable(&verge)?;
+    ensure_system_proxy_runtime_source_readable(&verge, enabled).await?;
     let close_connections = !enabled && verge.auto_close_connection.unwrap_or(false);
     drop(verge);
     feat::patch_verge(
@@ -1058,20 +1312,84 @@ pub async fn runtime_set_system_proxy_enabled(enabled: bool) -> CmdResult<()> {
     .await
     .map_err(|_| safe_error())?;
     if close_connections {
-        let _ = handle::Handle::mihomo().await.close_all_connections().await;
+        handle::Handle::mihomo()
+            .await
+            .close_all_connections()
+            .await
+            .map_err(|_| String::from("connection_cleanup_failed"))?;
     }
     handle::Handle::refresh_verge();
     Ok(())
 }
 
-async fn persist_node_selection(group_name: &str, proxy_name: &str) -> CmdResult<(String, PrfItem)> {
+#[tauri::command]
+pub async fn runtime_install_service_and_restart_core() -> CmdResult<()> {
+    let _transaction_guard = CoreManager::begin_config_transaction().await;
+    let _service_action_guard = SERVICE_ACTION_LOCK.lock().await;
+    ensure_verge_source_readable(&Config::verge().await.data_arc())?;
+    let service_availability = super::service::probe_service_availability().await?;
+    if service_availability.is_ready() {
+        CoreManager::global().restart_core().await.map_err(|_| safe_error())?;
+        handle::Handle::refresh_clash();
+        return Ok(());
+    }
+
+    let install_result = super::service::install_service().await;
+    if install_result.is_err() || !service_availability_is(super::service::ServiceAvailabilityView::Ready).await {
+        let service_rollback = restore_service_availability(service_availability).await;
+        let core_rollback = CoreManager::global().restart_core().await.is_ok();
+        return Err(service_action_failure(service_rollback, core_rollback));
+    }
+    if CoreManager::global().restart_core().await.is_err() {
+        let service_rollback = restore_service_availability(service_availability).await;
+        let core_rollback = CoreManager::global().restart_core().await.is_ok();
+        return Err(service_action_failure(service_rollback, core_rollback));
+    }
+    handle::Handle::refresh_clash();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn runtime_uninstall_service_and_restart_core() -> CmdResult<()> {
+    let _transaction_guard = CoreManager::begin_config_transaction().await;
+    let _service_action_guard = SERVICE_ACTION_LOCK.lock().await;
+    let verge = Config::verge().await.data_arc();
+    ensure_verge_source_readable(&verge)?;
+    if configured_tun_enabled(&verge) {
+        return Err("tun_must_be_disabled".into());
+    }
+
+    let service_availability = super::service::probe_service_availability().await?;
+    if !service_availability.is_installed() {
+        return Err("service_not_installed".into());
+    }
+
+    let stop_result = CoreManager::global().stop_core().await;
+    if stop_result.is_err() && service_availability.is_ready() {
+        return Err(safe_error());
+    }
+    let uninstall_result = super::service::uninstall_service().await;
+    if uninstall_result.is_err() || !service_availability_is(super::service::ServiceAvailabilityView::Absent).await {
+        let service_rollback = restore_service_availability(service_availability).await;
+        let core_rollback = CoreManager::global().restart_core().await.is_ok();
+        return Err(service_action_failure(service_rollback, core_rollback));
+    }
+    if CoreManager::global().restart_core().await.is_err() {
+        let service_rollback = restore_service_availability(service_availability).await;
+        let core_rollback = CoreManager::global().restart_core().await.is_ok();
+        return Err(service_action_failure(service_rollback, core_rollback));
+    }
+    handle::Handle::refresh_clash();
+    Ok(())
+}
+
+async fn persist_node_selection(group_name: &str, proxy_name: &str) -> CmdResult<(String, Option<Vec<PrfSelected>>)> {
     let profiles = Config::profiles().await.data_arc();
     let current = profiles.current.clone().ok_or_else(safe_error)?;
-    let previous_item: PrfItem = profiles.get_item(&current).map_err(|_| safe_error())?.clone();
-    let mut item = previous_item.clone();
+    let previous_selected = profiles.get_item(&current).map_err(|_| safe_error())?.selected.clone();
     drop(profiles);
 
-    let selected = item.selected.get_or_insert_default();
+    let mut selected = previous_selected.clone().unwrap_or_default();
     if let Some(entry) = selected
         .iter_mut()
         .find(|entry| entry.name.as_deref() == Some(group_name))
@@ -1083,10 +1401,10 @@ async fn persist_node_selection(group_name: &str, proxy_name: &str) -> CmdResult
             now: Some(proxy_name.into()),
         });
     }
-    profiles_patch_item_safe(&current, &item)
+    profiles_replace_item_selected_safe(&current, Some(selected))
         .await
         .map_err(|_| safe_error())?;
-    Ok((current, previous_item))
+    Ok((current, previous_selected))
 }
 
 async fn select_runtime_node(group_name: &str, proxy_name: &str) -> CmdResult<()> {
@@ -1101,12 +1419,117 @@ async fn select_runtime_node(group_name: &str, proxy_name: &str) -> CmdResult<()
     Ok(())
 }
 
+async fn current_runtime_selection(group_name: &str) -> Option<std::string::String> {
+    let mihomo = handle::Handle::mihomo().await;
+    tokio::time::timeout(Duration::from_secs(2), mihomo.get_group_by_name(group_name))
+        .await
+        .ok()?
+        .ok()?
+        .now
+}
+
+async fn select_runtime_node_verified(group_name: &str, proxy_name: &str) -> CmdResult<()> {
+    let operation = select_runtime_node(group_name, proxy_name).await;
+    if current_runtime_selection(group_name).await.as_deref() == Some(proxy_name) {
+        return Ok(());
+    }
+    operation.and(Err(safe_error()))
+}
+
+async fn restore_runtime_node(group_name: &str, previous_proxy: &str) -> bool {
+    select_runtime_node(group_name, previous_proxy).await.is_ok()
+        && current_runtime_selection(group_name).await.as_deref() == Some(previous_proxy)
+}
+
+async fn current_runtime_node(group_name: &str) -> Option<std::string::String> {
+    let mihomo = handle::Handle::mihomo().await;
+    tokio::time::timeout(Duration::from_secs(2), async {
+        let mut selected = mihomo.get_group_by_name(group_name).await.ok()?.now?;
+        for _ in 0..7 {
+            let Ok(group) = mihomo.get_group_by_name(&selected).await else {
+                break;
+            };
+            let Some(next) = group.now else {
+                break;
+            };
+            if next == selected {
+                break;
+            }
+            selected = next;
+        }
+        Some(selected)
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
+async fn cleanup_previous_node_connections(
+    group_name: std::string::String,
+    expected_current_proxy: std::string::String,
+    previous_proxy: std::string::String,
+) -> Result<(), ()> {
+    let _profile_guard = crate::cmd::wait_profile_switch_guard().await;
+    let _selection_guard = NODE_SELECTION_LOCK.lock().await;
+    if current_runtime_node(&group_name).await.as_deref() != Some(expected_current_proxy.as_str()) {
+        return Ok(());
+    }
+
+    let mihomo = handle::Handle::mihomo().await;
+    let connections = mihomo.get_connections().await.map_err(|_| ())?;
+    let mut close_failed = false;
+    for connection in connections.connections.unwrap_or_default() {
+        if connection.chains.iter().any(|chain| chain == &previous_proxy)
+            && mihomo.close_connection(&connection.id).await.is_err()
+        {
+            close_failed = true;
+        }
+    }
+    if close_failed { Err(()) } else { Ok(()) }
+}
+
+fn schedule_previous_node_connection_cleanup(
+    group_name: std::string::String,
+    expected_current_proxy: std::string::String,
+    previous_proxy: std::string::String,
+) {
+    tauri::async_runtime::spawn(async move {
+        let cleanup = tokio::time::timeout(
+            Duration::from_secs(5),
+            cleanup_previous_node_connections(group_name, expected_current_proxy, previous_proxy),
+        )
+        .await;
+        if !matches!(cleanup, Ok(Ok(()))) {
+            logging!(warn, Type::Core, "Previous node connection cleanup did not complete");
+        }
+    });
+}
+
 #[tauri::command]
-pub async fn runtime_select_node(group_name: String, proxy_name: String, persist: bool) -> CmdResult<()> {
+pub async fn runtime_select_node(
+    group_name: String,
+    proxy_name: String,
+    persist: bool,
+    close_previous_connections: bool,
+) -> CmdResult<()> {
     let _profile_guard = crate::cmd::wait_profile_switch_guard().await;
     let _selection_guard = NODE_SELECTION_LOCK.lock().await;
     validate_node_label(&group_name)?;
     validate_node_label(&proxy_name)?;
+    let previous_runtime_selection = current_runtime_selection(&group_name).await.ok_or_else(safe_error)?;
+    let previous_proxy = if close_previous_connections {
+        let previous = current_runtime_node(&group_name).await;
+        if previous.is_none() {
+            logging!(
+                warn,
+                Type::Core,
+                "Previous node resolution unavailable; connection cleanup skipped"
+            );
+        }
+        previous
+    } else {
+        None
+    };
 
     let persisted_selection = if persist {
         Some(persist_node_selection(&group_name, &proxy_name).await?)
@@ -1114,17 +1537,49 @@ pub async fn runtime_select_node(group_name: String, proxy_name: String, persist
         None
     };
 
-    if let Err(error) = select_runtime_node(&group_name, &proxy_name).await {
-        if let Some((profile_id, previous_item)) = persisted_selection
-            && profiles_patch_item_safe(&profile_id, &previous_item).await.is_err()
-        {
+    if let Err(error) = select_runtime_node_verified(&group_name, &proxy_name).await {
+        let runtime_rollback = restore_runtime_node(&group_name, &previous_runtime_selection).await;
+        let persistence_rollback = if let Some((profile_id, previous_selected)) = persisted_selection {
+            profiles_replace_item_selected_safe(&profile_id, previous_selected)
+                .await
+                .is_ok()
+        } else {
+            true
+        };
+        if !runtime_rollback || !persistence_rollback {
             return Err(rollback_error());
         }
         return Err(error);
     }
     handle::Handle::refresh_clash();
     let _ = tray::Tray::global().update_menu().await;
+    if let Some(previous_proxy) = previous_proxy {
+        let expected_current_proxy = current_runtime_node(&group_name).await;
+        if let Some(expected_current_proxy) = expected_current_proxy
+            && previous_proxy != expected_current_proxy
+        {
+            schedule_previous_node_connection_cleanup(group_name.to_string(), expected_current_proxy, previous_proxy);
+        }
+    }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn runtime_probe_node_delay(
+    proxy_name: String,
+    target: RuntimeProbeTarget,
+    timeout_ms: u32,
+) -> CmdResult<u32> {
+    validate_node_label(&proxy_name)?;
+    if !(500..=60_000).contains(&timeout_ms) {
+        return Err("invalid_latency_probe".into());
+    }
+    handle::Handle::mihomo()
+        .await
+        .delay_proxy_by_name(&proxy_name, target.url(), timeout_ms)
+        .await
+        .map(|result| result.delay)
+        .map_err(|_| safe_error())
 }
 
 #[tauri::command]
@@ -1190,7 +1645,6 @@ mod runtime_boundary_tests {
             system_proxy_bypass: None,
             proxy_auto_config: None,
             use_default_bypass: None,
-            pac_file_content: None,
             proxy_host: None,
         }
     }
@@ -1207,20 +1661,226 @@ mod runtime_boundary_tests {
 
         let mut invalid = empty_preferences();
         invalid.language = Some("unsupported".into());
-        assert!(validate_runtime_preferences(&invalid).is_err());
+        assert!(validate_runtime_preferences(invalid).is_err());
 
         let mut invalid = empty_preferences();
         invalid.proxy_guard_duration = Some(0);
-        assert!(validate_runtime_preferences(&invalid).is_err());
+        assert!(validate_runtime_preferences(invalid).is_err());
 
         let mut invalid = empty_preferences();
         invalid.proxy_host = Some("127.0.0.1\nunsafe".into());
-        assert!(validate_runtime_preferences(&invalid).is_err());
+        assert!(validate_runtime_preferences(invalid).is_err());
+
+        let mut invalid = empty_preferences();
+        invalid.system_proxy_bypass = Some("localhost\nunsafe".into());
+        assert!(validate_runtime_preferences(invalid).is_err());
 
         let mut valid = empty_preferences();
         valid.language = Some("zh".into());
-        valid.pac_file_content = Some("function FindProxyForURL() {\n  return \"DIRECT\";\n}".into());
-        assert!(validate_runtime_preferences(&valid).is_ok());
+        assert!(validate_runtime_preferences(valid).is_ok());
+
+        assert!(
+            serde_json::from_value::<RuntimePreferencesUpdate>(json!({
+                "pac_file_content": "function FindProxyForURL() { return \"DIRECT\"; }"
+            }))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn unreadable_clash_state_is_not_exposed_as_authoritative_defaults() {
+        let readable = crate::config::IClashTemp(serde_yaml_ng::Mapping::new(), false);
+        let unreadable = crate::config::IClashTemp(serde_yaml_ng::Mapping::new(), true);
+        assert!(ensure_clash_source_readable(&readable).is_ok());
+        assert!(ensure_clash_source_readable(&unreadable).is_err());
+    }
+
+    #[test]
+    fn tun_enable_request_requires_admin_or_service_authority() {
+        assert!(tun_enable_request_allowed(false, false, false));
+        assert!(!tun_enable_request_allowed(true, false, false));
+        assert!(tun_enable_request_allowed(true, true, false));
+        assert!(tun_enable_request_allowed(true, false, true));
+        assert!(tun_enable_request_allowed(true, true, true));
+
+        assert!(!RuntimeConnectMode::System.requires_tun());
+        assert!(RuntimeConnectMode::Both.requires_tun());
+        assert!(RuntimeConnectMode::Smart.requires_tun());
+    }
+
+    #[test]
+    fn service_action_failure_distinguishes_compensated_and_partial_state() {
+        assert_eq!(service_action_failure(true, true), safe_error());
+        assert_eq!(service_action_failure(false, true), rollback_error());
+        assert_eq!(service_action_failure(true, false), rollback_error());
+        assert_eq!(service_action_failure(false, false), rollback_error());
+    }
+
+    #[test]
+    fn service_availability_matching_preserves_operational_class() {
+        use super::super::service::ServiceAvailabilityView;
+
+        assert!(service_rollback_class_matches(
+            ServiceAvailabilityView::Absent,
+            ServiceAvailabilityView::Absent
+        ));
+        assert!(!service_rollback_class_matches(
+            ServiceAvailabilityView::Absent,
+            ServiceAvailabilityView::InstalledUnavailable
+        ));
+        assert!(service_rollback_class_matches(
+            ServiceAvailabilityView::Ready,
+            ServiceAvailabilityView::Ready
+        ));
+        assert!(!service_rollback_class_matches(
+            ServiceAvailabilityView::Ready,
+            ServiceAvailabilityView::InstalledUnavailable
+        ));
+        assert!(service_rollback_class_matches(
+            ServiceAvailabilityView::InstalledUnavailable,
+            ServiceAvailabilityView::Ready
+        ));
+    }
+
+    #[test]
+    fn automatic_tun_disable_requires_authoritative_service_absence() {
+        use super::super::service::ServiceAvailabilityView;
+
+        assert!(should_disable_tun_for_service_availability(
+            false,
+            ServiceAvailabilityView::Absent
+        ));
+        assert!(!should_disable_tun_for_service_availability(
+            false,
+            ServiceAvailabilityView::InstalledUnavailable
+        ));
+        assert!(!should_disable_tun_for_service_availability(
+            false,
+            ServiceAvailabilityView::Ready
+        ));
+        assert!(!should_disable_tun_for_service_availability(
+            true,
+            ServiceAvailabilityView::Absent
+        ));
+    }
+
+    #[tokio::test]
+    async fn service_action_lock_order_waits_for_the_config_transaction() {
+        let config_guard = CoreManager::begin_config_transaction().await;
+        let (attempted_tx, attempted_rx) = tokio::sync::oneshot::channel();
+        let (acquired_tx, acquired_rx) = tokio::sync::oneshot::channel();
+
+        let waiter = tokio::spawn(async move {
+            let _ = attempted_tx.send(());
+            let _config_guard = CoreManager::begin_config_transaction().await;
+            let _service_guard = SERVICE_ACTION_LOCK.lock().await;
+            let _ = acquired_tx.send(());
+        });
+
+        assert!(attempted_rx.await.is_ok(), "waiter did not start");
+        let mut acquired_rx = acquired_rx;
+        assert!(
+            tokio::time::timeout(Duration::from_millis(25), &mut acquired_rx)
+                .await
+                .is_err()
+        );
+
+        drop(config_guard);
+        assert!(
+            matches!(
+                tokio::time::timeout(Duration::from_secs(1), &mut acquired_rx).await,
+                Ok(Ok(()))
+            ),
+            "waiter did not acquire locks"
+        );
+        assert!(waiter.await.is_ok(), "waiter task failed");
+    }
+
+    #[test]
+    fn proxy_hosts_are_semantically_validated_and_canonicalized() -> CmdResult<()> {
+        for invalid in [
+            "https://example.test",
+            "example.test:7890",
+            "bad_host",
+            "-leading.example",
+            "trailing-.example",
+            "999.999.999.999",
+            "[127.0.0.1]",
+            "example.test/path",
+        ] {
+            let mut preferences = empty_preferences();
+            preferences.proxy_host = Some(invalid.into());
+            assert!(
+                validate_runtime_preferences(preferences).is_err(),
+                "accepted invalid proxy host: {invalid}"
+            );
+        }
+
+        for (input, expected) in [
+            ("LOCALHOST", "localhost"),
+            ("127.0.0.1", "127.0.0.1"),
+            ("2001:0db8::1", "[2001:db8::1]"),
+            ("[2001:0db8::1]", "[2001:db8::1]"),
+        ] {
+            let mut preferences = empty_preferences();
+            preferences.proxy_host = Some(input.into());
+            let validated = validate_runtime_preferences(preferences)?;
+            assert_eq!(validated.proxy_host.as_deref(), Some(expected));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn preferences_view_does_not_return_an_invalid_stored_proxy_host() {
+        let invalid = IVerge {
+            proxy_host: Some("https://example.test/private".into()),
+            ..Default::default()
+        };
+        let invalid_view = runtime_preferences_view(&invalid);
+        assert_eq!(invalid_view.proxy_host, None);
+        assert!(!invalid_view.proxy_host_valid);
+
+        let valid = IVerge {
+            proxy_host: Some("2001:0db8::1".into()),
+            ..Default::default()
+        };
+        let valid_view = runtime_preferences_view(&valid);
+        assert_eq!(valid_view.proxy_host.as_deref(), Some("[2001:db8::1]"));
+        assert!(valid_view.proxy_host_valid);
+
+        let default_view = runtime_preferences_view(&IVerge::default());
+        assert_eq!(default_view.proxy_host, None);
+        assert!(default_view.proxy_host_valid);
+    }
+
+    #[test]
+    fn legacy_missing_connection_flags_are_authoritatively_disabled() {
+        let legacy = IVerge::default();
+        assert!(!configured_tun_enabled(&legacy));
+        assert!(!configured_system_proxy_enabled(&legacy));
+
+        let enabled = IVerge {
+            enable_tun_mode: Some(true),
+            enable_system_proxy: Some(true),
+            ..Default::default()
+        };
+        assert!(configured_tun_enabled(&enabled));
+        assert!(configured_system_proxy_enabled(&enabled));
+    }
+
+    #[test]
+    fn preferences_view_serializes_with_the_renderer_snake_case_contract() -> Result<(), serde_json::Error> {
+        let serialized = serde_json::to_value(runtime_preferences_view(&IVerge::default()))?;
+
+        assert!(serialized.get("enable_tun_mode").is_some());
+        assert!(serialized.get("enable_system_proxy").is_some());
+        assert!(serialized.get("proxy_host_valid").is_some());
+        assert!(serialized.get("enableTunMode").is_none());
+        assert!(serialized.get("enableSystemProxy").is_none());
+        assert_eq!(serialized["enable_tun_mode"], false);
+        assert_eq!(serialized["enable_system_proxy"], false);
+        assert_eq!(serialized["proxy_host_valid"], true);
+        Ok(())
     }
 
     #[test]
@@ -1236,6 +1896,20 @@ mod runtime_boundary_tests {
         assert!(serialized["enable_tun_mode"].is_null());
         assert!(serialized["clash_core"].is_null());
         Ok(())
+    }
+
+    #[test]
+    fn proxy_host_updates_generate_a_managed_pac_without_renderer_content() {
+        let mut preferences = empty_preferences();
+        preferences.proxy_host = Some("[2001:db8::1]".into());
+        let patch = runtime_preferences_patch(preferences);
+
+        assert_eq!(
+            patch.pac_file_content.as_deref(),
+            Some(
+                "function FindProxyForURL(url, host) {\n  return \"PROXY [2001:db8::1]:%mixed-port%; SOCKS5 [2001:db8::1]:%mixed-port%; DIRECT;\";\n}\n"
+            )
+        );
     }
 
     #[test]

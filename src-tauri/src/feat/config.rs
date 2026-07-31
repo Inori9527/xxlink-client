@@ -6,7 +6,6 @@ use crate::{
 use anyhow::{Result, anyhow};
 use bitflags::bitflags;
 use serde_yaml_ng::Mapping;
-use xxlink_draft::SharedDraft;
 use xxlink_logging::{Type, logging};
 
 pub(crate) async fn patch_clash_in_transaction(patch: &Mapping) -> Result<()> {
@@ -73,6 +72,8 @@ fn determine_update_flags(patch: &IVerge) -> UpdateFlags {
     let pac = patch.proxy_auto_config;
     let pac_content = &patch.pac_file_content;
     let proxy_bypass = &patch.system_proxy_bypass;
+    let proxy_host = &patch.proxy_host;
+    let use_default_bypass = patch.use_default_bypass;
     let language = &patch.language;
     let mixed_port = patch.verge_mixed_port;
     #[cfg(not(target_os = "windows"))]
@@ -143,6 +144,8 @@ fn determine_update_flags(patch: &IVerge) -> UpdateFlags {
     if proxy_bypass.is_some()
         || pac_content.is_some()
         || pac.is_some()
+        || proxy_host.is_some()
+        || use_default_bypass.is_some()
         || enable_proxy_guard.is_some()
         || proxy_guard_duration.is_some()
     {
@@ -271,8 +274,27 @@ pub(crate) async fn patch_verge_in_transaction(patch: &IVerge, not_save_file: bo
     Ok(())
 }
 
-pub async fn fetch_verge_config() -> Result<SharedDraft<IVerge>> {
-    let draft = Config::verge().await;
-    let data = draft.data_arc();
-    Ok(data)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn proxy_host_change_requires_system_proxy_refresh() {
+        let patch = IVerge {
+            proxy_host: Some("127.0.0.1".into()),
+            ..Default::default()
+        };
+
+        assert!(determine_update_flags(&patch).contains(UpdateFlags::SYS_PROXY));
+    }
+
+    #[test]
+    fn default_bypass_change_requires_system_proxy_refresh() {
+        let patch = IVerge {
+            use_default_bypass: Some(false),
+            ..Default::default()
+        };
+
+        assert!(determine_update_flags(&patch).contains(UpdateFlags::SYS_PROXY));
+    }
 }

@@ -21,6 +21,19 @@ const systemProxy = read('src/hooks/use-system-proxy-state.ts')
 const controls = read('src/components/shared/proxy-control-switches.tsx')
 const systemState = read('src/hooks/use-system-state.ts')
 const tunViewer = read('src/components/setting/mods/tun-viewer.tsx')
+const sysproxyViewer = read('src/components/setting/mods/sysproxy-viewer.tsx')
+const commands = read('src/services/cmds.ts')
+const nodeController = read('src/services/runtime-node-controller.ts')
+const readiness = read('src/services/selected-node-readiness.ts')
+const delayService = read('src/services/delay.ts')
+const lifecycleController = read('src/services/app-lifecycle-controller.ts')
+const appInitialization = read(
+  'src/pages/_layout/hooks/use-app-initialization.ts',
+)
+const runtimeStatePolicy = read('src/services/runtime-state-policy.ts')
+const serviceCommands = read('src-tauri/src/cmd/service.rs')
+const sysopt = read('src-tauri/src/core/sysopt.rs')
+const profiles = read('src-tauri/src/config/profiles.rs')
 const appDataProvider = read('src/providers/app-data-provider.tsx')
 const desktopCapability = read('src-tauri/capabilities/desktop.json')
 
@@ -29,11 +42,15 @@ for (const command of [
   'runtime_set_connection_mode',
   'runtime_set_tun_enabled',
   'runtime_set_system_proxy_enabled',
+  'runtime_disable_tun_if_unavailable',
   'runtime_get_proxy_settings',
+  'runtime_get_preferences',
   'runtime_get_tun_settings',
   'runtime_update_tun_settings',
   'runtime_update_preferences',
   'runtime_refresh_system_proxy',
+  'runtime_install_service_and_restart_core',
+  'runtime_uninstall_service_and_restart_core',
   'runtime_select_node',
   'runtime_check_update',
   'runtime_install_update',
@@ -47,6 +64,12 @@ for (const command of [
     `command ${command} is not registered`,
   )
 }
+
+assert(
+  nodeController.includes("'runtime_probe_node_delay'") &&
+    lib.includes('cmd::runtime_probe_node_delay'),
+  'fixed-target node probe command is not registered behind its typed facade',
+)
 
 assert(
   rust.includes('enum RuntimeConnectMode') &&
@@ -78,7 +101,9 @@ assert(
     rust.includes(
       'let _transaction_guard = CoreManager::begin_config_transaction().await',
     ) &&
-    rust.includes('let previous_mode = Config::clash()') &&
+    rust.includes('let clash = Config::clash().await.data_arc()') &&
+    rust.includes('let previous_mode = clash.0.get("mode")') &&
+    rust.includes('ensure_clash_source_readable(&clash)') &&
     rust.includes('rollback_connection_state_in_transaction') &&
     rust.includes('previous_connection_state') &&
     rust
@@ -116,7 +141,13 @@ assert(
   !lib.includes('cmd::get_clash_info') &&
     !lib.includes('cmd::get_runtime_config') &&
     !lib.includes('cmd::patch_clash_config') &&
-    !lib.includes('cmd::patch_verge_config'),
+    !lib.includes('cmd::patch_verge_config') &&
+    !lib.includes('cmd::get_verge_config') &&
+    !lib.includes('cmd::start_core') &&
+    !lib.includes('cmd::stop_core') &&
+    !lib.includes('cmd::restart_core') &&
+    !lib.includes('cmd::install_service') &&
+    !lib.includes('cmd::uninstall_service'),
   'raw Mihomo secret/config commands remain registered',
 )
 assert(
@@ -250,10 +281,67 @@ const nodeSelectionCommand = rust.slice(
 )
 assert(
   nodeSelectionCommand.includes('persist_node_selection') &&
-    nodeSelectionCommand.includes('profiles_patch_item_safe') &&
-    nodeSelectionCommand.includes('previous_item') &&
-    !nodeSelectionCommand.includes('get_proxy_by_name'),
+    nodeSelectionCommand.includes('profiles_replace_item_selected_safe') &&
+    nodeSelectionCommand.includes('previous_selected') &&
+    nodeSelectionCommand.includes('previous_runtime_selection') &&
+    nodeSelectionCommand.includes('restore_runtime_node') &&
+    nodeSelectionCommand.includes('runtime_rollback') &&
+    nodeSelectionCommand.includes('persistence_rollback') &&
+    nodeSelectionCommand.includes('current_runtime_node') &&
+    nodeSelectionCommand.includes(
+      'schedule_previous_node_connection_cleanup',
+    ) &&
+    profiles.includes('replace_item_selected') &&
+    !nodeSelectionCommand.includes('get_proxy_by_name') &&
+    !controller.includes('getConnections') &&
+    !controller.includes('closeConnection'),
   'node selection cannot recover from an empty current selection or failed runtime apply',
+)
+assert(
+  nodeController.includes('target: RuntimeProbeTarget') &&
+    readiness.includes('READINESS_PROBE_TARGET_BY_URL') &&
+    !readiness.includes('delayProxyByName') &&
+    !delayService.includes('delayProxyByName') &&
+    !desktopCapability.includes('mihomo:allow-delay-proxy-by-name') &&
+    !desktopCapability.includes('mihomo:allow-get-connections') &&
+    !desktopCapability.includes('mihomo:allow-close-connection'),
+  'renderer retains arbitrary URL probes or raw connection controls',
+)
+assert(
+  commands.includes('service_availability_unavailable') &&
+    commands.includes('admin_state_unavailable') &&
+    serviceCommands.includes('enum ServiceAvailabilityView') &&
+    serviceCommands.includes('InstalledUnavailable') &&
+    systemState.includes("serviceAvailability: 'unknown'") &&
+    runtimeStatePolicy.includes('shouldDisableTunForUnavailableRuntime'),
+  'unknown service or admin state can be treated as authoritative disabled state',
+)
+assert(
+  rust.includes('static SERVICE_ACTION_LOCK') &&
+    rust.includes('runtime_install_service_and_restart_core') &&
+    rust.includes('runtime_uninstall_service_and_restart_core') &&
+    rust.includes('service_rollback') &&
+    rust.includes('core_rollback') &&
+    rust.includes('runtime_disable_tun_if_unavailable'),
+  'service lifecycle is not serialized, compensating, and atomically revalidated',
+)
+assert(
+  sysopt.includes('WindowsProxyRecoveryRecord') &&
+    sysopt.includes('win_registry_begin_proxy_mutation') &&
+    sysopt.includes('win_registry_commit_proxy_mutation') &&
+    sysopt.includes('win_registry_abort_proxy_mutation') &&
+    sysproxyViewer.includes('authoritativePreferences') &&
+    sysproxyViewer.includes('!authoritativeLoaded') &&
+    !sysproxyViewer.includes('pac_file_content') &&
+    !sysproxyViewer.includes('pac_content'),
+  'system proxy mutation or settings UI lacks transactional recovery and authoritative reads',
+)
+assert(
+  lifecycleController.includes("'update_ui_stage'") &&
+    lifecycleController.includes("'notify_ui_ready'") &&
+    !appInitialization.includes('@tauri-apps/api/core') &&
+    appInitialization.includes('appLifecycleController'),
+  'application startup bypasses the typed lifecycle controller',
 )
 assert(
   mine.includes('runtimeActionController.copyDiagnostics') &&

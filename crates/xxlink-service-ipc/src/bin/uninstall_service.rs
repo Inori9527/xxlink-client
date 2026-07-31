@@ -14,25 +14,20 @@ fn main() -> Result<(), Error> {
 
     let _ = uninstall_old_service();
     // 定义路径
-    let bundle_path =
-        "/Library/PrivilegedHelperTools/com.xxlink.desktop.service.bundle";
-    let plist_file =
-        "/Library/LaunchDaemons/com.xxlink.desktop.service.plist";
+    let bundle_path = "/Library/PrivilegedHelperTools/com.xxlink.desktop.service.bundle";
+    let plist_file = "/Library/LaunchDaemons/com.xxlink.desktop.service.plist";
     let service_id = "com.xxlink.desktop.service";
+    let service_target = format!("system/{service_id}");
 
     // 停止并卸载服务
-    let _ = run_command("launchctl", &["stop", service_id], debug);
-    let _ = run_command(
-        "launchctl",
-        &["disable", &format!("system/{}", service_id)],
-        debug,
-    );
-    let _ = run_command("launchctl", &["bootout", "system", plist_file], debug);
+    if command_succeeds("launchctl", &["print", &service_target], debug)? {
+        run_command("launchctl", &["bootout", "system", plist_file], debug)?;
+    }
+    run_command("launchctl", &["disable", &service_target], debug)?;
 
     // 删除文件
     if Path::new(plist_file).exists() {
-        std::fs::remove_file(plist_file)
-            .map_err(|e| anyhow::anyhow!("Failed to remove plist file: {}", e))?;
+        std::fs::remove_file(plist_file).map_err(|e| anyhow::anyhow!("Failed to remove plist file: {}", e))?;
     }
 
     // 删除整个 bundle 目录
@@ -52,26 +47,17 @@ fn main() -> Result<(), Error> {
     let debug = env::args().any(|arg| arg == "--debug");
 
     // Stop and disable service
-    let _ = run_command(
-        "systemctl",
-        &["stop", &format!("{}.service", SERVICE_NAME)],
-        debug,
-    );
-    let _ = run_command(
-        "systemctl",
-        &["disable", &format!("{}.service", SERVICE_NAME)],
-        debug,
-    );
+    run_command("systemctl", &["stop", &format!("{}.service", SERVICE_NAME)], debug)?;
+    run_command("systemctl", &["disable", &format!("{}.service", SERVICE_NAME)], debug)?;
 
     // Remove service file
     let unit_file = format!("/etc/systemd/system/{}.service", SERVICE_NAME);
     if std::path::Path::new(&unit_file).exists() {
-        std::fs::remove_file(&unit_file)
-            .map_err(|e| anyhow::anyhow!("Failed to remove service file: {}", e))?;
+        std::fs::remove_file(&unit_file).map_err(|e| anyhow::anyhow!("Failed to remove service file: {}", e))?;
     }
 
     // Reload systemd
-    let _ = run_command("systemctl", &["daemon-reload"], debug);
+    run_command("systemctl", &["daemon-reload"], debug)?;
 
     Ok(())
 }
@@ -83,7 +69,10 @@ fn main() -> anyhow::Result<()> {
         service::{ServiceAccess, ServiceState},
         service_manager::{ServiceManager, ServiceManagerAccess},
     };
-    use std::{thread, time::Duration};
+    use std::{
+        thread,
+        time::{Duration, Instant},
+    };
 
     let manager_access = ServiceManagerAccess::CONNECT;
     let service_manager = ServiceManager::local_computer(None::<&str>, manager_access)?;
@@ -93,15 +82,23 @@ fn main() -> anyhow::Result<()> {
 
     let service_status = service.query_status()?;
     if service_status.current_state != ServiceState::Stopped {
-        if let Err(err) = service.stop() {
-            eprintln!("{err}");
+        if service_status.current_state != ServiceState::StopPending {
+            service.stop()?;
         }
-        // Wait for service to stop
-        thread::sleep(Duration::from_secs(1));
+        let deadline = Instant::now() + Duration::from_secs(15);
+        loop {
+            if service.query_status()?.current_state == ServiceState::Stopped {
+                break;
+            }
+            if Instant::now() >= deadline {
+                return Err(anyhow::anyhow!("Timed out waiting for service to stop"));
+            }
+            thread::sleep(Duration::from_millis(250));
+        }
     }
 
     service.delete()?;
-    println!("Service uninstalled successfully. Resource cleanup warnings can be ignored.");
+    println!("Service uninstalled successfully.");
     Ok(())
 }
 
@@ -115,16 +112,11 @@ pub fn uninstall_old_service() -> Result<(), Error> {
     // Stop and unload service
     run_command("launchctl", &["stop", "io.github.clashverge.helper"], false)?;
     run_command("launchctl", &["bootout", "system", plist_file], false)?;
-    run_command(
-        "launchctl",
-        &["disable", "system/io.github.clashverge.helper"],
-        false,
-    )?;
+    run_command("launchctl", &["disable", "system/io.github.clashverge.helper"], false)?;
 
     // Remove files
     if Path::new(plist_file).exists() {
-        std::fs::remove_file(plist_file)
-            .map_err(|e| anyhow::anyhow!("Failed to remove plist file: {}", e))?;
+        std::fs::remove_file(plist_file).map_err(|e| anyhow::anyhow!("Failed to remove plist file: {}", e))?;
     }
 
     if Path::new(target_binary_path).exists() {
@@ -166,4 +158,16 @@ pub fn run_command(cmd: &str, args: &[&str], debug: bool) -> Result<(), Error> {
         stdout,
         stderr
     ))
+}
+
+#[cfg(target_os = "macos")]
+fn command_succeeds(cmd: &str, args: &[&str], debug: bool) -> Result<bool, Error> {
+    if debug {
+        println!("Checking: {} {}", cmd, args.join(" "));
+    }
+    let status = std::process::Command::new(cmd)
+        .args(args)
+        .status()
+        .map_err(|e| anyhow::anyhow!("Failed to execute '{}': {}", cmd, e))?;
+    Ok(status.success())
 }

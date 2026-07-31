@@ -1,4 +1,7 @@
-import { delayProxyByName, type ProxyDelay } from 'tauri-plugin-mihomo-api'
+import {
+  runtimeNodeController,
+  type RuntimeProbeTarget,
+} from '@/services/runtime-node-controller'
 
 export type SelectedNodeReadinessStatus =
   | 'disconnected'
@@ -32,6 +35,11 @@ export const SELECTED_NODE_READINESS_PROBE_URLS = [
   'http://cp.cloudflare.com/generate_204',
   'https://www.gstatic.com/generate_204',
 ] as const
+
+const READINESS_PROBE_TARGET_BY_URL = new Map<string, RuntimeProbeTarget>([
+  [SELECTED_NODE_READINESS_PROBE_URLS[0], 'cloudflare'],
+  [SELECTED_NODE_READINESS_PROBE_URLS[1], 'gstatic'],
+])
 
 export const isSelectedNodeConnected = (
   runtimeConnected: boolean,
@@ -71,21 +79,13 @@ export const shouldAutoSelectNode = ({
   nodeCount > 0 &&
   !currentSelectionValid
 
+type ProxyDelay = { delay: number }
+
 const getDelayValue = (result: ProxyDelay | number) =>
   typeof result === 'number' ? result : result.delay
 
-export const isReadinessProbeTargetSafe = (url: string) => {
-  try {
-    const parsed = new URL(url)
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return false
-    }
-    const host = parsed.hostname.toLowerCase().replace(/\.$/, '')
-    return host !== 'api.xxlink.net' && !host.endsWith('.xxlink.net')
-  } catch {
-    return false
-  }
-}
+export const isReadinessProbeTargetSafe = (url: string) =>
+  READINESS_PROBE_TARGET_BY_URL.has(url)
 
 export const assertReadinessProbeTargetsSafe = (
   probeUrls: readonly string[] = SELECTED_NODE_READINESS_PROBE_URLS,
@@ -99,7 +99,11 @@ const defaultProbe: SelectedNodeReadinessProbe = async (
   proxyName,
   url,
   timeoutMs,
-) => delayProxyByName(proxyName, url, timeoutMs)
+) => {
+  const target = READINESS_PROBE_TARGET_BY_URL.get(url)
+  if (!target) throw new Error('unsafe_readiness_probe_target')
+  return runtimeNodeController.probeDelay(proxyName, target, timeoutMs)
+}
 
 export const checkSelectedNodeReadiness = async ({
   proxyName,

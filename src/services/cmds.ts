@@ -1,7 +1,11 @@
 import { invoke } from '@tauri-apps/api/core'
-import { getProxies, getProxyProviders } from 'tauri-plugin-mihomo-api'
+import { getProxies } from 'tauri-plugin-mihomo-api'
 
-import { reportSafeClientFailure } from '@/services/safe-client-error'
+import {
+  classifyClientError,
+  reportSafeClientFailure,
+  type SafeClientFailureScope,
+} from '@/services/safe-client-error'
 
 export async function enhanceProfiles() {
   return invoke<void>('enhance_profiles')
@@ -14,25 +18,12 @@ export async function calcuProxies(): Promise<{
   records: Record<string, IProxyItem>
   proxies: IProxyItem[]
 }> {
-  const [proxyResponse, providerResponse] = await Promise.all([
-    getProxies(),
-    calcuProxyProviders(),
-  ])
-
+  const proxyResponse = await getProxies()
   const proxyRecord = proxyResponse.proxies
-  const providerRecord = providerResponse
-
-  // provider name map
-  const providerMap = Object.fromEntries(
-    Object.entries(providerRecord).flatMap(([provider, item]) =>
-      item!.proxies.map((p) => [p.name, { ...p, provider }]),
-    ),
-  )
 
   // compatible with proxy-providers
   const generateItem = (name: string) => {
     if (proxyRecord[name]) return proxyRecord[name]
-    if (providerMap[name]) return providerMap[name]
     return {
       name,
       type: 'unknown',
@@ -101,28 +92,22 @@ export async function calcuProxies(): Promise<{
   }
 }
 
-export async function calcuProxyProviders() {
-  const providers = await getProxyProviders()
-  return Object.fromEntries(
-    Object.entries(providers.providers)
-      .sort()
-      .filter(
-        ([_, item]) =>
-          item?.vehicleType === 'HTTP' || item?.vehicleType === 'File',
-      ),
-  )
-}
-
-export async function getVergeConfig() {
-  return invoke<IVergeConfig>('get_verge_config')
-}
-
 export async function getSystemProxy() {
   return invoke<{
     enable: boolean
     server: string
     bypass: string
   }>('get_sys_proxy')
+}
+
+const rejectSafeRead = (
+  scope: SafeClientFailureScope,
+  code: string,
+  error: unknown,
+): never => {
+  const kind = classifyClientError(error).kind
+  reportSafeClientFailure(scope, error)
+  throw new Error(code, { cause: kind })
 }
 
 export async function getAutotemProxy() {
@@ -133,11 +118,11 @@ export async function getAutotemProxy() {
     }>('get_auto_proxy')
     return result
   } catch (error) {
-    reportSafeClientFailure('auto-proxy-read', error)
-    return {
-      enable: false,
-      url: '',
-    }
+    return rejectSafeRead(
+      'auto-proxy-read',
+      'auto_proxy_state_unavailable',
+      error,
+    )
   }
 }
 
@@ -163,20 +148,24 @@ export const getAppUptime = async () => {
   return invoke<number>('get_app_uptime')
 }
 
-// 系统服务是否可用
-export const isServiceAvailable = async () => {
+export type ServiceAvailability = 'absent' | 'ready' | 'installed_unavailable'
+
+// 获取系统服务的安全展示状态
+export const getServiceAvailability = async () => {
   try {
-    return await invoke<boolean>('is_service_available')
+    return await invoke<ServiceAvailability>('get_service_availability')
   } catch (error) {
-    reportSafeClientFailure('service-availability-check', error)
-    return false
+    return rejectSafeRead(
+      'service-availability-check',
+      'service_availability_unavailable',
+      error,
+    )
   }
 }
 export const isAdmin = async () => {
   try {
     return await invoke<boolean>('app_is_admin')
   } catch (error) {
-    reportSafeClientFailure('admin-check', error)
-    return false
+    return rejectSafeRead('admin-check', 'admin_state_unavailable', error)
   }
 }

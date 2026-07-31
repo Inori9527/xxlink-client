@@ -1,17 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
-import { useRef } from 'react'
 
 import { useVerge } from '@/hooks/use-verge'
 import { useAppData } from '@/providers/app-data-context'
 import { getAutotemProxy } from '@/services/cmds'
 import { queryClient } from '@/services/query-client'
 import { runtimeActionController } from '@/services/runtime-action-controller'
+import { canSetSystemProxyEnabled } from '@/services/runtime-state-policy'
 
 // 系统代理状态检测统一逻辑
 export const useSystemProxyState = () => {
-  const { verge, mutateVerge } = useVerge()
-  const { sysproxy, proxySettings } = useAppData()
-  const { data: autoproxy } = useQuery({
+  const { verge, hasLastKnownPreferences, preferencesReady, refreshVerge } =
+    useVerge()
+  const { sysproxy, proxySettings, proxySettingsReady, sysproxyReady } =
+    useAppData()
+  const { data: autoproxy, isError: autoproxyReadFailed } = useQuery({
     queryKey: ['getAutotemProxy'],
     queryFn: getAutotemProxy,
     refetchOnWindowFocus: true,
@@ -22,11 +24,25 @@ export const useSystemProxyState = () => {
     enable_system_proxy,
     proxy_auto_config,
     proxy_host,
+    proxy_host_valid,
     verge_mixed_port,
   } = verge ?? {}
+  const authoritativeStateReady =
+    preferencesReady &&
+    proxy_host_valid === true &&
+    proxySettingsReady &&
+    sysproxyReady &&
+    autoproxy !== undefined &&
+    !autoproxyReadFailed
+  const lastKnownEnabled = hasLastKnownPreferences
+    ? (enable_system_proxy ?? false)
+    : null
 
   // OS 实际状态：enable + 地址匹配本应用
   const indicator = (() => {
+    if (!authoritativeStateReady) {
+      return lastKnownEnabled === true ? true : null
+    }
     const host = proxy_host || '127.0.0.1'
     if (proxy_auto_config) {
       if (!autoproxy?.enable) return false
@@ -39,33 +55,35 @@ export const useSystemProxyState = () => {
     }
   })()
 
-  // "最后一次生效"模式：快速连续点击时，只执行最终状态
-  const pendingRef = useRef<boolean | null>(null)
-  const busyRef = useRef(false)
+  const canToggle = authoritativeStateReady || lastKnownEnabled === true
 
   const toggleSystemProxy = async (enabled: boolean) => {
-    mutateVerge(
-      (prev) => (prev ? { ...prev, enable_system_proxy: enabled } : prev),
-      false,
-    )
-    pendingRef.current = enabled
-
-    if (busyRef.current) return
-    busyRef.current = true
-
-    try {
-      while (pendingRef.current !== null) {
-        const target = pendingRef.current
-        pendingRef.current = null
-        await runtimeActionController.setSystemProxyEnabled(target)
-      }
-    } finally {
-      busyRef.current = false
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['getSystemProxy'] }),
-        queryClient.invalidateQueries({ queryKey: ['getAutotemProxy'] }),
-      ])
+    if (
+      !canSetSystemProxyEnabled({
+        requestedEnabled: enabled,
+        authoritativeStateReady,
+        lastKnownEnabled,
+      })
+    ) {
+      throw new Error('system_proxy_state_unavailable')
     }
+    let operationError: unknown
+    try {
+      await runtimeActionController.setSystemProxyEnabled(enabled)
+    } catch (error) {
+      operationError = error
+    }
+
+    const refreshResults = await Promise.allSettled([
+      refreshVerge(),
+      queryClient.invalidateQueries({ queryKey: ['getSystemProxy'] }),
+      queryClient.invalidateQueries({ queryKey: ['getAutotemProxy'] }),
+    ])
+    if (operationError) throw operationError
+    const refreshFailure = refreshResults.find(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    )
+    if (refreshFailure) throw refreshFailure.reason
   }
 
   const invalidateProxyState = () =>
@@ -76,7 +94,9 @@ export const useSystemProxyState = () => {
 
   return {
     indicator,
-    configState: enable_system_proxy ?? false,
+    ready: authoritativeStateReady,
+    canToggle,
+    configState: preferencesReady ? (enable_system_proxy ?? false) : null,
     toggleSystemProxy,
     invalidateProxyState,
   }

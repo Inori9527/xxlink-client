@@ -1,11 +1,12 @@
 use super::{IClashTemp, IProfiles, IVerge};
 use crate::{
+    cmd::service::{ServiceAvailabilityView, probe_service_availability},
     config::{PrfItem, profiles_append_item_safe, runtime::IRuntime},
     constants::{files, timing},
     core::{
         CoreManager,
         handle::{self, Handle},
-        service, tray,
+        tray,
         validate::{ARCH_MISMATCH_PREFIX, CoreConfigValidator},
     },
     enhance,
@@ -14,14 +15,14 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use backon::{ExponentialBuilder, Retryable as _};
-use xxlink_draft::Draft;
-use xxlink_logging::{Type, logging, logging_error};
 use serde_yaml_ng::{Mapping, Value};
 use smartstring::alias::String;
 use std::{collections::HashSet, path::PathBuf};
 use tauri_plugin_xxlink_sysinfo::is_current_app_handle_admin;
 use tokio::sync::OnceCell;
 use tokio::time::sleep;
+use xxlink_draft::Draft;
+use xxlink_logging::{Type, logging, logging_error};
 
 pub struct Config {
     clash_config: Draft<IClashTemp>,
@@ -63,6 +64,7 @@ impl Config {
 
     /// 初始化订阅
     pub async fn init_config() -> Result<()> {
+        Self::ensure_runtime_sources_readable().await?;
         Self::ensure_default_profile_items().await?;
 
         let verge = Self::verge().await.latest_arc();
@@ -71,8 +73,8 @@ impl Config {
         // init Tun mode
         let handle = Handle::app_handle();
         let is_admin = is_current_app_handle_admin(handle);
-        let is_service_available = service::is_service_available().await.is_ok();
-        if !is_admin && !is_service_available {
+        let service_availability = probe_service_availability().await;
+        if should_disable_tun_for_service_state(is_admin, service_availability.as_ref()) {
             let verge = Self::verge().await;
             verge.edit_draft(|d| {
                 d.enable_tun_mode = Some(false);
@@ -204,6 +206,7 @@ impl Config {
     }
 
     pub async fn generate() -> Result<()> {
+        Self::ensure_runtime_sources_readable().await?;
         let (mut config, exists_keys, logs) = enhance::enhance().await;
 
         sanitize_tunnels_proxy(&mut config);
@@ -220,6 +223,10 @@ impl Config {
     }
 
     pub async fn verify_config_initialization() {
+        if Self::ensure_runtime_sources_readable().await.is_err() {
+            logging!(error, Type::Setup, "Runtime configuration sources are unavailable");
+            return;
+        }
         let backoff = ExponentialBuilder::default()
             .with_min_delay(std::time::Duration::from_millis(100))
             .with_max_delay(std::time::Duration::from_secs(2))
@@ -264,6 +271,30 @@ impl Config {
         let _ = tokio::join!(save_clash_task, save_verge_task, save_profiles_task);
         logging!(info, Type::Config, "save all draft data finished");
     }
+
+    pub async fn runtime_sources_readable() -> bool {
+        Self::ensure_runtime_sources_readable().await.is_ok()
+    }
+
+    async fn ensure_runtime_sources_readable() -> Result<()> {
+        let verge = Self::verge().await.latest_arc();
+        if verge.source_read_failed {
+            return Err(anyhow!("runtime preferences are unavailable"));
+        }
+        drop(verge);
+
+        if Self::clash().await.latest_arc().source_read_failed() {
+            return Err(anyhow!("runtime configuration is unavailable"));
+        }
+        Ok(())
+    }
+}
+
+const fn should_disable_tun_for_service_state(
+    is_admin: bool,
+    service_availability: Result<&ServiceAvailabilityView, &smartstring::alias::String>,
+) -> bool {
+    !is_admin && matches!(service_availability, Ok(ServiceAvailabilityView::Absent))
 }
 
 fn sanitize_tunnels_proxy(config: &mut Mapping) {
@@ -339,7 +370,7 @@ pub enum ConfigType {
     Check,
 }
 #[cfg(test)]
-mod tests {
+mod runtime_boundary_tests {
     use super::*;
     use std::mem;
 
@@ -371,5 +402,23 @@ mod tests {
         let draft = Draft::new(Box::new(IRuntime::new()));
         let box_iruntime_size = std::mem::size_of_val(&draft);
         assert_eq!(box_iruntime_size, std::mem::size_of::<Draft<Box<IRuntime>>>());
+    }
+
+    #[test]
+    fn tun_is_disabled_only_after_authoritative_service_absence() {
+        let probe_error = smartstring::alias::String::from("service_probe_failed");
+        assert!(should_disable_tun_for_service_state(
+            false,
+            Ok(&ServiceAvailabilityView::Absent)
+        ));
+        assert!(!should_disable_tun_for_service_state(
+            false,
+            Ok(&ServiceAvailabilityView::InstalledUnavailable)
+        ));
+        assert!(!should_disable_tun_for_service_state(false, Err(&probe_error)));
+        assert!(!should_disable_tun_for_service_state(
+            true,
+            Ok(&ServiceAvailabilityView::Absent)
+        ));
     }
 }
