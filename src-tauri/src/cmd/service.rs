@@ -67,6 +67,7 @@ fn classify_service_availability(registration_present: Result<bool, ()>) -> CmdR
     }
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn classify_registration_open_result(result: io::Result<()>) -> io::Result<bool> {
     match result {
         Ok(()) => Ok(true),
