@@ -1,5 +1,5 @@
-import KeyboardDoubleArrowLeftRoundedIcon from '@mui/icons-material/KeyboardDoubleArrowLeftRounded'
-import KeyboardDoubleArrowRightRoundedIcon from '@mui/icons-material/KeyboardDoubleArrowRightRounded'
+import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded'
+import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded'
 import {
   Alert,
   Box,
@@ -18,7 +18,6 @@ import { Outlet, useNavigate } from 'react-router'
 import brandIcon from '@/assets/image/brand-icon.png'
 import { BaseErrorBoundary } from '@/components/base'
 import { LayoutItem } from '@/components/layout/layout-item'
-import { LayoutTraffic } from '@/components/layout/layout-traffic'
 import { NoticeManager } from '@/components/layout/notice-manager'
 import { UpdateButton } from '@/components/layout/update-button'
 import { UpdatePrompt } from '@/components/layout/update-prompt'
@@ -55,7 +54,7 @@ const Layout = () => {
   const { sessionStatus } = useAuth()
   const { verge, patchVerge } = useVerge()
   const { language } = verge ?? {}
-  const navCollapsed = verge?.collapse_navbar ?? false
+  const navCollapsed = verge?.collapse_navbar ?? true
   const navToggleLabel = navCollapsed
     ? t('layout.components.navigation.menu.expandNavBar')
     : t('layout.components.navigation.menu.collapseNavBar')
@@ -162,55 +161,32 @@ const Layout = () => {
         <div className="layout-content">
           <div className="layout-content__left">
             <div className="the-logo" data-tauri-drag-region="false">
-              <div
-                data-tauri-drag-region="true"
-                style={{
-                  height: '27px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                }}
-              >
+              <div className="the-logo__brand" data-tauri-drag-region="true">
                 <Box
                   component="img"
+                  className="the-logo__icon"
                   src={brandIcon}
                   alt="XXLink"
                   sx={{
-                    width: 38,
-                    height: 38,
-                    mt: '-5px',
-                    mr: 1,
-                    ml: '-4px',
+                    width: 34,
+                    height: 34,
                     objectFit: 'contain',
                   }}
                 />
                 <Box
                   component="span"
+                  className="the-wordmark"
                   sx={{
                     color: 'text.primary',
-                    fontSize: 28,
+                    fontSize: 22,
                     fontWeight: 800,
-                    lineHeight: '28px',
-                    letterSpacing: '-0.03em',
+                    lineHeight: 1,
+                    letterSpacing: '-0.04em',
                   }}
                 >
                   XXLink
                 </Box>
               </div>
-              <UpdateButton className="the-newbtn" />
-              <IconButton
-                size="small"
-                data-tauri-drag-region="false"
-                title={navToggleLabel}
-                aria-label={navToggleLabel}
-                onClick={handleToggleNavCollapsed}
-                sx={{ alignSelf: 'center', ml: 'auto' }}
-              >
-                {navCollapsed ? (
-                  <KeyboardDoubleArrowRightRoundedIcon />
-                ) : (
-                  <KeyboardDoubleArrowLeftRoundedIcon />
-                )}
-              </IconButton>
             </div>
 
             <List className="the-menu">
@@ -221,8 +197,24 @@ const Layout = () => {
               ))}
             </List>
 
-            <div className="the-traffic">
-              <LayoutTraffic />
+            <div className="the-rail-footer">
+              <div className="the-rail-update">
+                <UpdateButton className="the-newbtn" />
+              </div>
+              <IconButton
+                className="the-nav-toggle"
+                size="small"
+                data-tauri-drag-region="false"
+                title={navToggleLabel}
+                aria-label={navToggleLabel}
+                onClick={handleToggleNavCollapsed}
+              >
+                {navCollapsed ? (
+                  <ChevronRightRoundedIcon />
+                ) : (
+                  <ChevronLeftRoundedIcon />
+                )}
+              </IconButton>
             </div>
           </div>
 
