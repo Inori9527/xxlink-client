@@ -283,6 +283,8 @@ test('runtime controls reject failed reads and gate unsafe mutations', () => {
   assert.match(connect, /if \(isTunModeAvailable !== true\)/)
   assert.match(connect, /await installServiceAndRestartCore\(\)/)
   assert.match(connect, /setPendingMode\(next\)/)
+  assert.match(connect, /queueModeChange\(next, \{ force: true \}\)/)
+  assert.match(connect, /\(next === mode && options\?\.force !== true\)/)
   assert.match(connect, /const serviceInstallMode/)
   assert.match(
     connect,

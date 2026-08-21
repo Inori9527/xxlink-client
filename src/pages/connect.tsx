@@ -761,8 +761,13 @@ const ConnectPage = () => {
   }, [])
 
   const queueModeChange = useCallback(
-    (next: ConnectMode) => {
-      if (!preferencesReady || next === mode || modeChanging) return
+    (next: ConnectMode, options?: { force?: boolean }) => {
+      if (
+        !preferencesReady ||
+        (next === mode && options?.force !== true) ||
+        modeChanging
+      )
+        return
 
       const requestId = ++modeChangeGenerationRef.current
       setMode(next)
@@ -845,7 +850,7 @@ const ConnectPage = () => {
     try {
       await installServiceAndRestartCore()
       setPendingMode(null)
-      queueModeChange(next)
+      queueModeChange(next, { force: true })
     } catch (error) {
       reportSafeClientFailure('service-install', error)
       showNotice.error(
