@@ -3,7 +3,6 @@ import {
   ContentCopyRounded,
   ExitToAppRounded,
   OpenInNewRounded,
-  PersonRounded,
   RefreshRounded,
   SystemUpdateAltRounded,
 } from '@mui/icons-material'
@@ -17,6 +16,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  Divider,
   LinearProgress,
   Paper,
   Stack,
@@ -35,6 +35,7 @@ import { BasePage, type DialogRef } from '@/components/base'
 import { PromoRedeemPanel } from '@/components/mine/promo-redeem-panel'
 import { UpdateViewer } from '@/components/setting/mods/update-viewer'
 import { useUpdate } from '@/hooks/use-update'
+import { designTokens } from '@/pages/_theme'
 import {
   formatUsagePairLabel,
   shouldShowRefreshFailureNotice,
@@ -110,9 +111,9 @@ const MineRow = ({
         gap: 1.5,
         px: 2,
         py: 1.6,
-        borderRadius: 2.5,
+        borderRadius: designTokens.radius.md,
         cursor: onClick ? 'pointer' : 'default',
-        transition: 'background 160ms ease, transform 160ms ease',
+        transition: theme.transitions.create(['background-color', 'transform']),
         '&:hover': onClick
           ? {
               bgcolor: alpha(theme.palette.primary.main, 0.08),
@@ -125,7 +126,7 @@ const MineRow = ({
         sx={{
           width: 42,
           height: 42,
-          borderRadius: 2,
+          borderRadius: designTokens.radius.md,
           display: 'grid',
           placeItems: 'center',
           color: danger ? 'error.main' : 'primary.light',
@@ -144,40 +145,9 @@ const MineRow = ({
           {description}
         </Typography>
       </Box>
-      {action ?? <ChevronRightRounded color="disabled" />}
+      {action}
+      {onClick && <ChevronRightRounded color={danger ? 'error' : 'disabled'} />}
     </Box>
-  )
-}
-
-const MineSection = ({
-  title,
-  children,
-}: {
-  title: string
-  children: ReactNode
-}) => {
-  const theme = useTheme()
-  return (
-    <Stack spacing={1}>
-      <Typography
-        variant="overline"
-        color="text.secondary"
-        sx={{ px: 1, fontWeight: 800 }}
-      >
-        {title}
-      </Typography>
-      <Paper
-        elevation={0}
-        sx={{
-          p: 1,
-          borderRadius: 4,
-          border: `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
-          bgcolor: theme.palette.mode === 'dark' ? '#181B24' : '#fff',
-        }}
-      >
-        {children}
-      </Paper>
-    </Stack>
   )
 }
 
@@ -360,6 +330,8 @@ const MinePage = () => {
     refreshFailed: usageRefreshFailed,
     hasLastKnownGood: usage !== null,
   })
+  const accountLabel = user?.email ?? text.userFallback
+  const accountInitial = accountLabel.trim().charAt(0).toUpperCase() || 'X'
 
   return (
     <BasePage title={text.pageTitle} contentStyle={{ height: '100%' }}>
@@ -374,18 +346,7 @@ const MinePage = () => {
           overflow: 'auto',
         }}
       >
-        <Paper
-          elevation={0}
-          sx={{
-            p: 2.5,
-            borderRadius: 4,
-            border: `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
-            background:
-              theme.palette.mode === 'dark'
-                ? 'linear-gradient(135deg, rgba(24,27,36,0.96), rgba(14,16,22,0.96))'
-                : '#fff',
-          }}
-        >
+        <Paper variant="surface" sx={{ p: 2.5 }}>
           <Stack
             direction={{ xs: 'column', md: 'row' }}
             spacing={2}
@@ -397,20 +358,26 @@ const MinePage = () => {
                 sx={{
                   width: 58,
                   height: 58,
-                  borderRadius: 3,
+                  borderRadius: designTokens.radius.pill,
                   display: 'grid',
                   placeItems: 'center',
-                  color: 'primary.light',
+                  color: 'primary.main',
                   bgcolor: alpha(theme.palette.primary.main, 0.16),
                 }}
               >
-                <PersonRounded sx={{ fontSize: 32 }} />
-              </Box>
-              <Box>
-                <Typography variant="h5" fontWeight={950}>
-                  {user?.email ?? text.userFallback}
+                <Typography variant="h5" fontWeight={900}>
+                  {accountInitial}
                 </Typography>
-                <Stack direction="row" spacing={1} sx={{ mt: 0.8 }}>
+              </Box>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="h6" fontWeight={900} noWrap>
+                  {accountLabel}
+                </Typography>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{ mt: 0.8, flexWrap: 'wrap' }}
+                >
                   <Chip
                     size="small"
                     label={
@@ -437,18 +404,15 @@ const MinePage = () => {
               </Stack>
               <LinearProgress
                 variant={usage ? 'determinate' : 'indeterminate'}
+                color={percent > 80 ? 'error' : 'primary'}
                 value={percent}
                 sx={{
                   mt: 1,
                   height: 8,
-                  borderRadius: 999,
-                  bgcolor: alpha(theme.palette.common.white, 0.08),
+                  borderRadius: designTokens.radius.pill,
+                  bgcolor: 'action.hover',
                   '& .MuiLinearProgress-bar': {
-                    borderRadius: 999,
-                    background:
-                      percent > 80
-                        ? 'linear-gradient(90deg,#FCD34D,#F87171)'
-                        : 'linear-gradient(90deg,#2F80ED,#0FEDD2)',
+                    borderRadius: designTokens.radius.pill,
                   },
                 }}
               />
@@ -457,7 +421,7 @@ const MinePage = () => {
                 size="small"
                 startIcon={<OpenInNewRounded />}
                 onClick={() => void open(DASHBOARD_URL)}
-                sx={{ mt: 1.5, borderRadius: 999, fontWeight: 900 }}
+                sx={{ mt: 1.5, fontWeight: 900 }}
               >
                 {text.openDashboard}
               </Button>
@@ -466,18 +430,26 @@ const MinePage = () => {
         </Paper>
 
         {showUsageRefreshNotice && (
-          <Alert severity="warning" sx={{ borderRadius: 3 }}>
-            {text.usageRefreshFailed}
-          </Alert>
+          <Alert severity="warning">{text.usageRefreshFailed}</Alert>
         )}
 
-        <MineSection title={text.common}>
+        <PromoRedeemPanel />
+
+        <Paper variant="surface" sx={{ p: 1, overflow: 'hidden' }}>
+          <Typography
+            variant="overline"
+            color="text.secondary"
+            sx={{ px: 2, fontWeight: 800 }}
+          >
+            {text.common}
+          </Typography>
           <MineRow
             icon={<ContentCopyRounded />}
             title={text.diagnostics}
             description={text.diagnosticsDesc}
             onClick={() => void handleCopyDiagnostics()}
           />
+          <Divider />
           <MineRow
             icon={<SystemUpdateAltRounded />}
             title={text.update}
@@ -496,18 +468,21 @@ const MinePage = () => {
                   event.stopPropagation()
                   void handleCheckUpdate()
                 }}
-                sx={{ borderRadius: 999, fontWeight: 900 }}
+                sx={{ fontWeight: 900, flexShrink: 0 }}
               >
                 {checkingUpdate ? text.checking : text.check}
               </Button>
             }
             onClick={() => void handleCheckUpdate()}
           />
-        </MineSection>
-
-        <PromoRedeemPanel />
-
-        <MineSection title={text.account}>
+          <Divider />
+          <Typography
+            variant="overline"
+            color="text.secondary"
+            sx={{ px: 2, fontWeight: 800 }}
+          >
+            {text.account}
+          </Typography>
           <MineRow
             danger
             icon={<ExitToAppRounded />}
@@ -515,7 +490,7 @@ const MinePage = () => {
             description={text.logoutDesc}
             onClick={() => setLogoutOpen(true)}
           />
-        </MineSection>
+        </Paper>
       </Stack>
 
       <Dialog open={logoutOpen} onClose={() => setLogoutOpen(false)}>

@@ -1,12 +1,9 @@
 import {
-  BoltRounded,
   CardGiftcardRounded,
   CheckCircleRounded,
-  DevicesRounded,
+  CheckRounded,
   OpenInNewRounded,
   RefreshRounded,
-  ShieldRounded,
-  SpeedRounded,
   WorkspacePremiumRounded,
 } from '@mui/icons-material'
 import {
@@ -32,6 +29,7 @@ import { useTranslation } from 'react-i18next'
 
 import { BasePage } from '@/components/base'
 import { useVisibility } from '@/hooks/use-visibility'
+import { designTokens } from '@/pages/_theme'
 import {
   formatUsagePairLabel,
   shouldShowConfirmedEmptyPlans,
@@ -152,13 +150,23 @@ function getBillingPeriod(plan: PlanView): BillingPeriod {
   return 'month'
 }
 
-function formatPrice(price: number): string {
+function formatPrice(price: number): { amount: string; currency: string } {
   const normalized = Number.isFinite(price) ? price / 100 : 0
-  return new Intl.NumberFormat('en-US', {
+  const parts = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: normalized % 1 === 0 ? 0 : 2,
-  }).format(normalized)
+  }).formatToParts(normalized)
+
+  return {
+    currency: parts.find((part) => part.type === 'currency')?.value ?? '$',
+    amount: parts
+      .filter((part) =>
+        ['integer', 'group', 'decimal', 'fraction'].includes(part.type),
+      )
+      .map((part) => part.value)
+      .join(''),
+  }
 }
 
 function formatCooldownHours(
@@ -473,7 +481,7 @@ const PlansPage = () => {
           }
           onClick={handleRefresh}
           disabled={refreshing || loading}
-          sx={{ borderRadius: 999, fontWeight: 900 }}
+          sx={{ fontWeight: 900 }}
         >
           {t('plans.page.actions.refresh')}
         </Button>
@@ -482,34 +490,17 @@ const PlansPage = () => {
     >
       <Stack spacing={1.5} sx={{ maxWidth: 1080, mx: 'auto' }}>
         {error && (
-          <Alert
-            severity="error"
-            sx={{ borderRadius: 3 }}
-            onClose={() => setError(null)}
-          >
+          <Alert severity="error" onClose={() => setError(null)}>
             {error}
           </Alert>
         )}
         {accountLoadFailed && showRefreshFailureNotice && !loading && (
-          <Alert severity="warning" sx={{ borderRadius: 3 }}>
+          <Alert severity="warning">
             {t('plans.page.cached.partialFailure')}
           </Alert>
         )}
 
-        <Paper
-          elevation={0}
-          sx={{
-            p: 2,
-            borderRadius: 4,
-            overflow: 'hidden',
-            position: 'relative',
-            border: `1px solid ${alpha(theme.palette.primary.main, 0.18)}`,
-            background:
-              theme.palette.mode === 'dark'
-                ? 'radial-gradient(circle at 8% 0%, rgba(34,211,238,0.18), transparent 36%), linear-gradient(135deg, rgba(12,18,28,0.98), rgba(14,23,31,0.96))'
-                : 'linear-gradient(135deg,#F7FCFF,#FFFFFF)',
-          }}
-        >
+        <Paper variant="hero" sx={{ p: 2, overflow: 'hidden' }}>
           <Stack
             direction={{ xs: 'column', md: 'row' }}
             spacing={2}
@@ -521,11 +512,11 @@ const PlansPage = () => {
                 sx={{
                   width: 46,
                   height: 46,
-                  borderRadius: 3,
+                  borderRadius: designTokens.radius.md,
                   display: 'grid',
                   placeItems: 'center',
-                  color: '#0FEDD2',
-                  bgcolor: alpha('#0FEDD2', 0.12),
+                  color: 'secondary.main',
+                  bgcolor: alpha(theme.palette.secondary.main, 0.12),
                 }}
               >
                 <WorkspacePremiumRounded />
@@ -560,18 +551,15 @@ const PlansPage = () => {
               </Stack>
               <LinearProgress
                 variant={usage ? 'determinate' : 'indeterminate'}
+                color={percent > 80 ? 'error' : 'secondary'}
                 value={percent}
                 sx={{
                   mt: 1,
                   height: 9,
-                  borderRadius: 999,
-                  bgcolor: alpha(theme.palette.common.white, 0.08),
+                  borderRadius: designTokens.radius.pill,
+                  bgcolor: 'action.hover',
                   '& .MuiLinearProgress-bar': {
-                    borderRadius: 999,
-                    background:
-                      percent > 80
-                        ? 'linear-gradient(90deg,#F59E0B,#EF4444)'
-                        : 'linear-gradient(90deg,#0FEDD2,#2F80ED)',
+                    borderRadius: designTokens.radius.pill,
                   },
                 }}
               />
@@ -587,18 +575,7 @@ const PlansPage = () => {
         </Paper>
 
         {publicBenefit?.visible && publicBenefit.isTrial && (
-          <Paper
-            elevation={0}
-            sx={{
-              p: 2,
-              borderRadius: 4,
-              border: `1px solid ${alpha('#0FEDD2', 0.28)}`,
-              bgcolor:
-                theme.palette.mode === 'dark'
-                  ? alpha('#0FEDD2', 0.08)
-                  : alpha('#0FEDD2', 0.06),
-            }}
-          >
+          <Paper variant="surface" sx={{ p: 2 }}>
             <Stack
               direction={{ xs: 'column', md: 'row' }}
               spacing={1.5}
@@ -610,11 +587,11 @@ const PlansPage = () => {
                   sx={{
                     width: 42,
                     height: 42,
-                    borderRadius: 3,
+                    borderRadius: designTokens.radius.md,
                     display: 'grid',
                     placeItems: 'center',
-                    color: '#0FEDD2',
-                    bgcolor: alpha('#0FEDD2', 0.14),
+                    color: 'secondary.main',
+                    bgcolor: alpha(theme.palette.secondary.main, 0.14),
                   }}
                 >
                   <CardGiftcardRounded />
@@ -644,7 +621,7 @@ const PlansPage = () => {
                   !publicBenefit.emailVerified ||
                   !publicBenefit.canClaim
                 }
-                sx={{ borderRadius: 999, fontWeight: 950, px: 3 }}
+                sx={{ fontWeight: 900, px: 3 }}
               >
                 {claimingBenefit
                   ? t('plans.trial.claiming')
@@ -677,7 +654,7 @@ const PlansPage = () => {
             variant="text"
             endIcon={<OpenInNewRounded />}
             onClick={() => void open(DASHBOARD_RECHARGE_URL)}
-            sx={{ borderRadius: 999, fontWeight: 900 }}
+            sx={{ fontWeight: 900 }}
           >
             {t('plans.page.actions.openDashboard')}
           </Button>
@@ -694,19 +671,13 @@ const PlansPage = () => {
             sx={{
               alignSelf: 'center',
               p: 0.4,
-              borderRadius: 999,
-              bgcolor: alpha(theme.palette.common.white, 0.06),
-              border: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+              borderRadius: designTokens.radius.pill,
+              bgcolor: 'action.hover',
               '& .MuiToggleButton-root': {
                 minWidth: 92,
-                border: 0,
-                borderRadius: 999,
-                fontWeight: 950,
+                borderRadius: designTokens.radius.pill,
+                fontWeight: 900,
                 px: 2.4,
-              },
-              '& .Mui-selected': {
-                color: '#03151A !important',
-                bgcolor: '#0FEDD2 !important',
               },
             }}
           >
@@ -734,24 +705,12 @@ const PlansPage = () => {
                 key={item}
                 variant="rounded"
                 height={260}
-                sx={{ borderRadius: 4 }}
+                sx={{ borderRadius: designTokens.radius.lg }}
               />
             ))}
           </Box>
         ) : planLoadFailed ? (
-          <Paper
-            elevation={0}
-            sx={{
-              p: 4,
-              borderRadius: 4,
-              textAlign: 'center',
-              border: `1px dashed ${alpha(theme.palette.warning.main, 0.7)}`,
-              bgcolor:
-                theme.palette.mode === 'dark'
-                  ? alpha('#101923', 0.84)
-                  : '#FFFFFF',
-            }}
-          >
+          <Paper variant="surface" sx={{ p: 4, textAlign: 'center' }}>
             <Typography variant="h6" fontWeight={950}>
               {t('plans.page.empty.loadFailedTitle')}
             </Typography>
@@ -766,25 +725,13 @@ const PlansPage = () => {
               variant="contained"
               startIcon={<RefreshRounded />}
               onClick={() => void handleRefresh()}
-              sx={{ mt: 2, borderRadius: 999, fontWeight: 950 }}
+              sx={{ mt: 2, fontWeight: 900 }}
             >
               {t('plans.page.actions.refresh')}
             </Button>
           </Paper>
         ) : showConfirmedEmptyPlans ? (
-          <Paper
-            elevation={0}
-            sx={{
-              p: 4,
-              borderRadius: 4,
-              textAlign: 'center',
-              border: `1px dashed ${alpha(theme.palette.divider, 0.7)}`,
-              bgcolor:
-                theme.palette.mode === 'dark'
-                  ? alpha('#101923', 0.84)
-                  : '#FFFFFF',
-            }}
-          >
+          <Paper variant="surface" sx={{ p: 4, textAlign: 'center' }}>
             <Typography variant="h6" fontWeight={950}>
               {t('plans.page.empty.title')}
             </Typography>
@@ -799,7 +746,7 @@ const PlansPage = () => {
               variant="contained"
               endIcon={<OpenInNewRounded />}
               onClick={() => void open(DASHBOARD_RECHARGE_URL)}
-              sx={{ mt: 2, borderRadius: 999, fontWeight: 950 }}
+              sx={{ mt: 2, fontWeight: 900 }}
             >
               {t('plans.page.actions.openDashboard')}
             </Button>
@@ -815,38 +762,24 @@ const PlansPage = () => {
               gap: 1.5,
             }}
           >
-            {visiblePlans.map((plan, index) => {
+            {visiblePlans.map((plan) => {
               const isCurrent = activeSubscription?.planId === plan.id
               const processing = openingPlanId === plan.id
-              const accent =
-                index % 3 === 0
-                  ? '#0FEDD2'
-                  : index % 3 === 1
-                    ? '#2F80ED'
-                    : '#14B8A6'
+              const price = formatPrice(plan.price)
+              const period = getBillingPeriod(plan)
+              const periodLabelKey =
+                BILLING_PERIODS.find((item) => item.value === period)
+                  ?.labelKey ?? BILLING_PERIODS[0].labelKey
 
               return (
                 <Paper
                   key={plan.id}
-                  elevation={0}
+                  variant={isCurrent ? 'hero' : 'surface'}
                   sx={{
                     p: 2.4,
                     minHeight: 258,
                     display: 'flex',
                     flexDirection: 'column',
-                    borderRadius: 4,
-                    border: `1px solid ${
-                      isCurrent
-                        ? alpha(accent, 0.78)
-                        : alpha(theme.palette.divider, 0.5)
-                    }`,
-                    bgcolor:
-                      theme.palette.mode === 'dark'
-                        ? alpha('#101923', 0.92)
-                        : '#FFFFFF',
-                    boxShadow: isCurrent
-                      ? `0 20px 60px ${alpha(accent, 0.12)}`
-                      : `0 16px 42px ${alpha('#020617', theme.palette.mode === 'dark' ? 0.22 : 0.06)}`,
                   }}
                 >
                   <Stack
@@ -864,25 +797,39 @@ const PlansPage = () => {
                         size="small"
                         icon={<CheckCircleRounded />}
                         label={t('plans.page.card.badge')}
-                        sx={{
-                          bgcolor: alpha(accent, 0.16),
-                          color: accent,
-                          fontWeight: 950,
-                          '.MuiChip-icon': { color: accent },
-                        }}
+                        color="secondary"
+                        sx={{ fontWeight: 900 }}
                       />
                     )}
                   </Stack>
 
-                  <Box sx={{ my: 2 }}>
-                    <Typography component="span" variant="h3" fontWeight={950}>
-                      {formatPrice(plan.price)}
+                  <Stack
+                    direction="row"
+                    alignItems="baseline"
+                    spacing={0.75}
+                    sx={{ my: 2 }}
+                  >
+                    <Typography
+                      component="span"
+                      variant="h3"
+                      fontWeight={900}
+                      sx={{ fontVariantNumeric: 'tabular-nums' }}
+                    >
+                      {price.amount}
                     </Typography>
-                  </Box>
+                    <Typography
+                      component="span"
+                      variant="body2"
+                      color="text.secondary"
+                      fontWeight={800}
+                    >
+                      {price.currency} / {t(periodLabelKey)}
+                    </Typography>
+                  </Stack>
 
                   <Stack spacing={1.1} sx={{ flex: 1 }}>
                     <Stack direction="row" spacing={1} alignItems="center">
-                      <BoltRounded sx={{ color: accent, fontSize: 19 }} />
+                      <CheckRounded color="secondary" sx={{ fontSize: 18 }} />
                       <Typography variant="body2" color="text.secondary">
                         {t('plans.page.card.features.trafficValue', {
                           traffic: formatTraffic(
@@ -892,7 +839,7 @@ const PlansPage = () => {
                       </Typography>
                     </Stack>
                     <Stack direction="row" spacing={1} alignItems="center">
-                      <SpeedRounded sx={{ color: accent, fontSize: 19 }} />
+                      <CheckRounded color="secondary" sx={{ fontSize: 18 }} />
                       <Typography variant="body2" color="text.secondary">
                         {plan.speedLimit
                           ? t('plans.page.card.features.speedMbps', {
@@ -902,7 +849,7 @@ const PlansPage = () => {
                       </Typography>
                     </Stack>
                     <Stack direction="row" spacing={1} alignItems="center">
-                      <DevicesRounded sx={{ color: accent, fontSize: 19 }} />
+                      <CheckRounded color="secondary" sx={{ fontSize: 18 }} />
                       <Typography variant="body2" color="text.secondary">
                         {t('plans.page.card.features.devicesValue', {
                           count: plan.maxDevices,
@@ -910,7 +857,7 @@ const PlansPage = () => {
                       </Typography>
                     </Stack>
                     <Stack direction="row" spacing={1} alignItems="center">
-                      <ShieldRounded sx={{ color: accent, fontSize: 19 }} />
+                      <CheckRounded color="secondary" sx={{ fontSize: 18 }} />
                       <Typography variant="body2" color="text.secondary">
                         {t('plans.page.card.features.validUntilExpire')}
                       </Typography>
@@ -919,7 +866,8 @@ const PlansPage = () => {
 
                   <Button
                     fullWidth
-                    variant={isCurrent ? 'outlined' : 'contained'}
+                    variant="contained"
+                    color="primary"
                     disabled={isCurrent || processing || openingPlanId !== null}
                     onClick={() => void handleSubscribe(plan)}
                     endIcon={
@@ -931,15 +879,8 @@ const PlansPage = () => {
                     }
                     sx={{
                       mt: 2,
-                      borderRadius: 999,
                       py: 1.1,
-                      fontWeight: 950,
-                      bgcolor: isCurrent ? undefined : accent,
-                      color: isCurrent ? accent : '#03151A',
-                      '&:hover': {
-                        bgcolor: isCurrent ? alpha(accent, 0.08) : accent,
-                        filter: 'brightness(1.04)',
-                      },
+                      fontWeight: 900,
                     }}
                   >
                     {isCurrent
