@@ -486,6 +486,8 @@ const NodesPage = () => {
                         component="button"
                         type="button"
                         aria-pressed={selected}
+                        aria-label={node.displayName}
+                        disabled={selected}
                         onClick={() => handleSelect(node)}
                         sx={{
                           width: '100%',
