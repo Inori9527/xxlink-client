@@ -7,9 +7,143 @@ import { Theme as TauriOsTheme } from '@tauri-apps/api/window'
 import { useEffect, useMemo } from 'react'
 
 import { useVerge } from '@/hooks/use-verge'
-import { defaultDarkTheme, defaultTheme } from '@/pages/_theme'
+import {
+  defaultDarkTheme,
+  defaultTheme,
+  designTokens,
+  modeTokens,
+} from '@/pages/_theme'
 import { reportSafeClientFailure } from '@/services/safe-client-error'
 import { useSetThemeMode, useThemeMode } from '@/services/states'
+
+declare module '@mui/material/Paper' {
+  interface PaperPropsVariantOverrides {
+    surface: true
+    hero: true
+  }
+}
+
+/** Soft navy shadow scale: index 0 none, low indices for cards, high for dialogs. */
+const buildShadows = (mode: 'light' | 'dark'): Shadows => {
+  const ink = mode === 'dark' ? '4, 10, 22' : '23, 42, 77'
+  const scale = Array(25).fill('none') as Shadows
+  for (let i = 1; i < 25; i += 1) {
+    const y = Math.min(2 + i * 1.5, 32)
+    const blur = Math.min(8 + i * 3, 72)
+    const a = mode === 'dark' ? Math.min(0.32 + i * 0.012, 0.55) : 0.12
+    scale[i] = `0 ${y}px ${blur}px rgba(${ink}, ${a})`
+  }
+  return scale
+}
+
+const buildTheme = (mode: 'light' | 'dark'): MuiTheme => {
+  const dt = mode === 'light' ? defaultTheme : defaultDarkTheme
+  const mt = modeTokens(mode)
+  const { radius } = designTokens
+
+  return createTheme({
+    breakpoints: {
+      values: { xs: 0, sm: 650, md: 900, lg: 1200, xl: 1536 },
+    },
+    palette: {
+      mode,
+      primary: { main: dt.primary_color },
+      secondary: { main: dt.secondary_color },
+      info: { main: dt.info_color },
+      error: { main: dt.error_color },
+      warning: { main: dt.warning_color },
+      success: { main: dt.success_color },
+      text: {
+        primary: dt.primary_text,
+        secondary: dt.secondary_text,
+      },
+      divider: mt.outline,
+      background: {
+        paper: mt.surface,
+        default: dt.background_color,
+      },
+    },
+    shadows: buildShadows(mode),
+    shape: { borderRadius: radius.sm },
+    typography: {
+      fontFamily: dt.font_family,
+      h4: { fontWeight: 900, letterSpacing: '-0.02em' },
+      h5: { fontWeight: 900, letterSpacing: '-0.02em' },
+      h6: { fontWeight: 850 },
+      overline: { fontWeight: 900, letterSpacing: '0.14em' },
+      button: { fontWeight: 800 },
+    },
+    components: {
+      MuiPaper: {
+        defaultProps: { elevation: 0 },
+        variants: [
+          {
+            props: { variant: 'surface' },
+            style: {
+              backgroundColor: mt.surface,
+              backgroundImage: 'none',
+              border: `1px solid ${mt.outline}`,
+              borderRadius: radius.lg,
+            },
+          },
+          {
+            props: { variant: 'hero' },
+            style: {
+              background: mt.heroMesh,
+              border: `1px solid ${mt.outline}`,
+              borderRadius: radius.xl,
+            },
+          },
+        ],
+      },
+      MuiButton: {
+        styleOverrides: {
+          root: {
+            textTransform: 'none',
+            fontWeight: 800,
+            borderRadius: radius.pill,
+          },
+        },
+      },
+      MuiButtonGroup: {
+        styleOverrides: {
+          root: { borderRadius: radius.pill },
+        },
+      },
+      MuiChip: {
+        styleOverrides: {
+          root: { borderRadius: radius.pill, fontWeight: 750 },
+        },
+      },
+      MuiAlert: {
+        styleOverrides: {
+          root: { borderRadius: radius.md },
+        },
+      },
+      MuiDialog: {
+        styleOverrides: {
+          paper: {
+            backgroundColor: mt.dialogPaper,
+            backgroundImage: 'none',
+            borderRadius: radius.lg,
+            border: `1px solid ${mt.outline}`,
+          },
+        },
+      },
+      MuiTooltip: {
+        styleOverrides: {
+          tooltip: {
+            backgroundColor: mt.surfaceRaised,
+            border: `1px solid ${mt.outline}`,
+            color: dt.primary_text,
+            borderRadius: radius.sm,
+            fontWeight: 600,
+          },
+        },
+      },
+    },
+  })
+}
 
 /**
  * custom theme
@@ -25,7 +159,8 @@ export const useCustomTheme = () => {
     if (theme_mode === 'light' || theme_mode === 'dark') {
       setMode(theme_mode)
     } else {
-      setMode('light')
+      // Dark is the primary brand surface (tone A).
+      setMode('dark')
     }
   }, [theme_mode, setMode])
 
@@ -34,12 +169,12 @@ export const useCustomTheme = () => {
       return
     }
 
-    setMode('light')
+    setMode('dark')
   }, [theme_mode, appWindow, setMode])
 
   useEffect(() => {
     if (theme_mode === undefined || theme_mode === 'system') {
-      appWindow.setTheme('light' as TauriOsTheme).catch((err) => {
+      appWindow.setTheme('dark' as TauriOsTheme).catch((err) => {
         reportSafeClientFailure('theme-window-set', err)
       })
     } else if (mode) {
@@ -51,52 +186,19 @@ export const useCustomTheme = () => {
 
   const theme = useMemo(() => {
     const dt = mode === 'light' ? defaultTheme : defaultDarkTheme
+    const mt = modeTokens(mode)
     let muiTheme: MuiTheme
 
     try {
-      muiTheme = createTheme({
-        breakpoints: {
-          values: { xs: 0, sm: 650, md: 900, lg: 1200, xl: 1536 },
-        },
-        palette: {
-          mode,
-          primary: { main: dt.primary_color },
-          secondary: { main: dt.secondary_color },
-          info: { main: dt.info_color },
-          error: { main: dt.error_color },
-          warning: { main: dt.warning_color },
-          success: { main: dt.success_color },
-          text: {
-            primary: dt.primary_text,
-            secondary: dt.secondary_text,
-          },
-          background: {
-            paper: dt.background_color,
-            default: dt.background_color,
-          },
-        },
-        shadows: Array(25).fill('none') as Shadows,
-        typography: {
-          fontFamily: dt.font_family,
-        },
-      })
+      muiTheme = buildTheme(mode)
     } catch (error) {
       reportSafeClientFailure('theme-create', error)
       muiTheme = createTheme({
-        breakpoints: {
-          values: { xs: 0, sm: 650, md: 900, lg: 1200, xl: 1536 },
-        },
         palette: {
           mode,
           primary: { main: dt.primary_color },
-          secondary: { main: dt.secondary_color },
-          info: { main: dt.info_color },
-          error: { main: dt.error_color },
-          warning: { main: dt.warning_color },
-          success: { main: dt.success_color },
-          text: { primary: dt.primary_text, secondary: dt.secondary_text },
           background: {
-            paper: dt.background_color,
+            paper: mt.surface,
             default: dt.background_color,
           },
         },
@@ -106,12 +208,10 @@ export const useCustomTheme = () => {
 
     const rootEle = document.documentElement
     if (rootEle) {
-      const backgroundColor = mode === 'light' ? '#F4F7FB' : dt.background_color
-      const selectColor = mode === 'light' ? '#EAF1FF' : '#23242B'
-      const scrollColor = mode === 'light' ? '#A7B2C380' : '#3F414A'
-      const dividerColor =
-        mode === 'light' ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.06)'
-      rootEle.style.setProperty('--divider-color', dividerColor)
+      const backgroundColor = dt.background_color
+      const selectColor = mode === 'light' ? '#EAF1FF' : '#1B2A44'
+      const scrollColor = mt.scrollbarThumb
+      rootEle.style.setProperty('--divider-color', mt.outline)
       rootEle.style.setProperty('--background-color', backgroundColor)
       rootEle.style.setProperty('--selection-color', selectColor)
       rootEle.style.setProperty('--scroller-color', scrollColor)
@@ -120,18 +220,12 @@ export const useCustomTheme = () => {
         '--background-color-alpha',
         alpha(muiTheme.palette.primary.main, 0.1),
       )
-      rootEle.style.setProperty(
-        '--window-border-color',
-        mode === 'light' ? '#D7DFEA' : '#23242B',
-      )
-      rootEle.style.setProperty(
-        '--scrollbar-bg',
-        mode === 'light' ? '#EEF3FA' : '#0D0E11',
-      )
-      rootEle.style.setProperty(
-        '--scrollbar-thumb',
-        mode === 'light' ? '#B8C3D4' : '#3F414A',
-      )
+      rootEle.style.setProperty('--window-border-color', mt.outline)
+      rootEle.style.setProperty('--scrollbar-bg', mt.scrollbarBg)
+      rootEle.style.setProperty('--scrollbar-thumb', mt.scrollbarThumb)
+      rootEle.style.setProperty('--surface-color', mt.surface)
+      rootEle.style.setProperty('--surface-raised-color', mt.surfaceRaised)
+      rootEle.style.setProperty('--outline-color', mt.outline)
     }
 
     let styleElement = document.querySelector('style#verge-theme')
@@ -143,7 +237,7 @@ export const useCustomTheme = () => {
 
     if (styleElement) {
       const globalStyles = `
-        /* 修复滚动条样式 */
+        /* scrollbar */
         ::-webkit-scrollbar {
           width: 8px;
           height: 8px;
@@ -154,28 +248,22 @@ export const useCustomTheme = () => {
           border-radius: 4px;
         }
         ::-webkit-scrollbar-thumb:hover {
-          background-color: ${mode === 'light' ? '#94A3B8' : '#555865'};
+          background-color: ${mode === 'light' ? '#94A3B8' : '#3D5170'};
         }
 
-        /* 背景色 */
+        /* page ground */
         body {
           background-color: var(--background-color);
         }
 
-        /* 修复可能的白色边框 */
-        .MuiPaper-root {
-          border-color: var(--window-border-color) !important;
+        /* Focus is handled per-component; suppress default UA outlines only.
+           NOTE: the old global "box-shadow: none !important" reset is gone on
+           purpose — the elevation/glow system depends on shadows. */
+        *:focus {
+          outline: none;
         }
-
-        /* 确保模态框和对话框也使用暗色主题 */
-        .MuiDialog-paper {
-          background-color: ${mode === 'light' ? '#ffffff' : '#191A1F'} !important;
-        }
-
-        /* 移除可能的白色点或线条 */
-        * {
-          outline: none !important;
-          box-shadow: none !important;
+        ::selection {
+          background: var(--selection-color);
         }
       `
 
