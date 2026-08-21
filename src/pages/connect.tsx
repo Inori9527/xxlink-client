@@ -40,6 +40,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 
 import { BasePage } from '@/components/base'
+import { LayoutTraffic } from '@/components/layout/layout-traffic'
 import {
   loadConnectMode,
   persistConnectMode,
@@ -51,6 +52,7 @@ import { useSystemState } from '@/hooks/use-system-state'
 import { useTrafficData } from '@/hooks/use-traffic-data'
 import { useVerge } from '@/hooks/use-verge'
 import { useVisibility } from '@/hooks/use-visibility'
+import { designTokens, modeTokens } from '@/pages/_theme'
 import { useAppData } from '@/providers/app-data-context'
 import {
   formatUsagePairLabel,
@@ -123,6 +125,16 @@ const pulse = keyframes`
   0% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.6); }
   70% { box-shadow: 0 0 0 22px rgba(255, 152, 0, 0); }
   100% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0); }
+`
+
+const spin = keyframes`
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+`
+
+const breathe = keyframes`
+  from { opacity: 0.7; }
+  to { opacity: 1; }
 `
 
 type ProxyEntry = {
@@ -254,6 +266,7 @@ const toPeriodUsageState = (usage: UsageView): PeriodUsageState => {
 const ConnectPage = () => {
   const { t } = useTranslation()
   const theme = useTheme()
+  const tokens = modeTokens(theme.palette.mode)
   const navigate = useNavigate()
   const pageVisible = useVisibility()
   const { verge, preferencesReady, refreshVerge } = useVerge()
@@ -1302,6 +1315,36 @@ const ConnectPage = () => {
   }
 
   const buttonColor = getButtonColor()
+  const powerIsConnected =
+    connected && !showReadinessFailure && readinessStatus !== 'degraded'
+  const powerRingBackground = showReadinessFailure
+    ? `conic-gradient(from 210deg, ${theme.palette.error.main}, ${tokens.glowError}, ${theme.palette.error.main})`
+    : readinessStatus === 'degraded'
+      ? `conic-gradient(from 210deg, ${theme.palette.warning.main}, ${theme.palette.secondary.main}, ${theme.palette.warning.main})`
+      : connectionBusy
+        ? `conic-gradient(from 210deg, ${theme.palette.warning.main}, ${theme.palette.secondary.main}, ${theme.palette.warning.main})`
+        : powerIsConnected
+          ? `conic-gradient(from 210deg, ${theme.palette.success.main}, ${theme.palette.secondary.main}, ${theme.palette.success.main})`
+          : `conic-gradient(from 210deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main}, ${theme.palette.primary.main})`
+  const powerRingGlow = showReadinessFailure
+    ? `0 0 64px 0 ${tokens.glowError}`
+    : readinessStatus === 'degraded'
+      ? `0 0 64px 0 ${alpha(theme.palette.warning.main, 0.4)}`
+      : connectionBusy
+        ? `0 0 56px 0 ${alpha(theme.palette.warning.main, 0.32)}`
+        : powerIsConnected
+          ? 'none'
+          : `0 0 64px 0 ${tokens.glowPrimary}`
+  const powerButtonBackground = powerIsConnected
+    ? theme.palette.success.main
+    : showReadinessFailure
+      ? alpha(theme.palette.error.main, 0.16)
+      : readinessStatus === 'degraded' || connectionBusy
+        ? alpha(theme.palette.warning.main, 0.16)
+        : tokens.surfaceRaised
+  const powerButtonForeground = powerIsConnected
+    ? theme.palette.getContrastText(theme.palette.success.main)
+    : buttonColor
   const trialNeedsClaim =
     publicBenefit?.visible === true &&
     publicBenefit.isTrial &&
@@ -1391,7 +1434,6 @@ const ConnectPage = () => {
             {trialNeedsClaim && (
               <Alert
                 severity="info"
-                sx={{ borderRadius: 3 }}
                 action={
                   <Button
                     color="inherit"
@@ -1406,7 +1448,7 @@ const ConnectPage = () => {
               </Alert>
             )}
             {trialOutOfTraffic && (
-              <Alert severity="warning" sx={{ borderRadius: 3 }}>
+              <Alert severity="warning">
                 {t('layout.components.connect.trial.trafficExceeded')}
               </Alert>
             )}
@@ -1414,7 +1456,7 @@ const ConnectPage = () => {
               <Alert
                 severity="error"
                 onClose={handleDismissStartupSyncError}
-                sx={{ cursor: 'pointer', borderRadius: 3 }}
+                sx={{ cursor: 'pointer' }}
                 onClick={handleRetryStartupSync}
                 action={
                   <Button
@@ -1433,12 +1475,12 @@ const ConnectPage = () => {
               </Alert>
             )}
             {showAccountRefreshNotice && (
-              <Alert severity="warning" sx={{ borderRadius: 3 }}>
+              <Alert severity="warning">
                 {t('layout.components.connect.feedback.accountRefreshFailed')}
               </Alert>
             )}
             {showNodeRefreshNotice && (
-              <Alert severity="warning" sx={{ borderRadius: 3 }}>
+              <Alert severity="warning">
                 {t('layout.components.connect.feedback.nodeRefreshFailed')}
               </Alert>
             )}
@@ -1448,7 +1490,6 @@ const ConnectPage = () => {
         {serviceInstallMode && (
           <Alert
             severity="warning"
-            sx={{ borderRadius: 3 }}
             action={
               <Button
                 color="inherit"
@@ -1472,54 +1513,47 @@ const ConnectPage = () => {
         )}
 
         <Paper
+          variant="hero"
           elevation={0}
           sx={{
             position: 'relative',
-            p: { xs: 1.5, md: 2.25 },
-            borderRadius: 5,
+            p: { xs: 3, md: 4 },
             overflow: 'visible',
-            border: `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
-            background:
-              theme.palette.mode === 'dark'
-                ? 'radial-gradient(circle at 88% 2%, rgba(15,237,210,0.16), transparent 32%), radial-gradient(circle at 4% 100%, rgba(47,128,237,0.14), transparent 28%), rgba(7,16,24,0.97)'
-                : 'linear-gradient(135deg,#ffffff,#f2fbff)',
           }}
         >
           <Stack
-            direction={{ xs: 'column', md: 'row' }}
-            spacing={2}
+            direction="row"
+            spacing={1.5}
             justifyContent="space-between"
-            alignItems={{ xs: 'stretch', md: 'flex-start' }}
-            sx={{ mb: 1.5 }}
+            alignItems="center"
+            sx={{ mb: 2, flexWrap: 'wrap' }}
           >
-            <Box>
-              <Typography
-                variant="overline"
-                sx={{ color: 'primary.light', fontWeight: 900 }}
-              >
-                XXLink
-              </Typography>
-              <Typography variant="h5" fontWeight={950}>
-                {t('layout.components.connect.labels.heroTitle')}
-              </Typography>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ mt: 0.25 }}
-              >
-                {t('layout.components.connect.labels.heroSubtitle')}
-              </Typography>
-            </Box>
+            <Typography
+              variant="overline"
+              sx={{
+                color: powerIsConnected
+                  ? 'success.main'
+                  : showReadinessFailure
+                    ? 'error.main'
+                    : readinessStatus === 'degraded' || connectionBusy
+                      ? 'warning.main'
+                      : 'text.secondary',
+                fontSize: '0.68rem',
+                lineHeight: 1.2,
+              }}
+            >
+              {connectionStatusLabel}
+            </Typography>
             <ButtonGroup
               size="small"
               sx={{
                 alignSelf: { xs: 'flex-start', md: 'center' },
                 p: 0.5,
-                borderRadius: 999,
-                bgcolor: alpha(theme.palette.primary.main, 0.09),
+                borderRadius: designTokens.radius.pill,
+                bgcolor: alpha(theme.palette.primary.main, 0.1),
                 '& .MuiButton-root': {
                   border: '0 !important',
-                  borderRadius: '999px !important',
+                  borderRadius: `${designTokens.radius.pill}px !important`,
                   px: 2,
                   fontWeight: 900,
                 },
@@ -1561,215 +1595,230 @@ const ConnectPage = () => {
             </ButtonGroup>
           </Stack>
 
-          <Paper
-            elevation={0}
-            sx={{
-              p: { xs: 1.75, md: 2.25 },
-              mb: 1.25,
-              borderRadius: 4,
-              border: 'none',
-              background: 'transparent',
-            }}
-          >
-            <Stack direction="column" spacing={1.25} alignItems="center">
-              <Button
-                onClick={handleToggle}
-                disabled={connectionBusy || isEmpty}
-                sx={{
-                  width: 104,
-                  height: 104,
-                  minWidth: 104,
+          <Stack spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+            <Box
+              sx={{
+                position: 'relative',
+                width: 216,
+                height: 216,
+                borderRadius: '50%',
+                boxShadow: powerRingGlow,
+                '&::after': {
+                  content: '""',
+                  position: 'absolute',
+                  inset: 0,
                   borderRadius: '50%',
-                  bgcolor: buttonColor,
-                  color: theme.palette.getContrastText(buttonColor),
-                  border: `10px solid ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.08 : 0.72)}`,
-                  transition: 'all 0.28s ease-in-out',
-                  boxShadow: connected
-                    ? `0 0 0 18px ${alpha(theme.palette.success.main, 0.12)}`
-                    : `0 0 0 18px ${alpha(theme.palette.primary.main, 0.08)}`,
-                  animation: connectionBusy ? `${pulse} 1.4s infinite` : 'none',
-                  '&:hover': {
-                    bgcolor: buttonColor,
-                    filter: 'brightness(1.08)',
-                  },
-                  '&.Mui-disabled': {
-                    bgcolor: isEmpty
-                      ? theme.palette.action.disabledBackground
-                      : buttonColor,
-                    color: isEmpty
-                      ? theme.palette.action.disabled
-                      : theme.palette.getContrastText(buttonColor),
-                    opacity: connectionBusy ? 0.75 : 0.9,
-                  },
+                  boxShadow: powerIsConnected
+                    ? `0 0 88px 8px ${tokens.glowSuccess}`
+                    : 'none',
+                  opacity: powerIsConnected ? 0.7 : 0,
+                  animation: powerIsConnected
+                    ? `${breathe} 4s ease-in-out infinite alternate`
+                    : 'none',
+                  pointerEvents: 'none',
+                  zIndex: 0,
+                },
+              }}
+            >
+              <Box
+                sx={{
+                  position: 'absolute',
+                  inset: 0,
+                  p: '4px',
+                  borderRadius: '50%',
+                  background: powerRingBackground,
+                  animation: connectionBusy
+                    ? `${spin} 2.4s linear infinite`
+                    : 'none',
+                  zIndex: 1,
                 }}
               >
-                {connectionBusy ? (
-                  <CircularProgress
-                    size={38}
-                    thickness={4}
-                    sx={{ color: 'inherit' }}
-                  />
-                ) : (
-                  <PowerSettingsNewRounded sx={{ fontSize: 46 }} />
-                )}
-              </Button>
-
-              <Box sx={{ minWidth: 0, flex: 1, textAlign: 'center' }}>
-                <Typography
-                  variant="h4"
-                  fontWeight={950}
-                  color={
-                    errorFlash
-                      ? 'error.main'
-                      : readinessStatus === 'degraded'
-                        ? 'warning.main'
-                        : connected
-                          ? 'success.main'
-                          : readinessStatus === 'failed'
-                            ? 'error.main'
-                            : 'text.primary'
-                  }
-                >
-                  {connectionStatusLabel}
-                </Typography>
-                <Typography
-                  color="text.secondary"
+                <Box
                   sx={{
-                    mt: 0.5,
-                    mb: isEmpty || showReadinessFailure ? 1.5 : 0,
+                    width: '100%',
+                    height: '100%',
+                    borderRadius: '50%',
+                    bgcolor: 'background.default',
+                  }}
+                />
+              </Box>
+              <Box
+                sx={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 2,
+                }}
+              >
+                <Button
+                  onClick={handleToggle}
+                  disabled={connectionBusy || isEmpty}
+                  sx={{
+                    width: 180,
+                    height: 180,
+                    minWidth: 180,
+                    borderRadius: '50%',
+                    bgcolor: powerButtonBackground,
+                    color: powerButtonForeground,
+                    border: `3px solid ${alpha(theme.palette.primary.main, 0.35)}`,
+                    transition:
+                      'transform 0.28s ease-in-out, filter 0.28s ease-in-out',
+                    animation: connectionBusy
+                      ? `${pulse} 1.4s infinite`
+                      : 'none',
+                    '&:hover': {
+                      bgcolor: powerButtonBackground,
+                      filter: 'brightness(1.08)',
+                      transform: 'scale(1.02)',
+                    },
+                    '&:active': { transform: 'scale(0.98)' },
+                    '&.Mui-disabled': {
+                      bgcolor: isEmpty
+                        ? theme.palette.action.disabledBackground
+                        : powerButtonBackground,
+                      color: isEmpty
+                        ? theme.palette.action.disabled
+                        : powerButtonForeground,
+                      opacity: connectionBusy ? 0.75 : 0.9,
+                    },
                   }}
                 >
-                  {connectionStatusHint}
-                </Typography>
-                {isEmpty ? (
-                  <Button
-                    variant="contained"
-                    size="large"
-                    onClick={() => navigate('/plans')}
-                    sx={{ borderRadius: 2.5, px: 4, fontWeight: 950 }}
-                  >
-                    {t('layout.components.connect.empty.goToPlans')}
-                  </Button>
-                ) : null}
-                {showReadinessRetryAction ? (
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={validateSelectedNodeReadiness}
-                    disabled={connectionBusy}
-                    sx={{ borderRadius: 2.5, fontWeight: 850 }}
-                  >
-                    {t('layout.components.connect.actions.retry')}
-                  </Button>
-                ) : null}
+                  {connectionBusy ? (
+                    <CircularProgress
+                      size={56}
+                      thickness={4}
+                      sx={{ color: 'inherit' }}
+                    />
+                  ) : (
+                    <PowerSettingsNewRounded sx={{ fontSize: 64 }} />
+                  )}
+                </Button>
               </Box>
-            </Stack>
-          </Paper>
+            </Box>
 
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                md: 'repeat(3, minmax(0, 1fr))',
-              },
-              gap: 1.5,
-              mb: 1.25,
-            }}
-          >
-            {[
-              {
-                icon: <AccessTimeRounded color="primary" />,
-                label: t('layout.components.connect.session.duration'),
-                value: connected ? connectedDurationLabel : '0:00',
-                color: 'text.primary',
-              },
-              {
-                icon: <DataUsageRounded sx={{ color: 'primary.light' }} />,
-                label: t('layout.components.connect.session.localTraffic'),
-                value: connected ? sessionTrafficLabel : formatTrafficTotal(0),
-                color: 'primary.light',
-              },
-              {
-                icon: <DataUsageRounded color="success" />,
-                label: t('layout.components.connect.session.packageTraffic'),
-                value: periodTrafficLabel,
-                color: 'success.main',
-              },
-            ].map((metric) => (
-              <Paper
-                key={metric.label}
-                elevation={0}
+            <Box sx={{ minWidth: 0, width: '100%', textAlign: 'center' }}>
+              <Typography
+                variant="h3"
+                fontWeight={900}
+                color={
+                  errorFlash
+                    ? 'error.main'
+                    : readinessStatus === 'degraded'
+                      ? 'warning.main'
+                      : connected
+                        ? 'success.main'
+                        : readinessStatus === 'failed'
+                          ? 'error.main'
+                          : 'text.primary'
+                }
+              >
+                {connectionStatusLabel}
+              </Typography>
+              <Typography
+                variant="body2"
+                color="text.secondary"
                 sx={{
-                  p: 2,
-                  borderRadius: 3,
-                  border: `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
-                  bgcolor:
-                    theme.palette.mode === 'dark'
-                      ? 'rgba(24,27,36,0.96)'
-                      : '#fff',
+                  mt: 0.5,
+                  mb: isEmpty || showReadinessFailure ? 1.5 : 0,
                 }}
               >
-                <Stack direction="row" spacing={1.2} alignItems="center">
-                  {metric.icon}
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      {metric.label}
-                    </Typography>
-                    <Typography
-                      variant="h6"
-                      fontWeight={950}
-                      color={metric.color}
-                      noWrap
-                    >
-                      {metric.value}
-                    </Typography>
-                  </Box>
-                </Stack>
-                {metric.label ===
-                  t('layout.components.connect.session.packageTraffic') &&
-                  periodTrafficLimit > 0 && (
-                    <LinearProgress
-                      variant="determinate"
-                      value={periodTrafficPct}
-                      sx={{
-                        mt: 1.2,
-                        height: 5,
-                        borderRadius: 999,
-                        bgcolor: alpha(theme.palette.success.main, 0.16),
-                        '& .MuiLinearProgress-bar': { borderRadius: 999 },
-                      }}
-                    />
-                  )}
-              </Paper>
-            ))}
-          </Box>
+                {connectionStatusHint}
+              </Typography>
+              {isEmpty ? (
+                <Button
+                  variant="contained"
+                  size="large"
+                  onClick={() => navigate('/plans')}
+                  sx={{ px: 4, fontWeight: 950 }}
+                >
+                  {t('layout.components.connect.empty.goToPlans')}
+                </Button>
+              ) : null}
+              {showReadinessRetryAction ? (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={validateSelectedNodeReadiness}
+                  disabled={connectionBusy}
+                  sx={{ fontWeight: 850 }}
+                >
+                  {t('layout.components.connect.actions.retry')}
+                </Button>
+              ) : null}
+            </Box>
+          </Stack>
 
-          <Paper
-            elevation={0}
-            sx={{
-              px: 2,
-              py: 1.4,
-              borderRadius: 3,
-              border: `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
-              bgcolor:
-                theme.palette.mode === 'dark' ? 'rgba(24,27,36,0.96)' : '#fff',
-            }}
-          >
+          <Box sx={{ mb: 1.5 }}>
             <Stack
               direction={{ xs: 'column', sm: 'row' }}
               spacing={1}
               justifyContent="space-between"
               alignItems={{ xs: 'stretch', sm: 'center' }}
             >
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Typography variant="body2" color="text.secondary">
+              <Stack
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                sx={{ minWidth: 0 }}
+              >
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ fontSize: 11, flexShrink: 0 }}
+                >
                   {t('layout.components.connect.labels.node')}
                 </Typography>
-                <Typography variant="body1" fontWeight={950} noWrap>
-                  {currentNodeDisplay ||
-                    t('layout.components.connect.labels.selectNode')}
-                </Typography>
+                <Button
+                  size="small"
+                  variant="text"
+                  aria-label={t('layout.components.connect.actions.switchNode')}
+                  startIcon={
+                    <Box
+                      component="span"
+                      sx={{
+                        width: 8,
+                        height: 8,
+                        flexShrink: 0,
+                        borderRadius: '50%',
+                        bgcolor: powerIsConnected
+                          ? 'success.main'
+                          : 'primary.main',
+                        boxShadow: `0 0 0 4px ${alpha(theme.palette.primary.main, 0.1)}`,
+                      }}
+                    />
+                  }
+                  endIcon={<KeyboardArrowDownRounded />}
+                  onClick={handleNodeMenuOpen}
+                  disabled={busy || modeChanging || isEmpty}
+                  sx={{
+                    minWidth: 0,
+                    minHeight: 38,
+                    maxWidth: { xs: '100%', sm: 360 },
+                    px: 1.5,
+                    borderRadius: designTokens.radius.pill,
+                    bgcolor: tokens.surface,
+                    border: `1px solid ${tokens.outlineStrong}`,
+                    color: 'text.primary',
+                    justifyContent: 'flex-start',
+                    '&:hover': { bgcolor: tokens.surfaceRaised },
+                    '& .MuiButton-startIcon': { mr: 0.75 },
+                    '& .MuiButton-endIcon': { ml: 0.5 },
+                  }}
+                >
+                  <Box
+                    component="span"
+                    sx={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {currentNodeDisplay ||
+                      t('layout.components.connect.labels.selectNode')}
+                  </Box>
+                </Button>
                 {latencyMap.get(currentNodeDisplay) !== undefined && (
                   <Chip
                     size="small"
@@ -1788,25 +1837,16 @@ const ConnectPage = () => {
                   />
                 )}
               </Stack>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ fontVariantNumeric: 'tabular-nums' }}
-                >
-                  ↑ {upVal} {upUnit}/s · ↓ {downVal} {downUnit}/s
-                </Typography>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  endIcon={<KeyboardArrowDownRounded />}
-                  onClick={handleNodeMenuOpen}
-                  disabled={busy || modeChanging || isEmpty}
-                  sx={{ borderRadius: 999, fontWeight: 950 }}
-                >
-                  {t('layout.components.connect.actions.switchNode')}
-                </Button>
-              </Stack>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{
+                  fontVariantNumeric: 'tabular-nums',
+                  alignSelf: { xs: 'flex-end', sm: 'auto' },
+                }}
+              >
+                ↑ {upVal} {upUnit}/s · ↓ {downVal} {downUnit}/s
+              </Typography>
             </Stack>
             <Menu
               anchorEl={nodeMenuAnchor}
@@ -1818,7 +1858,7 @@ const ConnectPage = () => {
                     mt: 1,
                     minWidth: 280,
                     maxHeight: 360,
-                    borderRadius: 3,
+                    borderRadius: designTokens.radius.md,
                   },
                 },
               }}
@@ -1853,6 +1893,128 @@ const ConnectPage = () => {
                 )
               })}
             </Menu>
+          </Box>
+
+          <Paper
+            variant="surface"
+            elevation={0}
+            sx={{
+              p: { xs: 1.25, md: 1.5 },
+              mb: 1.5,
+              borderRadius: designTokens.radius.md,
+            }}
+          >
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  sm: 'repeat(3, minmax(0, 1fr))',
+                },
+                '& > .connect-metric + .connect-metric': {
+                  borderTop: {
+                    xs: `1px solid ${tokens.outline}`,
+                    sm: 'none',
+                  },
+                  borderLeft: {
+                    xs: 'none',
+                    sm: `1px solid ${tokens.outline}`,
+                  },
+                },
+              }}
+            >
+              {[
+                {
+                  icon: <AccessTimeRounded color="primary" />,
+                  label: t('layout.components.connect.session.duration'),
+                  value: connected ? connectedDurationLabel : '0:00',
+                  color: 'text.primary',
+                },
+                {
+                  icon: <DataUsageRounded sx={{ color: 'primary.light' }} />,
+                  label: t('layout.components.connect.session.localTraffic'),
+                  value: connected
+                    ? sessionTrafficLabel
+                    : formatTrafficTotal(0),
+                  color: 'primary.light',
+                },
+                {
+                  icon: <DataUsageRounded color="success" />,
+                  label: t('layout.components.connect.session.packageTraffic'),
+                  value: periodTrafficLabel,
+                  color: 'success.main',
+                },
+              ].map((metric) => (
+                <Box
+                  key={metric.label}
+                  className="connect-metric"
+                  sx={{
+                    minWidth: 0,
+                    px: { xs: 0, sm: 1.5 },
+                    py: { xs: 1, sm: 0.5 },
+                  }}
+                >
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Box sx={{ display: 'flex', flexShrink: 0 }}>
+                      {metric.icon}
+                    </Box>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ fontSize: 11, lineHeight: 1.2 }}
+                      >
+                        {metric.label}
+                      </Typography>
+                      <Typography
+                        component="div"
+                        fontSize={16}
+                        fontWeight={800}
+                        color={metric.color}
+                        noWrap
+                        sx={{ fontVariantNumeric: 'tabular-nums' }}
+                      >
+                        {metric.value}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                  {metric.label ===
+                    t('layout.components.connect.session.packageTraffic') &&
+                    periodTrafficLimit > 0 && (
+                      <LinearProgress
+                        variant="determinate"
+                        value={periodTrafficPct}
+                        sx={{
+                          mt: 0.75,
+                          height: 4,
+                          borderRadius: designTokens.radius.pill,
+                          bgcolor: alpha(theme.palette.success.main, 0.16),
+                          '& .MuiLinearProgress-bar': {
+                            borderRadius: designTokens.radius.pill,
+                          },
+                        }}
+                      />
+                    )}
+                </Box>
+              ))}
+            </Box>
+          </Paper>
+
+          <Paper
+            variant="surface"
+            elevation={0}
+            sx={{
+              width: '100%',
+              height: 64,
+              overflow: 'hidden',
+              borderRadius: designTokens.radius.md,
+              px: { xs: 1, sm: 1.5 },
+              pt: 0.5,
+            }}
+          >
+            <Box sx={{ height: 70, overflow: 'hidden' }}>
+              <LayoutTraffic />
+            </Box>
           </Paper>
         </Paper>
       </Stack>
