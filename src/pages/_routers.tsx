@@ -1,12 +1,6 @@
-import AssignmentRoundedIcon from '@mui/icons-material/AssignmentRounded'
-import PersonRoundedIcon from '@mui/icons-material/PersonRounded'
-import PowerSettingsNewRoundedIcon from '@mui/icons-material/PowerSettingsNewRounded'
-import WifiRoundedIcon from '@mui/icons-material/WifiRounded'
 import { createBrowserRouter, type RouteObject } from 'react-router'
 import { Navigate } from 'react-router'
 
-import HomeSvg from '@/assets/image/itemicon/home.svg?react'
-import ProxiesSvg from '@/assets/image/itemicon/proxies.svg?react'
 import { RequireAuth } from '@/components/require-auth'
 import { AppDataProvider } from '@/providers/app-data-provider'
 
@@ -18,39 +12,37 @@ import NodesPage from './nodes'
 import PlansPage from './plans'
 import RegisterPage from './register'
 
-/** navItems drives both the fixed sidebar navigation and the router. */
+/** navItems is the route registry; showInTabBar controls primary visibility. */
 export const navItems = [
   {
     label: 'layout.components.navigation.tabs.connect',
     path: '/connect',
-    icon: [
-      <PowerSettingsNewRoundedIcon key="mui" />,
-      <PowerSettingsNewRoundedIcon key="svg" />,
-    ],
+    showInTabBar: true,
+    icon: 'connect',
     Component: ConnectPage,
   },
   {
     label: 'layout.components.navigation.tabs.proxies',
     path: '/nodes',
-    icon: [<WifiRoundedIcon key="mui" />, <ProxiesSvg key="svg" />],
+    showInTabBar: false,
+    icon: 'nodes',
     Component: NodesPage,
   },
   {
     label: 'layout.components.navigation.tabs.plans',
     path: '/plans',
-    icon: [
-      <AssignmentRoundedIcon key="mui" />,
-      <AssignmentRoundedIcon key="svg" />,
-    ],
+    showInTabBar: true,
+    icon: 'plans',
     Component: PlansPage,
   },
   {
     label: 'layout.components.navigation.tabs.mine',
     path: '/mine',
-    icon: [<PersonRoundedIcon key="mui" />, <HomeSvg key="svg" />],
+    showInTabBar: true,
+    icon: 'mine',
     Component: MinePage,
   },
-]
+] as const
 
 const redirectRoutes: RouteObject[] = [
   { path: '/home', element: <Navigate to="/connect" replace /> },

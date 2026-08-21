@@ -1,133 +1,77 @@
-import {
-  alpha,
-  ListItem,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-} from '@mui/material'
-import type { ReactNode } from 'react'
+import type { SVGProps } from 'react'
 import { useMatch, useNavigate, useResolvedPath } from 'react-router'
 
-import { useVerge } from '@/hooks/use-verge'
-import { designTokens, modeTokens } from '@/pages/_theme'
+export type LayoutIconName = 'connect' | 'nodes' | 'plans' | 'mine'
 
 interface Props {
   to: string
   children: string
-  icon: ReactNode[]
+  icon: LayoutIconName
 }
+
+const iconProps: SVGProps<SVGSVGElement> = {
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 2.2,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+  'aria-hidden': true,
+  focusable: false,
+}
+
+const LayoutIcon = ({ name }: { name: LayoutIconName }) => {
+  switch (name) {
+    case 'connect':
+      return (
+        <svg {...iconProps}>
+          <path d="M12 3v8" />
+          <path d="M6.5 6.5a8 8 0 1 0 11 0" />
+        </svg>
+      )
+    case 'plans':
+      return (
+        <svg {...iconProps}>
+          <rect x="3.5" y="5.5" width="17" height="13" rx="2.2" />
+          <path d="M7 10h10M7 14h5" />
+        </svg>
+      )
+    case 'mine':
+      return (
+        <svg {...iconProps}>
+          <circle cx="12" cy="8" r="3.2" />
+          <path d="M5 20c.8-3.3 3.2-5 7-5s6.2 1.7 7 5" />
+        </svg>
+      )
+    case 'nodes':
+      return (
+        <svg {...iconProps}>
+          <path d="M4 7h16M4 12h16M4 17h10" />
+        </svg>
+      )
+  }
+}
+
 export const LayoutItem = (props: Props) => {
   const { to, children, icon } = props
-  const { verge } = useVerge()
-  const { menu_icon } = verge ?? {}
-  const navCollapsed = verge?.collapse_navbar ?? true
   const resolved = useResolvedPath(to)
   const match = useMatch({ path: resolved.pathname, end: true })
   const navigate = useNavigate()
-
-  const effectiveMenuIcon =
-    navCollapsed && menu_icon === 'disable' ? 'monochrome' : menu_icon
-
-  const iconSx = {
-    color: 'inherit',
-    minWidth: navCollapsed ? 'auto' : 34,
-    width: navCollapsed ? 'auto' : 34,
-    margin: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    '& .MuiSvgIcon-root': {
-      fontSize: navCollapsed ? 21 : 22,
-    },
-  }
+  const active = Boolean(match)
 
   return (
-    <ListItem
-      className={`layout-item${navCollapsed ? ' layout-item--collapsed' : ''}`}
-      disablePadding
-    >
-      <ListItemButton
-        selected={!!match}
-        className="layout-item__button"
-        sx={[
-          {
-            minHeight: navCollapsed ? 58 : 46,
-            width: navCollapsed ? 58 : '100%',
-            margin: navCollapsed ? '4px auto' : '3px 0',
-            padding: navCollapsed ? '7px 4px 6px' : '9px 12px',
-            flexDirection: navCollapsed ? 'column' : 'row',
-            justifyContent: navCollapsed ? 'center' : 'flex-start',
-            borderRadius: navCollapsed
-              ? designTokens.radius.md
-              : designTokens.radius.sm,
-            color: 'text.secondary',
-            transition:
-              'background-color 180ms ease, box-shadow 180ms ease, color 180ms ease, transform 180ms ease',
-            '& .MuiListItemText-primary': {
-              color: 'inherit',
-              fontWeight: navCollapsed ? 700 : 750,
-              fontSize: navCollapsed ? 10.5 : 14,
-              lineHeight: 1.2,
-              letterSpacing: navCollapsed ? '0.01em' : 'normal',
-              textAlign: navCollapsed ? 'center' : 'left',
-            },
-          },
-          ({ palette: { mode, primary } }) => {
-            const tokens = modeTokens(mode)
-            const selectedBackground = alpha(primary.main, 0.14)
-
-            return {
-              '&:hover': {
-                backgroundColor: alpha(primary.main, 0.08),
-                color: 'text.primary',
-              },
-              '&.Mui-selected': {
-                backgroundColor: selectedBackground,
-                color: primary.main,
-                boxShadow: `0 0 14px ${tokens.glowPrimary}`,
-              },
-              '&.Mui-selected:hover': {
-                backgroundColor: alpha(primary.main, 0.18),
-                color: primary.main,
-              },
-              '&:focus-visible': {
-                outline: `2px solid ${alpha(primary.main, 0.72)}`,
-                outlineOffset: 2,
-              },
-              '&.Mui-selected .MuiListItemIcon-root': {
-                color: primary.main,
-              },
-            }
-          },
-        ]}
-        title={navCollapsed ? children : undefined}
-        aria-label={navCollapsed ? children : undefined}
+    <div className="layout-item">
+      <button
+        type="button"
+        className={`layout-item__button${active ? ' is-active' : ''}`}
+        aria-current={active ? 'page' : undefined}
         onClick={() => navigate(to)}
       >
-        {(effectiveMenuIcon === 'monochrome' || !effectiveMenuIcon) && (
-          <ListItemIcon className="layout-item__icon" sx={iconSx}>
-            {icon[0]}
-          </ListItemIcon>
-        )}
-        {effectiveMenuIcon === 'colorful' && (
-          <ListItemIcon className="layout-item__icon" sx={iconSx}>
-            {icon[1]}
-          </ListItemIcon>
-        )}
-        <ListItemText
-          className="layout-item__label"
-          sx={{
-            minWidth: 0,
-            flex: navCollapsed ? '0 0 auto' : '1 1 auto',
-            margin: navCollapsed
-              ? '2px 0 0'
-              : effectiveMenuIcon === 'disable'
-                ? 0
-                : '0 0 0 2px',
-          }}
-          primary={children}
-        />
-      </ListItemButton>
-    </ListItem>
+        <span className="layout-item__icon">
+          <LayoutIcon name={icon} />
+        </span>
+        <span className="layout-item__label">{children}</span>
+      </button>
+    </div>
   )
 }

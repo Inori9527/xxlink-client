@@ -14,6 +14,21 @@
     align-items: center;
     justify-content: space-between;
     border-bottom: 1px solid var(--divider-color);
+
+    .base-page__identity {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .base-page__logo {
+      width: 28px;
+      height: 28px;
+      flex: 0 0 28px;
+      object-fit: contain;
+      pointer-events: none;
+    }
   }
 
   .base-container {

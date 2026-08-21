@@ -1,25 +1,13 @@
-import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded'
-import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded'
-import {
-  Alert,
-  Box,
-  Button,
-  IconButton,
-  List,
-  Paper,
-  ThemeProvider,
-} from '@mui/material'
+import { Alert, Button, Paper, ThemeProvider } from '@mui/material'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet, useNavigate } from 'react-router'
 
-import brandIcon from '@/assets/image/brand-icon.png'
 import { BaseErrorBoundary } from '@/components/base'
 import { LayoutItem } from '@/components/layout/layout-item'
 import { NoticeManager } from '@/components/layout/notice-manager'
-import { UpdateButton } from '@/components/layout/update-button'
 import { UpdatePrompt } from '@/components/layout/update-prompt'
 import { WindowControls } from '@/components/layout/window-controller'
 import { useI18n } from '@/hooks/use-i18n'
@@ -46,28 +34,23 @@ import 'dayjs/locale/zh-cn'
 dayjs.extend(relativeTime)
 
 const OS = getSystem()
+// Resolved lazily: _routers imports Layout back, so navItems is in the
+// import cycle's temporal dead zone at module-evaluation time.
+const getTabBarItems = () => navItems.filter((item) => item.showInTabBar)
 
 const Layout = () => {
   const mode = useThemeMode()
   const { t } = useTranslation()
   const { theme } = useCustomTheme()
   const { sessionStatus } = useAuth()
-  const { verge, patchVerge } = useVerge()
+  const { verge } = useVerge()
   const { language } = verge ?? {}
-  const navCollapsed = verge?.collapse_navbar ?? true
-  const navToggleLabel = navCollapsed
-    ? t('layout.components.navigation.menu.expandNavBar')
-    : t('layout.components.navigation.menu.collapseNavBar')
   const { switchLanguage } = useI18n()
   const navigate = useNavigate()
   const themeReady = useMemo(() => Boolean(theme), [theme])
 
   const windowControlsRef = useRef<any>(null)
   const { decorated } = useWindowDecorations()
-
-  const handleToggleNavCollapsed = useCallback(() => {
-    void patchVerge({ collapse_navbar: !navCollapsed })
-  }, [navCollapsed, patchVerge])
 
   const customTitlebar = useMemo(
     () =>
@@ -122,13 +105,12 @@ const Layout = () => {
 
   return (
     <ThemeProvider theme={theme}>
-      {/* 左侧底部窗口控制按钮 */}
       <NoticeManager position={verge?.notice_position} />
       <UpdatePrompt />
       <Paper
         square
         elevation={0}
-        className={`${OS} layout${navCollapsed ? ' layout--nav-collapsed' : ''}`}
+        className={`${OS} layout`}
         style={{
           borderTopLeftRadius: '0px',
           borderTopRightRadius: '0px',
@@ -159,67 +141,7 @@ const Layout = () => {
         {customTitlebar}
 
         <div className="layout-content">
-          <div className="layout-content__left">
-            <div className="the-logo" data-tauri-drag-region="false">
-              <div className="the-logo__brand" data-tauri-drag-region="true">
-                <Box
-                  component="img"
-                  className="the-logo__icon"
-                  src={brandIcon}
-                  alt="XXLink"
-                  sx={{
-                    width: 34,
-                    height: 34,
-                    objectFit: 'contain',
-                  }}
-                />
-                <Box
-                  component="span"
-                  className="the-wordmark"
-                  sx={{
-                    color: 'text.primary',
-                    fontSize: 22,
-                    fontWeight: 800,
-                    lineHeight: 1,
-                    letterSpacing: '-0.04em',
-                  }}
-                >
-                  XXLink
-                </Box>
-              </div>
-            </div>
-
-            <List className="the-menu">
-              {navItems.map((item) => (
-                <LayoutItem key={item.path} to={item.path} icon={item.icon}>
-                  {t(item.label)}
-                </LayoutItem>
-              ))}
-            </List>
-
-            <div className="the-rail-footer">
-              <div className="the-rail-update">
-                <UpdateButton className="the-newbtn" />
-              </div>
-              <IconButton
-                className="the-nav-toggle"
-                size="small"
-                data-tauri-drag-region="false"
-                title={navToggleLabel}
-                aria-label={navToggleLabel}
-                onClick={handleToggleNavCollapsed}
-              >
-                {navCollapsed ? (
-                  <ChevronRightRoundedIcon />
-                ) : (
-                  <ChevronLeftRoundedIcon />
-                )}
-              </IconButton>
-            </div>
-          </div>
-
-          <div className="layout-content__right">
-            <div className="the-bar"></div>
+          <main className="layout-content__right">
             <div className="the-content">
               {sessionStatus === 'recovery_required' && (
                 <Alert
@@ -247,8 +169,16 @@ const Layout = () => {
                 <Outlet />
               </BaseErrorBoundary>
             </div>
-          </div>
+          </main>
         </div>
+
+        <nav className="bottom-tab-bar" aria-label="Primary navigation">
+          {getTabBarItems().map((item) => (
+            <LayoutItem key={item.path} to={item.path} icon={item.icon}>
+              {t(item.label)}
+            </LayoutItem>
+          ))}
+        </nav>
       </Paper>
     </ThemeProvider>
   )

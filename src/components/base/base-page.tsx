@@ -2,6 +2,8 @@ import { Typography } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
 import React, { ReactNode } from 'react'
 
+import brandIcon from '@/assets/image/brand-icon.png'
+
 import { BaseErrorBoundary } from './base-error-boundary'
 
 interface Props {
@@ -26,12 +28,25 @@ export const BasePage: React.FC<Props> = (props) => {
     <BaseErrorBoundary>
       <div className="base-page">
         <header data-tauri-drag-region="true" style={{ userSelect: 'none' }}>
-          <Typography
-            sx={{ fontSize: '20px', fontWeight: 800, letterSpacing: '-0.02em' }}
-            data-tauri-drag-region="true"
-          >
-            {title}
-          </Typography>
+          <div className="base-page__identity" data-tauri-drag-region="true">
+            <img
+              className="base-page__logo"
+              src={brandIcon}
+              alt="XXLink"
+              draggable={false}
+            />
+            <Typography
+              sx={{
+                minWidth: 0,
+                fontSize: '20px',
+                fontWeight: 800,
+                letterSpacing: '-0.02em',
+              }}
+              data-tauri-drag-region="true"
+            >
+              {title}
+            </Typography>
+          </div>
 
           {header}
         </header>

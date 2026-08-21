@@ -10,10 +10,12 @@ const readSource = (relativePath) =>
 
 const routerSource = readSource('src/pages/_routers.tsx')
 const layoutSource = readSource('src/pages/_layout.tsx')
+const layoutStylesSource = readSource('src/assets/styles/layout.scss')
 const layoutItemSource = readSource('src/components/layout/layout-item.tsx')
 const appDataProviderSource = readSource('src/providers/app-data-provider.tsx')
 const mineSource = readSource('src/pages/mine.tsx')
 const plansSource = readSource('src/pages/plans.tsx')
+const vergeTypesSource = readSource('src/types/global.d.ts')
 
 const expectedNavPaths = ['/connect', '/nodes', '/plans', '/mine']
 const navItemsSource = routerSource
@@ -23,7 +25,67 @@ const navPathMatches = [...navItemsSource.matchAll(/path:\s*'([^']+)'/g)].map(
   ([, path]) => path,
 )
 
-assert.deepEqual(navPathMatches, expectedNavPaths, 'consumer nav order changed')
+// 2026-08-21 bottom-tab-bar redesign: navItems remains the route source of truth,
+// including the reachable /nodes route that is no longer a primary tab.
+assert.deepEqual(
+  navPathMatches,
+  expectedNavPaths,
+  'consumer route registry order changed',
+)
+
+// 2026-08-21 bottom-tab-bar redesign: exactly three visible tabs are allowed,
+// and their labels/routes must stay in the approved Connect/Plans/Mine order.
+const expectedTabBarItems = [
+  {
+    label: 'layout.components.navigation.tabs.connect',
+    path: '/connect',
+  },
+  {
+    label: 'layout.components.navigation.tabs.plans',
+    path: '/plans',
+  },
+  {
+    label: 'layout.components.navigation.tabs.mine',
+    path: '/mine',
+  },
+]
+const tabBarItemMatches = [
+  ...navItemsSource.matchAll(
+    /label:\s*'([^']+)',\s*path:\s*'([^']+)',\s*showInTabBar:\s*true/g,
+  ),
+].map(([, label, path]) => ({ label, path }))
+assert.deepEqual(
+  tabBarItemMatches,
+  expectedTabBarItems,
+  'bottom tab bar must expose exactly Connect, Plans, and Mine',
+)
+assert.match(
+  navItemsSource,
+  /path:\s*'\/nodes',\s*showInTabBar:\s*false/,
+  '/nodes must remain route-reachable but hidden from the tab bar',
+)
+assert.match(
+  layoutSource,
+  // Lazy accessor: _routers imports Layout back, so navItems sits in the
+  // import cycle's TDZ at module-evaluation time (2026-08-21 fix).
+  /const getTabBarItems = \(\) =>\s*navItems\.filter\(\(item\) => item\.showInTabBar\)/,
+  'layout must derive visible tabs from navItems metadata',
+)
+assert.match(
+  layoutSource,
+  /getTabBarItems\(\)\.map/,
+  'tab bar must render the derived tab list',
+)
+assert.match(
+  layoutSource,
+  /<nav className="bottom-tab-bar"[\s\S]*getTabBarItems\(\)\.map\(/,
+  'layout must render the bottom tab bar from the filtered route registry',
+)
+assert.match(
+  routerSource,
+  /\.\.\.navItems\.map\([\s\S]*path: item\.path/,
+  '/nodes must remain reachable through the protected router',
+)
 
 const expectedRedirects = new Map([
   ['/home', '/connect'],
@@ -99,20 +161,34 @@ assert.equal(
   false,
   'obsolete menu-order hook remains',
 )
-assert.equal(
-  layoutSource.includes('collapse_navbar'),
-  true,
-  'collapse_navbar must remain supported',
-)
-assert.equal(
-  layoutSource.includes('patchVerge({ collapse_navbar:'),
-  true,
-  'collapse_navbar must remain writable',
-)
+// 2026-08-21 bottom-tab-bar redesign: the rail and collapse UI are gone;
+// collapse_navbar remains a supported model key for compatibility only.
+for (const [sourceName, source] of [
+  ['layout', layoutSource],
+  ['layout styles', layoutStylesSource],
+  ['layout item', layoutItemSource],
+]) {
+  for (const obsoleteToken of [
+    'collapse_navbar',
+    'layout--nav-collapsed',
+    'layout-content__left',
+    'the-logo',
+    'the-rail-footer',
+    'the-nav-toggle',
+  ]) {
+    assert.equal(
+      source.includes(obsoleteToken),
+      false,
+      `${sourceName} retains obsolete rail/collapse UI: ${obsoleteToken}`,
+    )
+  }
+}
+assert.equal(layoutSource.includes('<IconButton'), false)
+assert.equal(layoutSource.includes('patchVerge'), false)
 assert.match(
-  layoutSource,
-  /<IconButton[\s\S]{0,300}data-tauri-drag-region="false"/,
-  'collapse button must not be part of the Tauri drag region',
+  vergeTypesSource,
+  /collapse_navbar\?:\s*boolean/,
+  'collapse_navbar model support must remain declared',
 )
 assert.equal(layoutSource.includes('LogsPage'), false, 'Logs KeepAlive remains')
 assert.equal(

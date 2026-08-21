@@ -32,6 +32,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 
 import { BasePage, type DialogRef } from '@/components/base'
+import { UpdateButton } from '@/components/layout/update-button'
 import { PromoRedeemPanel } from '@/components/mine/promo-redeem-panel'
 import { UpdateViewer } from '@/components/setting/mods/update-viewer'
 import { useUpdate } from '@/hooks/use-update'
@@ -334,7 +335,11 @@ const MinePage = () => {
   const accountInitial = accountLabel.trim().charAt(0).toUpperCase() || 'X'
 
   return (
-    <BasePage title={text.pageTitle} contentStyle={{ height: '100%' }}>
+    <BasePage
+      title={text.pageTitle}
+      header={<UpdateButton />}
+      contentStyle={{ height: '100%' }}
+    >
       <UpdateViewer ref={updateViewerRef} />
       <Stack
         spacing={2}

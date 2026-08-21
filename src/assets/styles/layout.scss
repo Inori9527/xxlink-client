@@ -6,147 +6,110 @@
   overflow: hidden;
 
   .layout-content {
-    display: flex;
     flex: 1;
+    min-height: 0;
+    display: flex;
     overflow: hidden;
-
-    &__left {
-      flex: 0 0 200px;
-      width: 200px;
-      min-width: 200px;
-      max-width: 200px;
-      display: flex;
-      height: 100%;
-      padding: 12px 8px 10px;
-      flex-direction: column;
-      align-self: stretch;
-      box-sizing: border-box;
-      user-select: none;
-      -webkit-user-select: none;
-      -moz-user-select: none;
-      -ms-user-select: none;
-      overflow: hidden;
-      background-color: var(--surface-color);
-      border-right: 1px solid var(--outline-color);
-      transition:
-        width 180ms ease,
-        flex-basis 180ms ease;
-
-      .the-logo {
-        flex: 0 0 72px;
-        display: flex;
-        width: 100%;
-        padding: 0 8px;
-        flex-direction: column;
-        justify-content: center;
-        align-items: stretch;
-        align-self: stretch;
-        box-sizing: border-box;
-
-        .the-logo__brand {
-          display: flex;
-          width: 100%;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .the-logo__icon {
-          flex: 0 0 34px;
-          pointer-events: none;
-        }
-
-        .the-wordmark {
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          pointer-events: none;
-        }
-      }
-
-      .the-menu {
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow-y: auto;
-        margin: 0;
-        padding: 4px 0;
-        scrollbar-width: none;
-
-        &::-webkit-scrollbar {
-          width: 0;
-          height: 0;
-        }
-
-        .layout-item {
-          width: 100%;
-          max-width: none;
-          padding: 0;
-        }
-      }
-
-      .the-rail-footer {
-        display: flex;
-        flex: 0 0 auto;
-        flex-direction: column;
-        align-items: stretch;
-        gap: 8px;
-        padding: 10px 0 0;
-        border-top: 1px solid var(--outline-color);
-      }
-
-      .the-rail-update {
-        display: flex;
-        width: 100%;
-        justify-content: stretch;
-
-        .the-newbtn {
-          width: 100%;
-          min-height: 32px;
-          padding: 5px 12px;
-        }
-      }
-
-      .the-nav-toggle {
-        align-self: flex-end;
-        width: 32px;
-        height: 32px;
-        color: inherit;
-
-        &:focus-visible {
-          outline: 2px solid var(--primary-main);
-          outline-offset: 2px;
-        }
-
-        .MuiSvgIcon-root {
-          font-size: 20px;
-        }
-      }
-    }
 
     &__right {
       position: relative;
-      flex: 1 1 100%;
+      flex: 1 1 auto;
+      min-width: 0;
       height: 100%;
-
-      .the-bar {
-        height: 36px;
-        display: flex;
-        justify-content: end;
-        box-sizing: border-box;
-        z-index: 2;
-
-        .the-dragbar {
-          margin-top: 5px;
-          app-region: drag;
-        }
-      }
 
       .the-content {
         position: absolute;
-        top: 0;
-        left: 0;
-        right: 1px;
-        bottom: 0;
+        inset: 0;
+        overflow: hidden;
       }
+    }
+  }
+
+  .bottom-tab-bar {
+    flex: 0 0 76px;
+    height: 76px;
+    min-height: 76px;
+    display: flex;
+    align-items: stretch;
+    gap: 2px;
+    padding: 6px 12px 8px;
+    box-sizing: border-box;
+    background: #ffffff;
+    border-top: 1px solid rgba(23, 42, 77, 0.08);
+    box-shadow: 0 -8px 22px rgba(23, 42, 77, 0.06);
+    z-index: 3;
+
+    .layout-item {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+
+    .layout-item__button {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      padding: 4px 4px 2px;
+      border: 0;
+      border-radius: 12px;
+      background: transparent;
+      color: #5d6b84;
+      cursor: pointer;
+      font: inherit;
+      transition:
+        background-color 180ms ease,
+        color 180ms ease,
+        transform 180ms ease;
+
+      &:hover {
+        background: rgba(47, 128, 237, 0.05);
+      }
+
+      &:active {
+        transform: translateY(1px) scale(0.98);
+      }
+
+      &:focus-visible {
+        outline: 2px solid rgba(47, 128, 237, 0.58);
+        outline-offset: -2px;
+      }
+
+      &.is-active {
+        color: #2f80ed;
+      }
+    }
+
+    .layout-item__icon {
+      width: 24px;
+      height: 24px;
+      flex: 0 0 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #98a6b8;
+
+      svg {
+        width: 24px;
+        height: 24px;
+        display: block;
+      }
+    }
+
+    .layout-item__label {
+      display: block;
+      color: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 16px;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+    }
+
+    .layout-item__button.is-active .layout-item__icon {
+      color: #2f80ed;
     }
   }
 }
@@ -164,17 +127,6 @@
       height: 36px;
       border-bottom: 1px solid var(--divider-color);
     }
-
-    .layout-content__left .the-logo {
-      flex-basis: 72px;
-      margin-top: 6px;
-      padding-top: 5px;
-      padding-bottom: 8px;
-    }
-
-    .layout-content__right .the-content {
-      top: 5px;
-    }
   }
 }
 
@@ -188,99 +140,6 @@
       box-sizing: border-box;
       height: 36px;
       border-bottom: 1px solid var(--divider-color);
-    }
-
-    .layout-content__left {
-      padding-top: 5px;
-    }
-
-    .layout-content__right .the-content {
-      top: 5px;
-    }
-  }
-}
-
-.layout.layout--nav-collapsed {
-  --layout-nav-collapsed-width: 72px;
-  --layout-nav-item-size: 58px;
-  --layout-nav-logo-size: 58px;
-
-  .layout-content {
-    &__left {
-      flex: 0 0 var(--layout-nav-collapsed-width) !important;
-      width: var(--layout-nav-collapsed-width) !important;
-      min-width: var(--layout-nav-collapsed-width) !important;
-      max-width: var(--layout-nav-collapsed-width) !important;
-      padding: 10px 6px !important;
-      border-right: 1px solid var(--outline-color) !important;
-
-      .the-logo {
-        flex: 0 0 var(--layout-nav-logo-size) !important;
-        height: var(--layout-nav-logo-size) !important;
-        margin: 0 0 8px !important;
-        padding: 0 !important;
-        align-items: center !important;
-        justify-content: center !important;
-      }
-
-      .the-logo__brand {
-        width: 100% !important;
-        height: 100% !important;
-        align-items: center !important;
-        justify-content: center !important;
-      }
-
-      .the-logo__icon {
-        flex-basis: 34px !important;
-      }
-
-      .the-wordmark {
-        display: none !important;
-      }
-
-      .the-menu {
-        width: var(--layout-nav-collapsed-width) !important;
-        overflow-x: hidden;
-
-        .layout-item {
-          max-width: 100% !important;
-          padding: 0 !important;
-        }
-
-        .layout-item__button {
-          width: var(--layout-nav-item-size) !important;
-          max-width: var(--layout-nav-item-size) !important;
-        }
-      }
-
-      .the-rail-footer {
-        align-items: center;
-        gap: 8px;
-        padding-top: 10px;
-      }
-
-      .the-rail-update {
-        justify-content: center;
-
-        .the-newbtn {
-          width: 36px;
-          min-width: 36px;
-          height: 32px;
-          padding: 0;
-          overflow: hidden;
-          font-size: 0;
-
-          &::before {
-            content: '↻';
-            font-size: 16px;
-            line-height: 1;
-          }
-        }
-      }
-
-      .the-nav-toggle {
-        align-self: center;
-      }
     }
   }
 }
