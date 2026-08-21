@@ -8,6 +8,7 @@
     "dev:diff": "node scripts/stop-dev-sidecars.mjs && cross-env RUST_BACKTRACE=full tauri dev -f verge-dev",
     "dev:trace": "node scripts/stop-dev-sidecars.mjs && cross-env RUST_BACKTRACE=full RUSTFLAGS=\"--cfg tokio_unstable\" tauri dev -f verge-dev tokio-trace",
     "dev:tauri": "node scripts/stop-dev-sidecars.mjs && cross-env RUST_BACKTRACE=full tauri dev -f tauri-dev",
+    "preview:browser": "cross-env VITE_XXLINK_BROWSER_PREVIEW=1 vite --port 3100 --strictPort",
     "build": "cross-env NODE_OPTIONS='--max-old-space-size=4096' node scripts/tauri-cli.mjs build",
     "build:fast": "cross-env NODE_OPTIONS='--max-old-space-size=4096' node scripts/tauri-cli.mjs build -- --profile fast-release",
     "tauri": "node scripts/tauri-cli.mjs",

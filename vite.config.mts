@@ -5,6 +5,35 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import svgr from 'vite-plugin-svgr'
 
+const browserPreviewAliases =
+  process.env.VITE_XXLINK_BROWSER_PREVIEW === '1'
+    ? {
+        '@tauri-apps/api/app': path.resolve('./src/dev-preview/tauri-app.ts'),
+        '@tauri-apps/api/core': path.resolve(
+          './src/dev-preview/invoke-mock.ts',
+        ),
+        '@tauri-apps/api/event': path.resolve(
+          './src/dev-preview/tauri-event.ts',
+        ),
+        '@tauri-apps/api/webviewWindow': path.resolve(
+          './src/dev-preview/tauri-webview-window.ts',
+        ),
+        '@tauri-apps/api/window': path.resolve(
+          './src/dev-preview/tauri-window.ts',
+        ),
+        '@tauri-apps/api': path.resolve('./src/dev-preview/tauri-api.ts'),
+        '@tauri-apps/plugin-http': path.resolve(
+          './src/dev-preview/tauri-http.ts',
+        ),
+        '@tauri-apps/plugin-shell': path.resolve(
+          './src/dev-preview/tauri-shell.ts',
+        ),
+        'tauri-plugin-mihomo-api': path.resolve(
+          './src/dev-preview/mihomo-api.ts',
+        ),
+      }
+    : {}
+
 export default defineConfig({
   root: 'src',
   server: { port: 3000 },
@@ -58,6 +87,7 @@ export default defineConfig({
     alias: {
       '@': path.resolve('./src'),
       '@root': path.resolve('.'),
+      ...browserPreviewAliases,
     },
   },
   define: {
