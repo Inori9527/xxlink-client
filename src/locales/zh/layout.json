@@ -62,7 +62,24 @@
         "connected": "已连接",
         "disconnected": "未连接",
         "connectedHint": "已连接",
+        "connectedSecureHint": "连接安全 · 已加密 {{duration}}",
         "startHint": "点击开始"
+      },
+      "location": {
+        "chooseHint": "点击选择线路",
+        "auto": "自动选择 · {{city}}",
+        "route": "{{city}} · {{route}}",
+        "connected": "延迟 {{latency}}ms · ↑ {{upload}} · ↓ {{download}}",
+        "lockedHint": "已为你锁定当前最快线路"
+      },
+      "usage": {
+        "label": "套餐周期用量"
+      },
+      "region": {
+        "title": "选择地区",
+        "test": "测速",
+        "smartTitle": "智能推荐",
+        "smartSummary": "当前最快 · {{city}} {{latency}}ms"
       },
       "mode": {
         "system": "浏览器",

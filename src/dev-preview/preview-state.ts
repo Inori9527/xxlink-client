@@ -86,9 +86,9 @@ export const previewState: {
     auto_close_connection: false,
     auto_check_update: false,
     default_latency_timeout: 10_000,
-    connect_mode: 'both',
+    connect_mode: 'smart',
   },
-  mode: 'both',
+  mode: 'smart',
   connected: false,
   selectedNode: PREVIEW_NODE_NAMES[0],
   tunSettings: {

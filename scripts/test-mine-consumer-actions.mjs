@@ -83,6 +83,25 @@ test('Mine no longer contains announcement API usage or navigation', () => {
   assert.equal(source.includes('Announcement'), false)
 })
 
+// 2026-08-21: Mine now owns the consumer-facing connection mode settings row.
+test('Mine keeps the relocated connection mode control and bilingual copy', () => {
+  const source = readSource('src/pages/mine.tsx')
+
+  assert.match(source, /useConnectModeControl/)
+  assert.match(source, /modeControl\.handleModeChange/)
+  assert.match(source, /modeControl\.serviceInstallMode/)
+
+  for (const localePath of [
+    'src/locales/en/mine.json',
+    'src/locales/zh/mine.json',
+  ]) {
+    const locale = JSON.parse(readSource(localePath))
+    assert.equal(typeof locale.sections.settings, 'string')
+    assert.equal(typeof locale.rows.connectMode.title, 'string')
+    assert.equal(typeof locale.rows.connectMode.description, 'string')
+  }
+})
+
 test('protected layout has no announcement prompt or fetch-display path', () => {
   const layoutSource = readSource('src/pages/_layout.tsx')
 

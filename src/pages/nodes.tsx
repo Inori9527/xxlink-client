@@ -18,190 +18,44 @@ import {
   alpha,
   useTheme,
 } from '@mui/material'
-import { useLockFn } from 'ahooks'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { BasePage } from '@/components/base'
-import { useProxySelection } from '@/hooks/use-proxy-selection'
+import {
+  getRegionFlag,
+  getNodeRouteLabel,
+  groupNodes,
+  useNodeCatalog,
+} from '@/hooks/use-node-catalog'
 import { useVerge } from '@/hooks/use-verge'
 import { designTokens, modeTokens } from '@/pages/_theme'
 import { useAppData } from '@/providers/app-data-context'
-import delayManager from '@/services/delay'
-import { showNotice } from '@/services/notice-service'
-import { runtimeActionController } from '@/services/runtime-action-controller'
 import { reportSafeClientFailure } from '@/services/safe-client-error'
-import {
-  getProxyDisplayKey,
-  getProxyDisplayName,
-  isHiddenProxyEntry,
-} from '@/utils/proxy-display'
-
-type ProxyEntry = {
-  name: string
-  type?: string
-  now?: string
-  history?: { time: string; delay: number }[]
-}
-
-type DisplayNode = ProxyEntry & {
-  displayName: string
-  key: string
-}
-
-const REGION_FLAGS: Record<string, string> = {
-  东京: '🇯🇵',
-  新加坡: '🇸🇬',
-  洛杉矶: '🇺🇸',
-  香港: '🇭🇰',
-  法兰克福: '🇩🇪',
-  都柏林: '🇮🇪',
-  伦敦: '🇬🇧',
-  圣何塞: '🇺🇸',
-  纽约: '🇺🇸',
-}
-
-const getRegionName = (displayName: string) => {
-  const separatorIndex = displayName.indexOf('-')
-  return (
-    separatorIndex === -1 ? displayName : displayName.slice(0, separatorIndex)
-  ).trim()
-}
-
-const getNodeRouteLabel = (displayName: string) => {
-  const separatorIndex = displayName.indexOf('-')
-  return separatorIndex === -1
-    ? displayName
-    : displayName.slice(separatorIndex + 1).trim() || displayName
-}
 
 const NodesPage = () => {
   const { t } = useTranslation()
   const theme = useTheme()
   const tokens = modeTokens(theme.palette.mode)
-  const { verge } = useVerge()
-  const { proxies, refreshProxy } = useAppData()
-  const [delayRefreshTick, setDelayRefreshTick] = useState(0)
-  const [testingDelay, setTestingDelay] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const { verge } = useVerge()
+  const { refreshProxy } = useAppData()
   const connected = Boolean(
     verge?.enable_tun_mode || verge?.enable_system_proxy,
   )
-  const { changeProxy } = useProxySelection({
-    onSuccess: () => refreshProxy(),
-    onError: (error) => reportSafeClientFailure('nodes-proxy-selection', error),
-    forceConnectionCleanup: true,
+  const catalog = useNodeCatalog({
+    selectionScope: 'nodes-proxy-selection',
+    onSelectionSuccess: refreshProxy,
+    onSelectionError: (error) =>
+      reportSafeClientFailure('nodes-proxy-selection', error),
   })
-
-  const globalGroup = proxies?.global as
-    | {
-        name?: string
-        now?: string
-        all?: Array<ProxyEntry | string>
-      }
-    | undefined
-  const proxyRecords = proxies?.records as
-    | Record<string, ProxyEntry>
-    | undefined
-
-  const currentNode = globalGroup?.now || ''
-  const groupName = globalGroup?.name || ''
-  const latencyTimeout = verge?.default_latency_timeout || 10000
-  const nodes = useMemo<DisplayNode[]>(() => {
-    const byKey = new Map<string, DisplayNode>()
-
-    for (const item of globalGroup?.all ?? []) {
-      const entry =
-        typeof item === 'string'
-          ? ({ name: item } as ProxyEntry)
-          : (item as ProxyEntry)
-
-      if (isHiddenProxyEntry(entry.name, proxyRecords?.[entry.name] ?? entry))
-        continue
-
-      const displayName = getProxyDisplayName(entry.name)
-      const key = getProxyDisplayKey(entry.name)
-      if (!displayName || !key) continue
-
-      const node: DisplayNode = { ...entry, displayName, key }
-      const existing = byKey.get(key)
-      if (!existing || entry.name === currentNode) {
-        byKey.set(key, node)
-      }
-    }
-
-    return Array.from(byKey.values()).sort((a, b) => {
-      const aAuto = a.displayName.toLowerCase() === 'auto'
-      const bAuto = b.displayName.toLowerCase() === 'auto'
-      if (aAuto && !bAuto) return -1
-      if (bAuto && !aAuto) return 1
-      return a.displayName.localeCompare(b.displayName)
-    })
-  }, [currentNode, globalGroup?.all, proxyRecords])
-
-  const selectedKey = currentNode ? getProxyDisplayKey(currentNode) : ''
-
-  useEffect(() => {
-    if (!groupName) return
-    delayManager.setGroupListener(groupName, () =>
-      setDelayRefreshTick((value) => value + 1),
-    )
-    return () => delayManager.removeGroupListener(groupName)
-  }, [groupName])
-
-  const handleSelect = (node: DisplayNode) => {
-    if (!globalGroup?.name || node.name === currentNode) return
-    changeProxy(globalGroup.name, node.name)
-  }
-
-  const handleTestDelay = useLockFn(async () => {
-    if (!groupName || nodes.length === 0) return
-
-    setTestingDelay(true)
-    try {
-      setDelayRefreshTick((value) => value + 1)
-      await runtimeActionController.testNodeLatency({
-        nodeNames: nodes.map((node) => node.name),
-        groupName,
-        timeoutMs: latencyTimeout,
-      })
-      setDelayRefreshTick((value) => value + 1)
-      await refreshProxy()
-    } catch {
-      showNotice.error(t('layout.components.nodes.delay.failed'))
-    } finally {
-      setTestingDelay(false)
-    }
-  })
-
-  const getNodeDelay = (node: DisplayNode) => {
-    void delayRefreshTick
-    const cachedDelay = groupName
-      ? delayManager.getDelayUpdate(node.name, groupName)?.delay
-      : undefined
-    if (typeof cachedDelay === 'number') return cachedDelay
-
-    const historyDelay = node.history?.[node.history.length - 1]?.delay
-    return typeof historyDelay === 'number' ? historyDelay : -1
-  }
-
-  const getDelayLabel = (delay: number) => {
-    if (delay === -2) return t('layout.components.nodes.delay.testing')
-    if (delay === -1) return t('layout.components.nodes.delay.notTested')
-    if (delay === 0 || (delay >= latencyTimeout && delay <= 1e5)) {
-      return t('layout.components.nodes.delay.timeout')
-    }
-    if (delay > 1e5) return t('layout.components.nodes.delay.failed')
-    return t('layout.components.nodes.delay.ms', { value: delay })
-  }
-
-  const getDelayColor = (delay: number) => {
-    if (delay === -2) return 'primary.main'
-    if (delay < 0) return 'text.secondary'
-    if (delay === 0 || delay >= latencyTimeout) return 'error.main'
-    if (delay >= 400) return 'warning.main'
-    return 'success.main'
-  }
+  const nodes = catalog.nodes
+  const selectedKey = catalog.selectedKey
+  const testingDelay = catalog.testingDelay
+  const groupName = catalog.groupName
+  const getNodeDelay = catalog.getNodeDelay
+  const getDelayLabel = catalog.getDelayLabel
+  const getDelayColor = catalog.getDelayColor
 
   const filteredNodes = useMemo(() => {
     const query = searchQuery.trim().toLocaleLowerCase()
@@ -212,39 +66,9 @@ const NodesPage = () => {
     )
   }, [nodes, searchQuery])
 
-  const regions = useMemo(() => {
-    const grouped = new Map<string, DisplayNode[]>()
-
-    for (const node of filteredNodes) {
-      const regionName = getRegionName(node.displayName) || node.displayName
-      const regionNodes = grouped.get(regionName) ?? []
-      regionNodes.push(node)
-      grouped.set(regionName, regionNodes)
-    }
-
-    return Array.from(grouped, ([name, regionNodes]) => ({
-      name,
-      nodes: regionNodes,
-    }))
-  }, [filteredNodes])
-
-  const selectedNode = nodes.find(
-    (node) =>
-      selectedKey !== '' && selectedKey === getProxyDisplayKey(node.name),
-  )
-  const recommendedCandidate = nodes.reduce<{
-    node: DisplayNode
-    delay: number
-  } | null>((best, node) => {
-    const delay = getNodeDelay(node)
-    if (!Number.isFinite(delay) || delay <= 0) return best
-    if (!best || delay < best.delay) return { node, delay }
-    return best
-  }, null)
-  const recommendedNode = recommendedCandidate?.node ?? selectedNode
-  const recommendedDelay =
-    recommendedCandidate?.delay ??
-    (selectedNode ? getNodeDelay(selectedNode) : -1)
+  const regions = useMemo(() => groupNodes(filteredNodes), [filteredNodes])
+  const recommendedNode = catalog.recommendedNode
+  const recommendedDelay = catalog.recommendedDelay
 
   return (
     <BasePage
@@ -256,7 +80,7 @@ const NodesPage = () => {
           startIcon={
             testingDelay ? <CircularProgress size={14} /> : <SpeedRounded />
           }
-          onClick={handleTestDelay}
+          onClick={catalog.testDelay}
           disabled={!groupName || nodes.length === 0 || testingDelay}
           sx={{ fontWeight: 900 }}
         >
@@ -399,7 +223,7 @@ const NodesPage = () => {
               <Button
                 variant="outlined"
                 size="small"
-                onClick={() => handleSelect(recommendedNode)}
+                onClick={() => catalog.selectNode(recommendedNode)}
                 disabled={recommendedNode.key === selectedKey}
                 sx={{ flex: '0 0 auto' }}
               >
@@ -441,7 +265,7 @@ const NodesPage = () => {
                       component="span"
                       sx={{ fontSize: 20, lineHeight: 1 }}
                     >
-                      {REGION_FLAGS[region.name] ?? '🌐'}
+                      {getRegionFlag(region.name)}
                     </Typography>
                     <Typography variant="subtitle1" fontWeight={900} noWrap>
                       {region.name}
@@ -476,8 +300,7 @@ const NodesPage = () => {
                 <Box>
                   {region.nodes.map((node, index) => {
                     const selected =
-                      selectedKey !== '' &&
-                      selectedKey === getProxyDisplayKey(node.name)
+                      selectedKey !== '' && selectedKey === node.key
                     const delay = getNodeDelay(node)
 
                     return (
@@ -488,7 +311,7 @@ const NodesPage = () => {
                         aria-pressed={selected}
                         aria-label={node.displayName}
                         disabled={selected}
-                        onClick={() => handleSelect(node)}
+                        onClick={() => catalog.selectNode(node)}
                         sx={{
                           width: '100%',
                           minHeight: 58,

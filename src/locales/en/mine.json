@@ -10,6 +10,7 @@
   "usageRefreshFailed": "Usage could not refresh. You are still signed in; retry later.",
   "sections": {
     "common": "Common",
+    "settings": "Settings",
     "account": "Account"
   },
   "rows": {
@@ -24,6 +25,10 @@
       "checking": "Checking",
       "check": "Check",
       "latest": "You are on the latest version"
+    },
+    "connectMode": {
+      "title": "Connection mode",
+      "description": "Choose system proxy, full VPN, or smart split"
     },
     "settings": {
       "title": "Settings",

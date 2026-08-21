@@ -10,6 +10,7 @@
   "usageRefreshFailed": "用量暂时无法刷新。你仍保持登录，可稍后重试。",
   "sections": {
     "common": "常用",
+    "settings": "设置",
     "account": "账户"
   },
   "rows": {
@@ -24,6 +25,10 @@
       "checking": "检查中",
       "check": "检查",
       "latest": "当前已是最新版本"
+    },
+    "connectMode": {
+      "title": "连接模式",
+      "description": "选择浏览器加速、全局加速或智能分流"
     },
     "settings": {
       "title": "设置",

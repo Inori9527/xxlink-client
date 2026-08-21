@@ -62,7 +62,24 @@
         "connected": "Connected",
         "disconnected": "Disconnected",
         "connectedHint": "Connected",
+        "connectedSecureHint": "Secure · Encrypted {{duration}}",
         "startHint": "Click to start"
+      },
+      "location": {
+        "chooseHint": "Choose a route",
+        "auto": "Auto-selected · {{city}}",
+        "route": "{{city}} · {{route}}",
+        "connected": "Latency {{latency}}ms · ↑ {{upload}} · ↓ {{download}}",
+        "lockedHint": "The fastest route is locked in for you"
+      },
+      "usage": {
+        "label": "Plan cycle usage"
+      },
+      "region": {
+        "title": "Choose a region",
+        "test": "Test latency",
+        "smartTitle": "Smart recommendation",
+        "smartSummary": "Fastest now · {{city}} {{latency}}ms"
       },
       "mode": {
         "system": "Browser",

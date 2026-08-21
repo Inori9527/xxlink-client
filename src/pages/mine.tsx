@@ -5,12 +5,15 @@ import {
   OpenInNewRounded,
   RefreshRounded,
   SystemUpdateAltRounded,
+  TuneRounded,
 } from '@mui/icons-material'
 import {
   Alert,
   Box,
   Button,
+  ButtonGroup,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -35,8 +38,10 @@ import { BasePage, type DialogRef } from '@/components/base'
 import { UpdateButton } from '@/components/layout/update-button'
 import { PromoRedeemPanel } from '@/components/mine/promo-redeem-panel'
 import { UpdateViewer } from '@/components/setting/mods/update-viewer'
+import { useConnectModeControl } from '@/hooks/use-connect-mode-control'
 import { useUpdate } from '@/hooks/use-update'
 import { designTokens } from '@/pages/_theme'
+import { useAppData } from '@/providers/app-data-context'
 import {
   formatUsagePairLabel,
   shouldShowRefreshFailureNotice,
@@ -157,8 +162,10 @@ const MinePage = () => {
   const theme = useTheme()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { refreshProxy } = useAppData()
   const updateViewerRef = useRef<DialogRef>(null)
   const { updateInfo, checkUpdate, loading: checkingUpdate } = useUpdate(false)
+  const modeControl = useConnectModeControl({ onRefreshProxy: refreshProxy })
   const [logoutOpen, setLogoutOpen] = useState(false)
   const [usage, setUsage] = useState<UsageView | null>(
     () => readAccountLkgCache(user?.id)?.usage ?? null,
@@ -171,6 +178,7 @@ const MinePage = () => {
     remaining: t('mine.remaining'),
     openDashboard: t('mine.openDashboard'),
     common: t('mine.sections.common'),
+    settings: t('mine.sections.settings'),
     account: t('mine.sections.account'),
     diagnostics: t('mine.rows.diagnostics.title'),
     diagnosticsDesc: t('mine.rows.diagnostics.description'),
@@ -189,6 +197,8 @@ const MinePage = () => {
     currentAccount: t('mine.currentAccount'),
     usageUnavailable: t('mine.usageUnavailable'),
     usageRefreshFailed: t('mine.usageRefreshFailed'),
+    connectMode: t('mine.rows.connectMode.title'),
+    connectModeDescription: t('mine.rows.connectMode.description'),
   }
 
   useEffect(() => {
@@ -480,6 +490,105 @@ const MinePage = () => {
             }
             onClick={() => void handleCheckUpdate()}
           />
+          <Divider />
+          <Typography
+            variant="overline"
+            color="text.secondary"
+            sx={{ px: 2, fontWeight: 800 }}
+          >
+            {text.settings}
+          </Typography>
+          <MineRow
+            icon={<TuneRounded />}
+            title={text.connectMode}
+            description={text.connectModeDescription}
+            action={
+              <ButtonGroup
+                size="small"
+                aria-label={text.connectMode}
+                sx={{
+                  flex: '0 0 auto',
+                  '& .MuiButton-root': {
+                    minWidth: { xs: 0, sm: 58 },
+                    px: { xs: 0.9, sm: 1.25 },
+                    fontWeight: 850,
+                  },
+                }}
+              >
+                <Button
+                  variant={
+                    modeControl.mode === 'system' ? 'contained' : 'outlined'
+                  }
+                  onClick={() => modeControl.handleModeChange('system')}
+                  disabled={
+                    !modeControl.preferencesReady ||
+                    modeControl.modeChanging ||
+                    modeControl.serviceInstalling
+                  }
+                >
+                  {t('layout.components.connect.mode.system')}
+                </Button>
+                <Button
+                  variant={
+                    modeControl.mode === 'both' ? 'contained' : 'outlined'
+                  }
+                  onClick={() => modeControl.handleModeChange('both')}
+                  disabled={
+                    !modeControl.preferencesReady ||
+                    modeControl.modeChanging ||
+                    modeControl.serviceInstalling ||
+                    !modeControl.systemStateReady
+                  }
+                >
+                  {t('layout.components.connect.mode.both')}
+                </Button>
+                <Button
+                  variant={
+                    modeControl.mode === 'smart' ? 'contained' : 'outlined'
+                  }
+                  onClick={() => modeControl.handleModeChange('smart')}
+                  disabled={
+                    !modeControl.preferencesReady ||
+                    modeControl.modeChanging ||
+                    modeControl.serviceInstalling ||
+                    !modeControl.systemStateReady
+                  }
+                >
+                  {t('layout.components.connect.mode.smart')}
+                </Button>
+              </ButtonGroup>
+            }
+          />
+          {modeControl.serviceInstallMode && (
+            <Alert
+              severity="warning"
+              sx={{ mx: 1, mb: 1 }}
+              action={
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={modeControl.handleInstallService}
+                  disabled={
+                    modeControl.serviceInstalling ||
+                    !modeControl.preferencesReady
+                  }
+                  startIcon={
+                    modeControl.serviceInstalling ? (
+                      <CircularProgress size={14} color="inherit" />
+                    ) : undefined
+                  }
+                >
+                  {modeControl.serviceInstalling
+                    ? t('settings.statuses.clashService.installing')
+                    : t(
+                        'settings.sections.proxyControl.actions.installService',
+                      )}
+                </Button>
+              }
+            >
+              {t('settings.sections.proxyControl.tooltips.tunUnavailable')}
+            </Alert>
+          )}
           <Divider />
           <Typography
             variant="overline"

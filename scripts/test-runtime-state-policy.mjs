@@ -227,6 +227,12 @@ test('runtime controls reject failed reads and gate unsafe mutations', () => {
     resolve(repoRoot, 'src/pages/connect.tsx'),
     'utf8',
   )
+  // 2026-08-21: connect mode and service-install contracts moved to the
+  // shared hook used by Connect and Mine.
+  const modeControl = readFileSync(
+    resolve(repoRoot, 'src/hooks/use-connect-mode-control.ts'),
+    'utf8',
+  )
   const runtimeController = readFileSync(
     resolve(repoRoot, 'src-tauri/src/cmd/runtime_action_controller.rs'),
     'utf8',
@@ -277,20 +283,21 @@ test('runtime controls reject failed reads and gate unsafe mutations', () => {
     /const \{ verge, preferencesReady, refreshVerge \} = useVerge\(\)/,
   )
   assert.match(
-    connect,
+    modeControl,
     /if \(\s*!preferencesReady\s*\|\|\s*next === mode\s*\|\|\s*modeChanging\s*\|\|\s*serviceInstalling\s*\)/,
   )
-  assert.match(connect, /if \(isTunModeAvailable !== true\)/)
-  assert.match(connect, /await installServiceAndRestartCore\(\)/)
-  assert.match(connect, /setPendingMode\(next\)/)
-  assert.match(connect, /queueModeChange\(next, \{ force: true \}\)/)
+  assert.match(modeControl, /if \(isTunModeAvailable !== true\)/)
+  assert.match(modeControl, /await installServiceAndRestartCore\(\)/)
+  assert.match(modeControl, /setPendingMode\(next\)/)
+  assert.match(modeControl, /queueModeChange\(next, \{ force: true \}\)/)
   assert.match(
-    connect,
+    modeControl,
     /if \(!next \|\| serviceInstalling \|\| !preferencesReady\) return/,
   )
+  assert.match(connect, /if \(isTunModeAvailable !== true\)/)
   assert.match(connect, /disabled=\{serviceInstalling \|\| !preferencesReady\}/)
-  assert.match(connect, /\(next === mode && options\?\.force !== true\)/)
-  assert.match(connect, /const serviceInstallMode/)
+  assert.match(modeControl, /\(next === mode && options\?\.force !== true\)/)
+  assert.match(modeControl, /const serviceInstallMode/)
   assert.match(
     connect,
     /\(!preferencesReady && !runtimeMayRequireDisable\) \|\|\s*busy/,

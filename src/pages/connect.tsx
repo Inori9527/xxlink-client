@@ -1,7 +1,5 @@
 import {
-  AccessTimeRounded,
-  DataUsageRounded,
-  KeyboardArrowDownRounded,
+  ChevronRightRounded,
   PowerSettingsNewRounded,
   RefreshRounded,
 } from '@mui/icons-material'
@@ -9,14 +7,9 @@ import {
   Alert,
   Box,
   Button,
-  ButtonGroup,
-  Chip,
+  ButtonBase,
   CircularProgress,
   IconButton,
-  LinearProgress,
-  ListItemText,
-  Menu,
-  MenuItem,
   Paper,
   Stack,
   Tooltip,
@@ -28,7 +21,6 @@ import {
 import { open } from '@tauri-apps/plugin-shell'
 import { useLockFn } from 'ahooks'
 import {
-  type MouseEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -40,15 +32,14 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 
 import { BasePage } from '@/components/base'
-import { LayoutTraffic } from '@/components/layout/layout-traffic'
+import { RegionSheet } from '@/components/connect/region-sheet'
+import { useConnectModeControl } from '@/hooks/use-connect-mode-control'
 import {
-  loadConnectMode,
-  persistConnectMode,
-  type ConnectMode,
-} from '@/hooks/use-connect-mode'
-import { useProxySelection } from '@/hooks/use-proxy-selection'
-import { useServiceInstaller } from '@/hooks/use-service-installer'
-import { useSystemState } from '@/hooks/use-system-state'
+  getNodeRouteLabel,
+  getRegionFlag,
+  getRegionName,
+  useNodeCatalog,
+} from '@/hooks/use-node-catalog'
 import { useTrafficData } from '@/hooks/use-traffic-data'
 import { useVerge } from '@/hooks/use-verge'
 import { useVisibility } from '@/hooks/use-visibility'
@@ -89,10 +80,6 @@ import {
   type PublicBenefitView,
   type UsageView,
 } from '@/services/backend-controller'
-import {
-  formatNodeLatencyLabel,
-  getNodeLatencyChipColor,
-} from '@/services/node-latency-display'
 import { showNotice } from '@/services/notice-service'
 import { runResumeRecovery } from '@/services/resume-recovery'
 import { runtimeActionController } from '@/services/runtime-action-controller'
@@ -145,19 +132,6 @@ type ProxyEntry = {
   history?: { time: string; delay: number }[]
 }
 
-type DisplayProxyEntry = ProxyEntry & {
-  displayName: string
-}
-
-const getLatency = (entry: ProxyEntry | undefined): number | undefined => {
-  const history = entry?.history
-  if (!history || history.length === 0) return undefined
-  const last = history[history.length - 1]
-  if (!last || typeof last.delay !== 'number' || last.delay < 0)
-    return undefined
-  return last.delay
-}
-
 const resolveLeafProxyName = (
   records: Record<string, ProxyEntry> | undefined,
   name: string,
@@ -167,15 +141,6 @@ const resolveLeafProxyName = (
   const next = records[name]?.now
   if (!next || next === name) return name
   return resolveLeafProxyName(records, next, depth + 1)
-}
-
-const resolveVisibleProxyName = (
-  records: Record<string, ProxyEntry> | undefined,
-  name: string,
-): string => {
-  const leaf = resolveLeafProxyName(records, name)
-  if (!isHiddenProxyEntry(leaf, records?.[leaf])) return leaf
-  return ''
 }
 
 const formatDuration = (durationMs: number): string => {
@@ -270,21 +235,12 @@ const ConnectPage = () => {
   const navigate = useNavigate()
   const pageVisible = useVisibility()
   const { verge, preferencesReady, refreshVerge } = useVerge()
-  const { isReady: systemStateReady, isTunModeAvailable } = useSystemState()
-  const { installServiceAndRestartCore } = useServiceInstaller()
   const { proxies, refreshProxy } = useAppData()
   const currentUserId = authStore.getState().user?.id ?? null
   const initialAccountCache = useMemo(
     () => readAccountLkgCache(currentUserId),
     [currentUserId],
   )
-  const { changeProxy } = useProxySelection({
-    onSuccess: () => refreshProxy(),
-    onError: (error) =>
-      reportSafeClientFailure('connect-proxy-selection', error),
-    forceConnectionCleanup: true,
-  })
-  const [mode, setMode] = useState<ConnectMode>(() => loadConnectMode())
   const [busy, setBusy] = useState(false)
   const [readinessStatus, setReadinessStatus] =
     useState<SelectedNodeReadinessStatus>('disconnected')
@@ -308,21 +264,7 @@ const ConnectPage = () => {
   const [accountNodes, setAccountNodes] = useState<NodeView[]>(
     () => initialAccountCache?.nodes ?? [],
   )
-  const [nodeMenuAnchor, setNodeMenuAnchor] = useState<HTMLElement | null>(null)
-  const [modeChanging, setModeChanging] = useState(false)
-  const [pendingMode, setPendingMode] = useState<Exclude<
-    ConnectMode,
-    'system'
-  > | null>(null)
-  const [serviceInstalling, setServiceInstalling] = useState(false)
-  const serviceInstallMode =
-    pendingMode ??
-    (systemStateReady && mode !== 'system' && isTunModeAvailable !== true
-      ? mode
-      : null)
-  const committedModeRef = useRef(mode)
-  const modeChangeGenerationRef = useRef(0)
-  const modeChangeQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const [regionSheetOpen, setRegionSheetOpen] = useState(false)
   const [durationNow, setDurationNow] = useState(() => Date.now())
   const [connectionSession, updateConnectionSession] = useReducer(
     connectionSessionReducer,
@@ -359,6 +301,32 @@ const ConnectPage = () => {
     up: number
     down: number
   } | null>(null)
+
+  const triggerErrorFlash = useCallback(() => {
+    setErrorFlash(true)
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
+    errorTimerRef.current = setTimeout(() => setErrorFlash(false), 2000)
+  }, [])
+
+  const {
+    mode,
+    modeChanging,
+    serviceInstallMode,
+    serviceInstalling,
+    systemStateReady,
+    isTunModeAvailable,
+    setPendingMode,
+    handleInstallService,
+  } = useConnectModeControl({
+    onRefreshProxy: refreshProxy,
+    onError: triggerErrorFlash,
+  })
+  const nodeCatalog = useNodeCatalog({
+    selectionScope: 'connect-proxy-selection',
+    onSelectionSuccess: refreshProxy,
+    onSelectionError: (error) =>
+      reportSafeClientFailure('connect-proxy-selection', error),
+  })
 
   const commitAccountAccessDecision = useCallback(
     (subjectId: string, decision: AccountAccessDecision) => {
@@ -650,66 +618,16 @@ const ConnectPage = () => {
     return () => window.clearInterval(timer)
   }, [connected])
 
-  // GLOBAL group for simple one-click node selection
-  const globalGroup = proxies?.global as
-    | {
-        name?: string
-        now?: string
-        all?: Array<ProxyEntry | string>
-      }
-    | undefined
   const proxyRecords = proxies?.records as
     | Record<string, ProxyEntry>
     | undefined
 
-  const currentNode = globalGroup?.now || ''
+  const currentNode = nodeCatalog.currentNode
   const currentRuntimeNode = useMemo(
     () => resolveLeafProxyName(proxyRecords, currentNode),
     [currentNode, proxyRecords],
   )
-
-  const nodeEntries = useMemo<DisplayProxyEntry[]>(() => {
-    const all = globalGroup?.all || []
-    const byKey = new Map<string, DisplayProxyEntry>()
-
-    for (const item of all) {
-      const entry =
-        typeof item === 'string'
-          ? ({ name: item } as ProxyEntry)
-          : (item as ProxyEntry)
-      if (
-        !entry ||
-        typeof entry.name !== 'string' ||
-        isHiddenProxyEntry(entry.name, proxyRecords?.[entry.name] ?? entry)
-      ) {
-        continue
-      }
-
-      const displayName = getProxyDisplayName(entry.name)
-      const key = getProxyDisplayKey(entry.name)
-      if (!displayName) continue
-
-      const existing = byKey.get(key)
-      if (!existing || entry.name === currentNode) {
-        byKey.set(key, { ...entry, displayName })
-      }
-    }
-
-    return Array.from(byKey.values())
-  }, [currentNode, globalGroup?.all, proxyRecords])
-
-  const nodeOptions = useMemo(
-    () => nodeEntries.map((entry) => entry.displayName),
-    [nodeEntries],
-  )
-
-  const currentNodeDisplay = useMemo(() => {
-    const match = nodeEntries.find((entry) => entry.name === currentNode)
-    if (match?.displayName) return match.displayName
-
-    const visibleLeaf = resolveVisibleProxyName(proxyRecords, currentNode)
-    return visibleLeaf ? getProxyDisplayName(visibleLeaf) : ''
-  }, [currentNode, nodeEntries, proxyRecords])
+  const currentNodeDisplay = nodeCatalog.currentNodeDisplay
 
   const currentNodeId = useMemo(() => {
     if (!currentRuntimeNode && !currentNode && !currentNodeDisplay) return null
@@ -755,155 +673,7 @@ const ConnectPage = () => {
     proxyRecords,
   ])
 
-  const latencyMap = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const entry of nodeEntries) {
-      const delay = getLatency(entry)
-      if (delay !== undefined) map.set(entry.displayName, delay)
-    }
-    return map
-  }, [nodeEntries])
-  const latencyTimeoutMs = verge?.default_latency_timeout || 10000
-
-  const isEmpty = nodeOptions.length === 0
-
-  const triggerErrorFlash = useCallback(() => {
-    setErrorFlash(true)
-    if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
-    errorTimerRef.current = setTimeout(() => setErrorFlash(false), 2000)
-  }, [])
-
-  const queueModeChange = useCallback(
-    (next: ConnectMode, options?: { force?: boolean }) => {
-      if (
-        !preferencesReady ||
-        (next === mode && options?.force !== true) ||
-        modeChanging
-      )
-        return
-
-      const requestId = ++modeChangeGenerationRef.current
-      setMode(next)
-      persistConnectMode(next)
-      setModeChanging(true)
-
-      const queuedChange = modeChangeQueueRef.current.then(async () => {
-        try {
-          await runtimeActionController.setConnectionMode(next)
-          committedModeRef.current = next
-
-          if (requestId === modeChangeGenerationRef.current) {
-            setMode(next)
-            persistConnectMode(next)
-            try {
-              await refreshProxy()
-            } catch (refreshError) {
-              reportSafeClientFailure('connect-mode-change', refreshError)
-            }
-          }
-        } catch (error) {
-          reportSafeClientFailure('connect-mode-change', error)
-          if (requestId === modeChangeGenerationRef.current) {
-            setMode(committedModeRef.current)
-            persistConnectMode(committedModeRef.current)
-            showNotice.error(
-              toSafeClientErrorMessage(classifyClientError(error).kind, t),
-            )
-            triggerErrorFlash()
-          }
-        } finally {
-          if (requestId === modeChangeGenerationRef.current) {
-            setModeChanging(false)
-          }
-        }
-      })
-
-      modeChangeQueueRef.current = queuedChange
-    },
-    [mode, modeChanging, preferencesReady, refreshProxy, t, triggerErrorFlash],
-  )
-
-  const handleModeChange = useCallback(
-    (next: ConnectMode) => {
-      if (
-        !preferencesReady ||
-        next === mode ||
-        modeChanging ||
-        serviceInstalling
-      )
-        return
-
-      if (next !== 'system') {
-        if (!systemStateReady) return
-        if (isTunModeAvailable !== true) {
-          setPendingMode(next)
-          return
-        }
-      }
-
-      setPendingMode(null)
-      queueModeChange(next)
-    },
-    [
-      isTunModeAvailable,
-      mode,
-      modeChanging,
-      preferencesReady,
-      queueModeChange,
-      serviceInstalling,
-      systemStateReady,
-    ],
-  )
-
-  const handleInstallService = useLockFn(async () => {
-    const next = serviceInstallMode
-    if (!next || serviceInstalling || !preferencesReady) return
-
-    setServiceInstalling(true)
-    try {
-      await installServiceAndRestartCore()
-      setPendingMode(null)
-      queueModeChange(next, { force: true })
-    } catch (error) {
-      reportSafeClientFailure('service-install', error)
-      showNotice.error(
-        toSafeClientErrorMessage(classifyClientError(error).kind, t),
-      )
-      triggerErrorFlash()
-    } finally {
-      setServiceInstalling(false)
-    }
-  })
-
-  const handleNodeMenuOpen = useCallback(
-    (event: MouseEvent<HTMLElement>) => {
-      if (!preferencesReady || busy || modeChanging) return
-      setNodeMenuAnchor(event.currentTarget)
-    },
-    [busy, modeChanging, preferencesReady],
-  )
-
-  const handleNodeMenuClose = useCallback(() => {
-    setNodeMenuAnchor(null)
-  }, [])
-
-  const handleNodeSelect = useCallback(
-    (entry: DisplayProxyEntry) => {
-      handleNodeMenuClose()
-      if (!preferencesReady || busy || modeChanging) return
-      if (!globalGroup?.name || entry.name === currentNode) return
-      changeProxy(globalGroup.name, entry.name)
-    },
-    [
-      changeProxy,
-      currentNode,
-      busy,
-      globalGroup?.name,
-      handleNodeMenuClose,
-      modeChanging,
-      preferencesReady,
-    ],
-  )
+  const isEmpty = nodeCatalog.nodes.length === 0
 
   const stopFailedReadinessConnection = useCallback(
     async (attempt: number) => {
@@ -1001,9 +771,16 @@ const ConnectPage = () => {
       readinessStatus === 'validating'
     )
       return
+    const next = !runtimeMayRequireDisable
+    if (next && mode !== 'system') {
+      if (!systemStateReady) return
+      if (isTunModeAvailable !== true) {
+        setPendingMode(mode)
+        return
+      }
+    }
     setBusy(true)
     try {
-      const next = !runtimeMayRequireDisable
       if (next) {
         setReadinessStatus('connecting')
         const decision = await refreshAccountState()
@@ -1286,6 +1063,12 @@ const ConnectPage = () => {
 
   const connectionStatusHint = useMemo(() => {
     if (isEmpty) return t('layout.components.connect.empty.subtitle')
+    if (
+      readinessStatus === 'disconnected' &&
+      nodeCatalog.selectionSource === 'auto'
+    ) {
+      return t('layout.components.connect.location.lockedHint')
+    }
     switch (readinessStatus) {
       case 'connecting':
         return t('layout.components.connect.labels.connecting')
@@ -1303,7 +1086,13 @@ const ConnectPage = () => {
         }
         return t('layout.components.connect.actions.clickToConnect')
     }
-  }, [isEmpty, readinessStatus, showReadinessFailure, t])
+  }, [
+    isEmpty,
+    nodeCatalog.selectionSource,
+    readinessStatus,
+    showReadinessFailure,
+    t,
+  ])
 
   // Button colors
   const getButtonColor = () => {
@@ -1333,17 +1122,15 @@ const ConnectPage = () => {
       : connectionBusy
         ? `0 0 56px 0 ${alpha(theme.palette.warning.main, 0.32)}`
         : powerIsConnected
-          ? 'none'
+          ? `0 0 74px 8px ${tokens.glowSuccess}`
           : `0 0 64px 0 ${tokens.glowPrimary}`
-  const powerButtonBackground = powerIsConnected
-    ? theme.palette.success.main
-    : showReadinessFailure
-      ? alpha(theme.palette.error.main, 0.16)
-      : readinessStatus === 'degraded' || connectionBusy
-        ? alpha(theme.palette.warning.main, 0.16)
-        : tokens.surfaceRaised
+  const powerButtonBackground = showReadinessFailure
+    ? alpha(theme.palette.error.main, 0.06)
+    : readinessStatus === 'degraded' || connectionBusy
+      ? alpha(theme.palette.warning.main, 0.06)
+      : tokens.surfaceRaised
   const powerButtonForeground = powerIsConnected
-    ? theme.palette.getContrastText(theme.palette.success.main)
+    ? theme.palette.success.main
     : buttonColor
   const trialNeedsClaim =
     publicBenefit?.visible === true &&
@@ -1357,7 +1144,8 @@ const ConnectPage = () => {
     (periodUsage?.remaining ?? 0) <= 0
   const hasAccountFallbackData =
     hasSubscription !== null || publicBenefit !== null || periodUsage !== null
-  const hasNodeFallbackData = accountNodes.length > 0 || nodeOptions.length > 0
+  const hasNodeFallbackData =
+    accountNodes.length > 0 || nodeCatalog.nodes.length > 0
   const showAccountRefreshNotice = shouldShowRefreshFailureNotice({
     refreshFailed: accountRefreshFailed,
     hasLastKnownGood: hasAccountFallbackData,
@@ -1370,9 +1158,6 @@ const ConnectPage = () => {
   const connectedDurationLabel = connectionSession.connectedAt
     ? formatDuration(durationNow - connectionSession.connectedAt)
     : '0:00'
-  const sessionTrafficLabel = formatTrafficTotal(
-    connectionSession.traffic.up + connectionSession.traffic.down,
-  )
   const periodTrafficLimit = periodUsage?.limit ?? 0
   const periodTrafficPct = periodUsage?.percentUsed ?? 0
   const periodTrafficLabel = formatUsagePairLabel({
@@ -1382,6 +1167,31 @@ const ConnectPage = () => {
       periodTrafficLimit > 0 ? formatTrafficTotal(periodTrafficLimit) : null,
     unknownLabel: t('layout.components.connect.session.usageUnavailable'),
   })
+  const selectedNode = nodeCatalog.selectedNode
+  const selectedDelay = selectedNode
+    ? nodeCatalog.getNodeDelay(selectedNode)
+    : -1
+  const selectedCity = selectedNode
+    ? getRegionName(selectedNode.displayName)
+    : ''
+  const locationTitle = selectedNode
+    ? selectedCity
+    : t('layout.components.connect.labels.selectNode')
+  const locationSubtitle = !selectedNode
+    ? t('layout.components.connect.location.chooseHint')
+    : nodeCatalog.selectionSource === 'auto'
+      ? t('layout.components.connect.location.auto', { city: selectedCity })
+      : t('layout.components.connect.location.route', {
+          city: selectedCity,
+          route: getNodeRouteLabel(selectedNode.displayName),
+        })
+  const connectedLocationSubtitle = selectedNode
+    ? t('layout.components.connect.location.connected', {
+        latency: selectedDelay > 0 ? selectedDelay : '--',
+        upload: `${upVal} ${upUnit}/s`,
+        download: `${downVal} ${downUnit}/s`,
+      })
+    : locationSubtitle
 
   const refreshControl = hasSubscription === true && (
     <Tooltip title={t('layout.components.connect.empty.rebuild')}>
@@ -1417,12 +1227,13 @@ const ConnectPage = () => {
       <Stack
         spacing={1.5}
         sx={{
-          maxWidth: 860,
+          maxWidth: 420,
           mx: 'auto',
-          py: 0.5,
+          py: { xs: 1, sm: 1.5 },
           height: '100%',
           boxSizing: 'border-box',
-          justifyContent: 'center',
+          alignItems: 'center',
+          overflow: 'auto',
         }}
       >
         {(trialNeedsClaim ||
@@ -1512,95 +1323,20 @@ const ConnectPage = () => {
           </Alert>
         )}
 
-        <Paper
-          variant="hero"
-          elevation={0}
+        <Box
           sx={{
-            position: 'relative',
-            p: { xs: 3, md: 4 },
-            overflow: 'visible',
+            width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
           }}
         >
-          <Stack
-            direction="row"
-            spacing={1.5}
-            justifyContent="space-between"
-            alignItems="center"
-            sx={{ mb: 2, flexWrap: 'wrap' }}
-          >
-            <Typography
-              variant="overline"
-              sx={{
-                color: powerIsConnected
-                  ? 'success.main'
-                  : showReadinessFailure
-                    ? 'error.main'
-                    : readinessStatus === 'degraded' || connectionBusy
-                      ? 'warning.main'
-                      : 'text.secondary',
-                fontSize: '0.68rem',
-                lineHeight: 1.2,
-              }}
-            >
-              {connectionStatusLabel}
-            </Typography>
-            <ButtonGroup
-              size="small"
-              sx={{
-                alignSelf: { xs: 'flex-start', md: 'center' },
-                p: 0.5,
-                borderRadius: designTokens.radius.pill,
-                bgcolor: alpha(theme.palette.primary.main, 0.1),
-                '& .MuiButton-root': {
-                  border: '0 !important',
-                  borderRadius: `${designTokens.radius.pill}px !important`,
-                  px: 2,
-                  fontWeight: 900,
-                },
-              }}
-            >
-              <Button
-                variant={mode === 'system' ? 'contained' : 'text'}
-                onClick={() => handleModeChange('system')}
-                disabled={
-                  !preferencesReady || modeChanging || serviceInstalling
-                }
-              >
-                {t('layout.components.connect.mode.system')}
-              </Button>
-              <Button
-                variant={mode === 'both' ? 'contained' : 'text'}
-                onClick={() => handleModeChange('both')}
-                disabled={
-                  !preferencesReady ||
-                  modeChanging ||
-                  serviceInstalling ||
-                  !systemStateReady
-                }
-              >
-                {t('layout.components.connect.mode.both')}
-              </Button>
-              <Button
-                variant={mode === 'smart' ? 'contained' : 'text'}
-                onClick={() => handleModeChange('smart')}
-                disabled={
-                  !preferencesReady ||
-                  modeChanging ||
-                  serviceInstalling ||
-                  !systemStateReady
-                }
-              >
-                {t('layout.components.connect.mode.smart')}
-              </Button>
-            </ButtonGroup>
-          </Stack>
-
           <Stack spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
             <Box
               sx={{
                 position: 'relative',
-                width: 216,
-                height: 216,
+                width: 224,
+                height: 224,
                 borderRadius: '50%',
                 boxShadow: powerRingGlow,
                 '&::after': {
@@ -1624,7 +1360,6 @@ const ConnectPage = () => {
                 sx={{
                   position: 'absolute',
                   inset: 0,
-                  p: '4px',
                   borderRadius: '50%',
                   background: powerRingBackground,
                   animation: connectionBusy
@@ -1632,16 +1367,7 @@ const ConnectPage = () => {
                     : 'none',
                   zIndex: 1,
                 }}
-              >
-                <Box
-                  sx={{
-                    width: '100%',
-                    height: '100%',
-                    borderRadius: '50%',
-                    bgcolor: 'background.default',
-                  }}
-                />
-              </Box>
+              ></Box>
               <Box
                 sx={{
                   position: 'absolute',
@@ -1655,14 +1381,19 @@ const ConnectPage = () => {
                 <Button
                   onClick={handleToggle}
                   disabled={connectionBusy || isEmpty}
+                  aria-label={
+                    connected
+                      ? t('layout.components.connect.labels.connected')
+                      : t('layout.components.connect.actions.connect')
+                  }
                   sx={{
-                    width: 180,
-                    height: 180,
-                    minWidth: 180,
+                    width: 184,
+                    height: 184,
+                    minWidth: 184,
                     borderRadius: '50%',
                     bgcolor: powerButtonBackground,
                     color: powerButtonForeground,
-                    border: `3px solid ${alpha(theme.palette.primary.main, 0.35)}`,
+                    border: `1px solid ${alpha(theme.palette.primary.main, 0.08)}`,
                     transition:
                       'transform 0.28s ease-in-out, filter 0.28s ease-in-out',
                     animation: connectionBusy
@@ -1675,9 +1406,7 @@ const ConnectPage = () => {
                     },
                     '&:active': { transform: 'scale(0.98)' },
                     '&.Mui-disabled': {
-                      bgcolor: isEmpty
-                        ? theme.palette.action.disabledBackground
-                        : powerButtonBackground,
+                      bgcolor: powerButtonBackground,
                       color: isEmpty
                         ? theme.palette.action.disabled
                         : powerButtonForeground,
@@ -1700,7 +1429,9 @@ const ConnectPage = () => {
 
             <Box sx={{ minWidth: 0, width: '100%', textAlign: 'center' }}>
               <Typography
-                variant="h3"
+                component="div"
+                fontSize={28}
+                lineHeight={1.15}
                 fontWeight={900}
                 color={
                   errorFlash
@@ -1724,7 +1455,11 @@ const ConnectPage = () => {
                   mb: isEmpty || showReadinessFailure ? 1.5 : 0,
                 }}
               >
-                {connectionStatusHint}
+                {powerIsConnected
+                  ? t('layout.components.connect.labels.connectedSecureHint', {
+                      duration: connectedDurationLabel,
+                    })
+                  : connectionStatusHint}
               </Typography>
               {isEmpty ? (
                 <Button
@@ -1750,274 +1485,151 @@ const ConnectPage = () => {
             </Box>
           </Stack>
 
-          <Box sx={{ mb: 1.5 }}>
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={1}
-              justifyContent="space-between"
-              alignItems={{ xs: 'stretch', sm: 'center' }}
+          <ButtonBase
+            component="button"
+            type="button"
+            onClick={() => setRegionSheetOpen(true)}
+            disabled={busy || modeChanging || isEmpty}
+            aria-label={t('layout.components.connect.actions.switchNode')}
+            sx={{
+              width: '100%',
+              maxWidth: 356,
+              borderRadius: designTokens.radius.lg,
+              textAlign: 'left',
+              '&:focus-visible': {
+                outline: `2px solid ${alpha(theme.palette.primary.main, 0.6)}`,
+                outlineOffset: 2,
+              },
+              '&.Mui-disabled': { opacity: 1 },
+            }}
+          >
+            <Paper
+              variant="surface"
+              component="span"
+              sx={{
+                width: '100%',
+                minHeight: 82,
+                boxSizing: 'border-box',
+                px: 2,
+                py: 1.5,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.25,
+                borderRadius: designTokens.radius.lg,
+                transition: theme.transitions.create([
+                  'border-color',
+                  'box-shadow',
+                ]),
+                '&:hover': {
+                  borderColor: alpha(theme.palette.primary.main, 0.32),
+                  boxShadow: `0 8px 24px ${alpha(theme.palette.primary.main, 0.08)}`,
+                },
+              }}
             >
-              <Stack
-                direction="row"
-                spacing={1}
-                alignItems="center"
-                sx={{ minWidth: 0 }}
-              >
+              <Typography component="span" sx={{ fontSize: 28, lineHeight: 1 }}>
+                {selectedNode ? getRegionFlag(selectedCity) : '🌐'}
+              </Typography>
+              <Box component="span" sx={{ minWidth: 0, flex: 1 }}>
                 <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ fontSize: 11, flexShrink: 0 }}
+                  component="span"
+                  display="block"
+                  fontSize={16}
+                  fontWeight={900}
+                  noWrap
                 >
-                  {t('layout.components.connect.labels.node')}
+                  {locationTitle}
                 </Typography>
-                <Button
-                  size="small"
-                  variant="text"
-                  aria-label={t('layout.components.connect.actions.switchNode')}
-                  startIcon={
-                    <Box
-                      component="span"
-                      sx={{
-                        width: 8,
-                        height: 8,
-                        flexShrink: 0,
-                        borderRadius: '50%',
-                        bgcolor: powerIsConnected
-                          ? 'success.main'
-                          : 'primary.main',
-                        boxShadow: `0 0 0 4px ${alpha(theme.palette.primary.main, 0.1)}`,
-                      }}
-                    />
-                  }
-                  endIcon={<KeyboardArrowDownRounded />}
-                  onClick={handleNodeMenuOpen}
-                  disabled={busy || modeChanging || isEmpty}
-                  sx={{
-                    minWidth: 0,
-                    minHeight: 38,
-                    maxWidth: { xs: '100%', sm: 360 },
-                    px: 1.5,
-                    borderRadius: designTokens.radius.pill,
-                    bgcolor: tokens.surface,
-                    border: `1px solid ${tokens.outlineStrong}`,
-                    color: 'text.primary',
-                    justifyContent: 'flex-start',
-                    '&:hover': { bgcolor: tokens.surfaceRaised },
-                    '& .MuiButton-startIcon': { mr: 0.75 },
-                    '& .MuiButton-endIcon': { ml: 0.5 },
-                  }}
+                <Typography
+                  component="span"
+                  display="block"
+                  variant="caption"
+                  color={powerIsConnected ? 'success.main' : 'text.secondary'}
+                  noWrap
+                  sx={{ mt: 0.25, fontVariantNumeric: 'tabular-nums' }}
                 >
-                  <Box
-                    component="span"
-                    sx={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {currentNodeDisplay ||
-                      t('layout.components.connect.labels.selectNode')}
-                  </Box>
-                </Button>
-                {latencyMap.get(currentNodeDisplay) !== undefined && (
-                  <Chip
-                    size="small"
-                    color={getNodeLatencyChipColor(
-                      latencyMap.get(currentNodeDisplay)!,
-                      latencyTimeoutMs,
-                    )}
-                    label={formatNodeLatencyLabel(
-                      latencyMap.get(currentNodeDisplay)!,
-                      latencyTimeoutMs,
-                      {
-                        timeout: t('layout.components.nodes.delay.timeout'),
-                        unknown: t('layout.components.nodes.delay.notTested'),
-                      },
-                    )}
-                  />
-                )}
-              </Stack>
+                  {powerIsConnected
+                    ? connectedLocationSubtitle
+                    : locationSubtitle}
+                </Typography>
+              </Box>
+              <Box
+                component="span"
+                sx={{
+                  width: 30,
+                  height: 30,
+                  flex: '0 0 auto',
+                  display: 'grid',
+                  placeItems: 'center',
+                  borderRadius: '50%',
+                  color: powerIsConnected ? 'success.main' : 'primary.main',
+                  border: `1px solid ${alpha(
+                    powerIsConnected
+                      ? theme.palette.success.main
+                      : theme.palette.primary.main,
+                    0.22,
+                  )}`,
+                }}
+              >
+                <ChevronRightRounded sx={{ fontSize: 20 }} />
+              </Box>
+            </Paper>
+          </ButtonBase>
+
+          <Box sx={{ width: '100%', maxWidth: 356, mt: 0.5 }}>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+            >
               <Typography
                 variant="caption"
                 color="text.secondary"
-                sx={{
-                  fontVariantNumeric: 'tabular-nums',
-                  alignSelf: { xs: 'flex-end', sm: 'auto' },
-                }}
+                fontWeight={750}
               >
-                ↑ {upVal} {upUnit}/s · ↓ {downVal} {downUnit}/s
+                {t('layout.components.connect.usage.label')}
+              </Typography>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontVariantNumeric: 'tabular-nums' }}
+              >
+                {periodTrafficLabel}
               </Typography>
             </Stack>
-            <Menu
-              anchorEl={nodeMenuAnchor}
-              open={Boolean(nodeMenuAnchor)}
-              onClose={handleNodeMenuClose}
-              slotProps={{
-                paper: {
-                  sx: {
-                    mt: 1,
-                    minWidth: 280,
-                    maxHeight: 360,
-                    borderRadius: designTokens.radius.md,
-                  },
-                },
-              }}
-            >
-              {nodeEntries.map((entry) => {
-                const selected = entry.name === currentNode
-                const delay = latencyMap.get(entry.displayName)
-                return (
-                  <MenuItem
-                    key={`${entry.name}:${entry.displayName}`}
-                    selected={selected}
-                    disabled={selected}
-                    onClick={() => handleNodeSelect(entry)}
-                  >
-                    <ListItemText
-                      primary={entry.displayName}
-                      secondary={
-                        delay !== undefined
-                          ? formatNodeLatencyLabel(delay, latencyTimeoutMs, {
-                              timeout: t(
-                                'layout.components.nodes.delay.timeout',
-                              ),
-                              unknown: t(
-                                'layout.components.nodes.delay.notTested',
-                              ),
-                            })
-                          : t('layout.components.nodes.delay.notTested')
-                      }
-                      primaryTypographyProps={{ fontWeight: 900, noWrap: true }}
-                    />
-                  </MenuItem>
-                )
-              })}
-            </Menu>
-          </Box>
-
-          <Paper
-            variant="surface"
-            elevation={0}
-            sx={{
-              p: { xs: 1.25, md: 1.5 },
-              mb: 1.5,
-              borderRadius: designTokens.radius.md,
-            }}
-          >
             <Box
+              role="progressbar"
+              aria-label={t('layout.components.connect.usage.label')}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={periodUsage ? periodTrafficPct : 0}
               sx={{
-                display: 'grid',
-                gridTemplateColumns: {
-                  xs: '1fr',
-                  sm: 'repeat(3, minmax(0, 1fr))',
-                },
-                '& > .connect-metric + .connect-metric': {
-                  borderTop: {
-                    xs: `1px solid ${tokens.outline}`,
-                    sm: 'none',
-                  },
-                  borderLeft: {
-                    xs: 'none',
-                    sm: `1px solid ${tokens.outline}`,
-                  },
-                },
+                width: 320,
+                maxWidth: '100%',
+                height: 6,
+                mt: 0.75,
+                overflow: 'hidden',
+                borderRadius: designTokens.radius.pill,
+                bgcolor: alpha(theme.palette.success.main, 0.14),
               }}
             >
-              {[
-                {
-                  icon: <AccessTimeRounded color="primary" />,
-                  label: t('layout.components.connect.session.duration'),
-                  value: connected ? connectedDurationLabel : '0:00',
-                  color: 'text.primary',
-                },
-                {
-                  icon: <DataUsageRounded sx={{ color: 'primary.light' }} />,
-                  label: t('layout.components.connect.session.localTraffic'),
-                  value: connected
-                    ? sessionTrafficLabel
-                    : formatTrafficTotal(0),
-                  color: 'primary.light',
-                },
-                {
-                  icon: <DataUsageRounded color="success" />,
-                  label: t('layout.components.connect.session.packageTraffic'),
-                  value: periodTrafficLabel,
-                  color: 'success.main',
-                },
-              ].map((metric) => (
-                <Box
-                  key={metric.label}
-                  className="connect-metric"
-                  sx={{
-                    minWidth: 0,
-                    px: { xs: 0, sm: 1.5 },
-                    py: { xs: 1, sm: 0.5 },
-                  }}
-                >
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Box sx={{ display: 'flex', flexShrink: 0 }}>
-                      {metric.icon}
-                    </Box>
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ fontSize: 11, lineHeight: 1.2 }}
-                      >
-                        {metric.label}
-                      </Typography>
-                      <Typography
-                        component="div"
-                        fontSize={16}
-                        fontWeight={800}
-                        color={metric.color}
-                        noWrap
-                        sx={{ fontVariantNumeric: 'tabular-nums' }}
-                      >
-                        {metric.value}
-                      </Typography>
-                    </Box>
-                  </Stack>
-                  {metric.label ===
-                    t('layout.components.connect.session.packageTraffic') &&
-                    periodTrafficLimit > 0 && (
-                      <LinearProgress
-                        variant="determinate"
-                        value={periodTrafficPct}
-                        sx={{
-                          mt: 0.75,
-                          height: 4,
-                          borderRadius: designTokens.radius.pill,
-                          bgcolor: alpha(theme.palette.success.main, 0.16),
-                          '& .MuiLinearProgress-bar': {
-                            borderRadius: designTokens.radius.pill,
-                          },
-                        }}
-                      />
-                    )}
-                </Box>
-              ))}
+              <Box
+                sx={{
+                  width: `${periodUsage ? periodTrafficPct : 0}%`,
+                  height: '100%',
+                  borderRadius: designTokens.radius.pill,
+                  bgcolor: 'success.main',
+                  transition: theme.transitions.create('width'),
+                }}
+              />
             </Box>
-          </Paper>
-
-          <Paper
-            variant="surface"
-            elevation={0}
-            sx={{
-              width: '100%',
-              height: 64,
-              overflow: 'hidden',
-              borderRadius: designTokens.radius.md,
-              px: { xs: 1, sm: 1.5 },
-              pt: 0.5,
-            }}
-          >
-            <Box sx={{ height: 70, overflow: 'hidden' }}>
-              <LayoutTraffic />
-            </Box>
-          </Paper>
-        </Paper>
+          </Box>
+        </Box>
       </Stack>
+      <RegionSheet
+        open={regionSheetOpen}
+        onClose={() => setRegionSheetOpen(false)}
+        catalog={nodeCatalog}
+      />
     </BasePage>
   )
 }

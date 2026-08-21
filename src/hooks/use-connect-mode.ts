@@ -4,7 +4,7 @@ export type ConnectMode = 'system' | 'both' | 'smart'
 
 export const CONNECT_MODE_STORAGE_KEY = 'xxlink:connect-mode'
 const CONNECT_MODE_EVENT = 'xxlink:connect-mode-changed'
-const DEFAULT_CONNECT_MODE: ConnectMode = 'both'
+const DEFAULT_CONNECT_MODE: ConnectMode = 'smart'
 
 const normalizeConnectMode = (
   value: string | null | undefined,

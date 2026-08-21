@@ -14,7 +14,13 @@ const configManager = read('src-tauri/src/core/manager/config.rs')
 const configFeature = read('src-tauri/src/feat/config.rs')
 const lib = read('src-tauri/src/lib.rs')
 const connect = read('src/pages/connect.tsx')
+// 2026-08-21: connection-mode queue ownership moved to the shared hook used
+// by the Connect gate and Mine settings control.
+const modeControl = read('src/hooks/use-connect-mode-control.ts')
 const nodes = read('src/pages/nodes.tsx')
+// 2026-08-21: node grouping, selection, and latency testing are shared by
+// Connect's region sheet and the route-only Nodes page.
+const nodeCatalog = read('src/hooks/use-node-catalog.ts')
 const mine = read('src/pages/mine.tsx')
 const selection = read('src/hooks/use-proxy-selection.ts')
 const systemProxy = read('src/hooks/use-system-proxy-state.ts')
@@ -257,20 +263,20 @@ for (const [name, source] of [
 
 assert(
   connect.includes('runtimeActionController.setConnectionEnabled') &&
-    connect.includes('runtimeActionController.setConnectionMode'),
+    modeControl.includes('runtimeActionController.setConnectionMode'),
   'Connect does not use typed connection actions',
 )
 assert(
-  connect.includes('modeChangeQueueRef') &&
-    connect.includes('modeChangeGenerationRef') &&
-    connect.includes('committedModeRef') &&
-    connect.includes('requestId === modeChangeGenerationRef.current') &&
-    !connect.includes("'connect-mode-rollback'"),
+  modeControl.includes('modeChangeQueueRef') &&
+    modeControl.includes('modeChangeGenerationRef') &&
+    modeControl.includes('committedModeRef') &&
+    modeControl.includes('requestId === modeChangeGenerationRef.current') &&
+    !modeControl.includes("'connect-mode-rollback'"),
   'stale connection-mode failures can overwrite a newer successful request',
 )
 assert(
   selection.includes('runtimeActionController.selectNode') &&
-    nodes.includes('runtimeActionController.testNodeLatency'),
+    nodeCatalog.includes('runtimeActionController.testNodeLatency'),
   'node selection or latency test bypasses typed actions',
 )
 const nodeSelectionCommand = rust.slice(

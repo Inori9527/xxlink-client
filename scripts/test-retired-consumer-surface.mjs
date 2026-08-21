@@ -186,6 +186,11 @@ test('consumer TUN and update controls remain without PAC or raw-error editors',
     resolve(repoRoot, 'src/pages/connect.tsx'),
     'utf8',
   )
+  // 2026-08-21: the sanctioned mode/install flow is shared by Connect and Mine.
+  const modeControlSource = readFileSync(
+    resolve(repoRoot, 'src/hooks/use-connect-mode-control.ts'),
+    'utf8',
+  )
   const mineSource = readFileSync(
     resolve(repoRoot, 'src/pages/mine.tsx'),
     'utf8',
@@ -193,10 +198,10 @@ test('consumer TUN and update controls remain without PAC or raw-error editors',
 
   assert.doesNotMatch(connectSource, /ProxyControlSwitches/)
   assert.doesNotMatch(connectSource, /handleProxyControlError/)
-  assert.match(connectSource, /useServiceInstaller/)
-  assert.match(connectSource, /await installServiceAndRestartCore\(\)/)
-  assert.match(connectSource, /isTunModeAvailable !== true/)
-  assert.match(connectSource, /setPendingMode\(next\)/)
+  assert.match(modeControlSource, /useServiceInstaller/)
+  assert.match(modeControlSource, /await installServiceAndRestartCore\(\)/)
+  assert.match(modeControlSource, /isTunModeAvailable !== true/)
+  assert.match(modeControlSource, /setPendingMode\(next\)/)
   assert.match(tunSource, /StackModeSwitch/)
   assert.match(mineSource, /UpdateViewer/)
 
@@ -282,7 +287,9 @@ test('active consumer pages do not expose raw operation errors', () => {
   assert.match(connectSource, /reportSafeClientFailure\('connect-refresh'/)
 })
 
-test('manual node selection persists and automatic selection is absent', () => {
+// 2026-08-21: node selection and guarded recommendation now live in the
+// shared catalog consumed by Connect and Nodes.
+test('manual node selection persists and guarded automatic selection is shared', () => {
   const connectSource = readFileSync(
     resolve(repoRoot, 'src/pages/connect.tsx'),
     'utf8',
@@ -291,32 +298,26 @@ test('manual node selection persists and automatic selection is absent', () => {
     resolve(repoRoot, 'src/pages/nodes.tsx'),
     'utf8',
   )
+  const catalogSource = readFileSync(
+    resolve(repoRoot, 'src/hooks/use-node-catalog.ts'),
+    'utf8',
+  )
 
-  assert.doesNotMatch(connectSource, /shouldAutoSelectNode/)
-  assert.doesNotMatch(connectSource, /nodeEntries\[0\]/)
+  assert.match(connectSource, /useNodeCatalog/)
+  assert.match(nodesSource, /useNodeCatalog/)
+  assert.match(catalogSource, /changeProxy\(groupName, node\.name\)/)
+  assert.match(catalogSource, /autoSelectAttemptRef/)
   assert.match(
-    connectSource,
-    /changeProxy\(\s*globalGroup\.name,\s*entry\.name,?\s*\)/,
-  )
-  assert.doesNotMatch(
-    connectSource,
-    /changeProxy\(\s*globalGroup\.name,\s*entry\.name,\s*true,?\s*\)/,
+    catalogSource,
+    /selectNode\(recommendedCandidate\.node, 'auto'\)/,
   )
   assert.match(
     connectSource,
-    /onError:\s*\(error\)\s*=>\s*reportSafeClientFailure\('connect-proxy-selection', error\)/,
+    /onSelectionError:\s*\(error\)\s*=>\s*reportSafeClientFailure\('connect-proxy-selection', error\)/,
   )
   assert.match(
     nodesSource,
-    /changeProxy\(\s*globalGroup\.name,\s*node\.name,?\s*\)/,
-  )
-  assert.doesNotMatch(
-    nodesSource,
-    /changeProxy\(\s*globalGroup\.name,\s*node\.name,\s*true,?\s*\)/,
-  )
-  assert.match(
-    nodesSource,
-    /onError:\s*\(error\)\s*=>\s*reportSafeClientFailure\('nodes-proxy-selection', error\)/,
+    /onSelectionError:\s*\(error\)\s*=>\s*reportSafeClientFailure\('nodes-proxy-selection', error\)/,
   )
 })
 

@@ -183,6 +183,7 @@ export interface TranslationResources {
             both: string
             connected: string
             connectedHint: string
+            connectedSecureHint: string
             connecting: string
             connectionFailed: string
             connectionUnverified: string
@@ -202,12 +203,25 @@ export interface TranslationResources {
             upload: string
             validating: string
           }
+          location: {
+            auto: string
+            chooseHint: string
+            connected: string
+            lockedHint: string
+            route: string
+          }
           mode: {
             both: string
             smart: string
             system: string
           }
           modeTooltip: string
+          region: {
+            smartSummary: string
+            smartTitle: string
+            test: string
+            title: string
+          }
           session: {
             duration: string
             localTraffic: string
@@ -225,6 +239,9 @@ export interface TranslationResources {
             exceededTitle: string
             openDashboard: string
             trafficExceeded: string
+          }
+          usage: {
+            label: string
           }
         }
         navigation: {
@@ -346,6 +363,10 @@ export interface TranslationResources {
       }
       remaining: string
       rows: {
+        connectMode: {
+          description: string
+          title: string
+        }
         diagnostics: {
           description: string
           title: string
@@ -372,6 +393,7 @@ export interface TranslationResources {
       sections: {
         account: string
         common: string
+        settings: string
       }
       usage: string
       usageRefreshFailed: string
