@@ -844,7 +844,7 @@ const ConnectPage = () => {
 
   const handleInstallService = useLockFn(async () => {
     const next = serviceInstallMode
-    if (!next || serviceInstalling) return
+    if (!next || serviceInstalling || !preferencesReady) return
 
     setServiceInstalling(true)
     try {
@@ -1454,7 +1454,7 @@ const ConnectPage = () => {
                 color="inherit"
                 size="small"
                 onClick={handleInstallService}
-                disabled={serviceInstalling}
+                disabled={serviceInstalling || !preferencesReady}
                 startIcon={
                   serviceInstalling ? (
                     <CircularProgress size={14} color="inherit" />
