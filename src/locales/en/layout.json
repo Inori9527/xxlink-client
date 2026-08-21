@@ -118,6 +118,14 @@
         "test": "Test latency",
         "testing": "Testing..."
       },
+      "smart": {
+        "title": "Smart recommendation",
+        "hint": "Based on recent latency tests",
+        "action": "Use this node"
+      },
+      "search": {
+        "placeholder": "Search locations or routes"
+      },
       "delay": {
         "notTested": "-- ms",
         "testing": "Testing",
@@ -127,7 +135,9 @@
       },
       "empty": {
         "title": "No nodes available",
-        "subtitle": "Refresh nodes on Connect, or check your plan."
+        "subtitle": "Refresh nodes on Connect, or check your plan.",
+        "filteredTitle": "No matching nodes",
+        "filteredSubtitle": "Try another location or route name."
       }
     },
     "promoCode": {

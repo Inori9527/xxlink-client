@@ -118,6 +118,14 @@
         "test": "测速",
         "testing": "测速中..."
       },
+      "smart": {
+        "title": "智能推荐",
+        "hint": "基于最近测速结果",
+        "action": "使用此节点"
+      },
+      "search": {
+        "placeholder": "搜索地区或线路"
+      },
       "delay": {
         "notTested": "-- ms",
         "testing": "测速中",
@@ -127,7 +135,9 @@
       },
       "empty": {
         "title": "暂无可用节点",
-        "subtitle": "请在连接页刷新节点，或确认当前套餐权益。"
+        "subtitle": "请在连接页刷新节点，或确认当前套餐权益。",
+        "filteredTitle": "没有匹配的节点",
+        "filteredSubtitle": "请尝试其他地区或线路名称。"
       }
     },
     "promoCode": {

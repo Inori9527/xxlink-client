@@ -267,12 +267,22 @@ export interface TranslationResources {
             timeout: string
           }
           empty: {
+            filteredSubtitle: string
+            filteredTitle: string
             subtitle: string
             title: string
           }
           heading: string
           kicker: string
           readyHint: string
+          search: {
+            placeholder: string
+          }
+          smart: {
+            action: string
+            hint: string
+            title: string
+          }
           title: string
         }
         promoCode: {
