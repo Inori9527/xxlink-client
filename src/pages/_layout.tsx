@@ -172,7 +172,10 @@ const Layout = () => {
           </main>
         </div>
 
-        <nav className="bottom-tab-bar" aria-label="Primary navigation">
+        <nav
+          className="bottom-tab-bar"
+          aria-label={t('layout.components.navigation.primaryAriaLabel')}
+        >
           {getTabBarItems().map((item) => (
             <LayoutItem key={item.path} to={item.path} icon={item.icon}>
               {t(item.label)}

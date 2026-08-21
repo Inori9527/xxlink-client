@@ -253,6 +253,7 @@ export interface TranslationResources {
             restoreDefaultOrder: string
             unlock: string
           }
+          primaryAriaLabel: string
           tabs: {
             apiKeys: string
             connect: string

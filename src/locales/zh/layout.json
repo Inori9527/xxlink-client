@@ -6,6 +6,7 @@
   },
   "components": {
     "navigation": {
+      "primaryAriaLabel": "主导航",
       "tabs": {
         "connect": "连接",
         "home": "首页",

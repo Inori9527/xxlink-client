@@ -76,9 +76,12 @@ assert.match(
   /getTabBarItems\(\)\.map/,
   'tab bar must render the derived tab list',
 )
+// 2026-08-21 W5 review finding 5: the nav gained a localized aria-label, so the
+// element spans multiple JSX lines; the assertion still requires the same
+// class and the getTabBarItems() source.
 assert.match(
   layoutSource,
-  /<nav className="bottom-tab-bar"[\s\S]*getTabBarItems\(\)\.map\(/,
+  /<nav\s+className="bottom-tab-bar"[\s\S]*getTabBarItems\(\)\.map\(/,
   'layout must render the bottom tab bar from the filtered route registry',
 )
 assert.match(

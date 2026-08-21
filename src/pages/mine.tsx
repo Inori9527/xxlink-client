@@ -32,7 +32,7 @@ import {
 import { open } from '@tauri-apps/plugin-shell'
 import { useLockFn } from 'ahooks'
 import type { ReactNode } from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 
@@ -208,13 +208,25 @@ const MinePage = () => {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { refreshProxy } = useAppData()
-  const { verge } = useVerge()
-  const {
-    currentLanguage,
-    supportedLanguages,
-    switchLanguage,
-    isLoading: languageLoading,
-  } = useI18n()
+  const { verge, patchVerge } = useVerge()
+  const { currentLanguage, supportedLanguages } = useI18n()
+  const [languagePending, setLanguagePending] = useState(false)
+  // The layout language effect is the single writer that applies
+  // verge.language to i18n; patching the preference here and letting it
+  // react avoids the two-writer ping-pong that reverts the switch.
+  const handleLanguageSelect = useCallback(
+    async (nextLanguage: string) => {
+      setLanguagePending(true)
+      try {
+        await patchVerge({ language: nextLanguage })
+      } catch (error) {
+        reportSafeClientFailure('i18n-switch-language', error)
+      } finally {
+        setLanguagePending(false)
+      }
+    },
+    [patchVerge],
+  )
   const setThemeMode = useSetThemeMode()
   const configuredThemeMode: MineThemePreference =
     verge?.theme_mode === 'light' ||
@@ -735,8 +747,8 @@ const MinePage = () => {
                         ? 'contained'
                         : 'outlined'
                     }
-                    disabled={languageLoading}
-                    onClick={() => void switchLanguage(language)}
+                    disabled={languagePending}
+                    onClick={() => void handleLanguageSelect(language)}
                   >
                     {language.toUpperCase()}
                   </Button>

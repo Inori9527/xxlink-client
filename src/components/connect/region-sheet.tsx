@@ -113,7 +113,7 @@ export const RegionSheet = ({ open, onClose, catalog }: RegionSheetProps) => {
           sx: {
             maxHeight: 'min(78vh, 620px)',
             borderRadius: '28px 28px 0 0',
-            bgcolor: '#fff',
+            bgcolor: theme.palette.background.paper,
             backgroundImage: 'none',
             color: theme.palette.text.primary,
             overflow: 'hidden',

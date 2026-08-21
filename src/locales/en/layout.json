@@ -6,6 +6,7 @@
   },
   "components": {
     "navigation": {
+      "primaryAriaLabel": "Primary navigation",
       "tabs": {
         "connect": "Connect",
         "home": "Home",
@@ -84,7 +85,7 @@
       "mode": {
         "system": "Browser",
         "both": "Full VPN",
-        "smart": "Smart Split"
+        "smart": "Smart Route"
       },
       "modeTooltip": "Browser: only apps honoring system proxy. Full VPN: route all traffic. Smart Split: direct traffic in mainland China, route overseas traffic through XXLink.",
       "empty": {

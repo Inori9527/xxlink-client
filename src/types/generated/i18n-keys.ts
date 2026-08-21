@@ -80,6 +80,7 @@ export const translationKeys = [
   'layout.secureSession.recoveryRequired',
   'layout.secureSession.serviceBlocked',
   'layout.secureSession.retry',
+  'layout.components.navigation.primaryAriaLabel',
   'layout.components.navigation.tabs.connect',
   'layout.components.navigation.tabs.home',
   'layout.components.navigation.tabs.proxies',

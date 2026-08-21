@@ -5,7 +5,6 @@ import {
   getPreviewAutoProxy,
   getPreviewNodeDelay,
   getPreviewPreferences,
-  getPreviewProxies,
   getPreviewProxySettings,
   getPreviewSystemProxy,
   PREVIEW_NODES,
@@ -37,7 +36,10 @@ const publishRuntimeState = () => {
   queryClient.setQueryData(['getVergeConfig'], getPreviewPreferences())
   queryClient.setQueryData(['getSystemProxy'], getPreviewSystemProxy())
   queryClient.setQueryData(['getAutotemProxy'], getPreviewAutoProxy())
-  queryClient.setQueryData(['getProxies'], getPreviewProxies())
+  // The getProxies cache holds the calcuProxies() normalized shape
+  // ({ global, records, ... }); refetch through the query fn instead of
+  // writing the raw { proxies } fixture into it.
+  void queryClient.invalidateQueries({ queryKey: ['getProxies'] })
 }
 
 const setConnectionState = (mode: PreviewConnectionMode, enabled: boolean) => {
@@ -221,7 +223,7 @@ export async function invoke<T = unknown>(
       const proxyName = String(args?.proxyName ?? '')
       if (PREVIEW_NODES.some((node) => node.name === proxyName)) {
         previewState.selectedNode = proxyName
-        queryClient.setQueryData(['getProxies'], getPreviewProxies())
+        void queryClient.invalidateQueries({ queryKey: ['getProxies'] })
       }
       return undefined as T
     }

@@ -100,7 +100,7 @@
     },
     "proxyControl": {
       "tooltips": {
-        "tunUnavailable": "TUN requires Service Mode or Admin Mode"
+        "tunUnavailable": "Full VPN requires Service Mode or Admin Mode"
       },
       "actions": {
         "installService": "Install Service"

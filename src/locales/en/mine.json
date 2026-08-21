@@ -28,7 +28,7 @@
     },
     "connectMode": {
       "title": "Connection mode",
-      "description": "Choose system proxy, full VPN, or smart split"
+      "description": "Choose Browser, Full VPN, or Smart Route"
     },
     "settings": {
       "title": "Settings",
