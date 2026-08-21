@@ -66,7 +66,7 @@ export const previewState: {
 } = {
   preferences: {
     language: 'zh',
-    theme_mode: 'dark',
+    theme_mode: 'system',
     traffic_graph: true,
     enable_memory_usage: false,
     menu_icon: 'colorful',

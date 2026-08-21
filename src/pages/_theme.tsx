@@ -2,33 +2,32 @@ import getSystem from '@/utils/get-system'
 const OS = getSystem()
 
 /**
- * XXLink design tokens — dark-first premium ("tone A").
+ * XXLink design tokens — light-first premium ("direction two").
  *
- * The dark set is the primary brand surface: deep navy ink with the
- * brand blue lineage (#2F80ED family) and the teal accent (#0FEDD2)
- * used as glow/energy color. Light remains available as a secondary
- * mode and shares the same structure.
+ * The light set is the primary brand surface: soft blue-white ground,
+ * brand blue (#2F80ED), and deepened teal accent (#0FD3BF). Dark remains
+ * available as a secondary mode and shares the same structure.
  */
 
 const fontFamily = `-apple-system, BlinkMacSystemFont,"Microsoft YaHei UI", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji"${
   OS === 'windows' ? ', twemoji mozilla' : ''
 }`
 
-// default theme setting (light — secondary mode)
+// default theme setting (light — primary brand surface)
 export const defaultTheme = {
   primary_color: '#2F80ED',
-  secondary_color: '#0FEDD2',
-  primary_text: '#131C2E',
+  secondary_color: '#0FD3BF',
+  primary_text: '#16233B',
   secondary_text: '#5D6B84',
   info_color: '#2F80ED',
   error_color: '#DC2626',
   warning_color: '#D97706',
   success_color: '#0FA678',
-  background_color: '#F5F8FD',
+  background_color: '#F2F6FC',
   font_family: fontFamily,
 }
 
-// dark mode (primary brand surface)
+// dark mode (secondary brand surface)
 export const defaultDarkTheme = {
   ...defaultTheme,
   primary_color: '#3E8EF7',
@@ -69,18 +68,17 @@ export const designTokens = {
   light: {
     surface: '#FFFFFF',
     surfaceRaised: '#FFFFFF',
-    outline: 'rgba(23, 42, 77, 0.10)',
-    outlineStrong: 'rgba(23, 42, 77, 0.20)',
+    outline: 'rgba(23, 42, 77, 0.08)',
+    outlineStrong: 'rgba(23, 42, 77, 0.16)',
     heroMesh:
-      'radial-gradient(circle at 85% 0%, rgba(15, 237, 210, 0.10), transparent 34%),' +
-      ' radial-gradient(circle at 0% 100%, rgba(47, 128, 237, 0.10), transparent 30%),' +
+      'radial-gradient(circle at 50% 0%, rgba(47, 128, 237, 0.10), transparent 42%),' +
       ' linear-gradient(180deg, #FFFFFF 0%, #F2F8FF 100%)',
-    glowPrimary: 'rgba(47, 128, 237, 0.30)',
-    glowAccent: 'rgba(15, 237, 210, 0.24)',
-    glowSuccess: 'rgba(15, 166, 120, 0.30)',
-    glowError: 'rgba(220, 38, 38, 0.25)',
-    scrollbarBg: '#EEF3FA',
-    scrollbarThumb: '#B8C3D4',
+    glowPrimary: 'rgba(47, 128, 237, 0.28)',
+    glowAccent: 'rgba(15, 211, 191, 0.22)',
+    glowSuccess: 'rgba(15, 166, 120, 0.28)',
+    glowError: 'rgba(220, 38, 38, 0.22)',
+    scrollbarBg: '#EDF2F9',
+    scrollbarThumb: '#C3CEDD',
     dialogPaper: '#FFFFFF',
   },
 }

@@ -23,14 +23,17 @@ declare module '@mui/material/Paper' {
   }
 }
 
-/** Soft navy shadow scale: index 0 none, low indices for cards, high for dialogs. */
+/** Mode-aware shadow scale: index 0 none, low indices for cards, high for dialogs. */
 const buildShadows = (mode: 'light' | 'dark'): Shadows => {
   const ink = mode === 'dark' ? '4, 10, 22' : '23, 42, 77'
   const scale = Array(25).fill('none') as Shadows
   for (let i = 1; i < 25; i += 1) {
     const y = Math.min(2 + i * 1.5, 32)
     const blur = Math.min(8 + i * 3, 72)
-    const a = mode === 'dark' ? Math.min(0.32 + i * 0.012, 0.55) : 0.12
+    const a =
+      mode === 'dark'
+        ? Math.min(0.32 + i * 0.012, 0.55)
+        : Math.min(0.06 + (i - 1) * 0.004, 0.14)
     scale[i] = `0 ${y}px ${blur}px rgba(${ink}, ${a})`
   }
   return scale
@@ -159,8 +162,8 @@ export const useCustomTheme = () => {
     if (theme_mode === 'light' || theme_mode === 'dark') {
       setMode(theme_mode)
     } else {
-      // Dark is the primary brand surface (tone A).
-      setMode('dark')
+      // Light is the primary brand surface (direction two).
+      setMode('light')
     }
   }, [theme_mode, setMode])
 
@@ -169,12 +172,12 @@ export const useCustomTheme = () => {
       return
     }
 
-    setMode('dark')
+    setMode('light')
   }, [theme_mode, appWindow, setMode])
 
   useEffect(() => {
     if (theme_mode === undefined || theme_mode === 'system') {
-      appWindow.setTheme('dark' as TauriOsTheme).catch((err) => {
+      appWindow.setTheme('light' as TauriOsTheme).catch((err) => {
         reportSafeClientFailure('theme-window-set', err)
       })
     } else if (mode) {
@@ -237,18 +240,15 @@ export const useCustomTheme = () => {
 
     if (styleElement) {
       const globalStyles = `
-        /* scrollbar */
+        /* Scrollbars are hidden app-wide (owner directive 2026-08-21):
+           scrolling stays functional, the chrome disappears. */
         ::-webkit-scrollbar {
-          width: 8px;
-          height: 8px;
-          background-color: var(--scrollbar-bg);
+          width: 0;
+          height: 0;
+          display: none;
         }
-        ::-webkit-scrollbar-thumb {
-          background-color: var(--scrollbar-thumb);
-          border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-          background-color: ${mode === 'light' ? '#94A3B8' : '#3D5170'};
+        * {
+          scrollbar-width: none;
         }
 
         /* page ground */
@@ -256,9 +256,6 @@ export const useCustomTheme = () => {
           background-color: var(--background-color);
         }
 
-        /* Focus is handled per-component; suppress default UA outlines only.
-           NOTE: the old global "box-shadow: none !important" reset is gone on
-           purpose — the elevation/glow system depends on shadows. */
         *:focus {
           outline: none;
         }
