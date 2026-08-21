@@ -40,13 +40,14 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 
 import { BasePage } from '@/components/base'
-import ProxyControlSwitches from '@/components/shared/proxy-control-switches'
 import {
   loadConnectMode,
   persistConnectMode,
   type ConnectMode,
 } from '@/hooks/use-connect-mode'
 import { useProxySelection } from '@/hooks/use-proxy-selection'
+import { useServiceInstaller } from '@/hooks/use-service-installer'
+import { useSystemState } from '@/hooks/use-system-state'
 import { useTrafficData } from '@/hooks/use-traffic-data'
 import { useVerge } from '@/hooks/use-verge'
 import { useVisibility } from '@/hooks/use-visibility'
@@ -256,6 +257,8 @@ const ConnectPage = () => {
   const navigate = useNavigate()
   const pageVisible = useVisibility()
   const { verge, preferencesReady, refreshVerge } = useVerge()
+  const { isReady: systemStateReady, isTunModeAvailable } = useSystemState()
+  const { installServiceAndRestartCore } = useServiceInstaller()
   const { proxies, refreshProxy } = useAppData()
   const currentUserId = authStore.getState().user?.id ?? null
   const initialAccountCache = useMemo(
@@ -268,16 +271,6 @@ const ConnectPage = () => {
       reportSafeClientFailure('connect-proxy-selection', error),
     forceConnectionCleanup: true,
   })
-  const handleProxyControlError = useCallback(
-    (error: unknown) => {
-      reportSafeClientFailure('connect-proxy-control', error)
-      showNotice.error(
-        toSafeClientErrorMessage(classifyClientError(error).kind, t),
-      )
-    },
-    [t],
-  )
-
   const [mode, setMode] = useState<ConnectMode>(() => loadConnectMode())
   const [busy, setBusy] = useState(false)
   const [readinessStatus, setReadinessStatus] =
@@ -304,6 +297,16 @@ const ConnectPage = () => {
   )
   const [nodeMenuAnchor, setNodeMenuAnchor] = useState<HTMLElement | null>(null)
   const [modeChanging, setModeChanging] = useState(false)
+  const [pendingMode, setPendingMode] = useState<Exclude<
+    ConnectMode,
+    'system'
+  > | null>(null)
+  const [serviceInstalling, setServiceInstalling] = useState(false)
+  const serviceInstallMode =
+    pendingMode ??
+    (systemStateReady && mode !== 'system' && isTunModeAvailable !== true
+      ? mode
+      : null)
   const committedModeRef = useRef(mode)
   const modeChangeGenerationRef = useRef(0)
   const modeChangeQueueRef = useRef<Promise<void>>(Promise.resolve())
@@ -757,7 +760,7 @@ const ConnectPage = () => {
     errorTimerRef.current = setTimeout(() => setErrorFlash(false), 2000)
   }, [])
 
-  const handleModeChange = useCallback(
+  const queueModeChange = useCallback(
     (next: ConnectMode) => {
       if (!preferencesReady || next === mode || modeChanging) return
 
@@ -801,6 +804,58 @@ const ConnectPage = () => {
     },
     [mode, modeChanging, preferencesReady, refreshProxy, t, triggerErrorFlash],
   )
+
+  const handleModeChange = useCallback(
+    (next: ConnectMode) => {
+      if (
+        !preferencesReady ||
+        next === mode ||
+        modeChanging ||
+        serviceInstalling
+      )
+        return
+
+      if (next !== 'system') {
+        if (!systemStateReady) return
+        if (isTunModeAvailable !== true) {
+          setPendingMode(next)
+          return
+        }
+      }
+
+      setPendingMode(null)
+      queueModeChange(next)
+    },
+    [
+      isTunModeAvailable,
+      mode,
+      modeChanging,
+      preferencesReady,
+      queueModeChange,
+      serviceInstalling,
+      systemStateReady,
+    ],
+  )
+
+  const handleInstallService = useLockFn(async () => {
+    const next = serviceInstallMode
+    if (!next || serviceInstalling) return
+
+    setServiceInstalling(true)
+    try {
+      await installServiceAndRestartCore()
+      setPendingMode(null)
+      queueModeChange(next)
+    } catch (error) {
+      reportSafeClientFailure('service-install', error)
+      showNotice.error(
+        toSafeClientErrorMessage(classifyClientError(error).kind, t),
+      )
+      triggerErrorFlash()
+    } finally {
+      setServiceInstalling(false)
+    }
+  })
 
   const handleNodeMenuOpen = useCallback(
     (event: MouseEvent<HTMLElement>) => {
@@ -1385,6 +1440,32 @@ const ConnectPage = () => {
           </Stack>
         )}
 
+        {serviceInstallMode && (
+          <Alert
+            severity="warning"
+            sx={{ borderRadius: 3 }}
+            action={
+              <Button
+                color="inherit"
+                size="small"
+                onClick={handleInstallService}
+                disabled={serviceInstalling}
+                startIcon={
+                  serviceInstalling ? (
+                    <CircularProgress size={14} color="inherit" />
+                  ) : undefined
+                }
+              >
+                {serviceInstalling
+                  ? t('settings.statuses.clashService.installing')
+                  : t('settings.sections.proxyControl.actions.installService')}
+              </Button>
+            }
+          >
+            {t('settings.sections.proxyControl.tooltips.tunUnavailable')}
+          </Alert>
+        )}
+
         <Paper
           elevation={0}
           sx={{
@@ -1442,21 +1523,33 @@ const ConnectPage = () => {
               <Button
                 variant={mode === 'system' ? 'contained' : 'text'}
                 onClick={() => handleModeChange('system')}
-                disabled={!preferencesReady || modeChanging}
+                disabled={
+                  !preferencesReady || modeChanging || serviceInstalling
+                }
               >
                 {t('layout.components.connect.mode.system')}
               </Button>
               <Button
                 variant={mode === 'both' ? 'contained' : 'text'}
                 onClick={() => handleModeChange('both')}
-                disabled={!preferencesReady || modeChanging}
+                disabled={
+                  !preferencesReady ||
+                  modeChanging ||
+                  serviceInstalling ||
+                  !systemStateReady
+                }
               >
                 {t('layout.components.connect.mode.both')}
               </Button>
               <Button
                 variant={mode === 'smart' ? 'contained' : 'text'}
                 onClick={() => handleModeChange('smart')}
-                disabled={!preferencesReady || modeChanging}
+                disabled={
+                  !preferencesReady ||
+                  modeChanging ||
+                  serviceInstalling ||
+                  !systemStateReady
+                }
               >
                 {t('layout.components.connect.mode.smart')}
               </Button>
@@ -1564,29 +1657,6 @@ const ConnectPage = () => {
                     {t('layout.components.connect.actions.retry')}
                   </Button>
                 ) : null}
-              </Box>
-
-              <Box
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: {
-                    xs: '1fr',
-                    sm: 'repeat(2, minmax(0, 1fr))',
-                  },
-                  gap: 0.5,
-                  width: '100%',
-                  maxWidth: 560,
-                  mt: 0.25,
-                }}
-              >
-                <ProxyControlSwitches
-                  kind="systemProxy"
-                  onError={handleProxyControlError}
-                />
-                <ProxyControlSwitches
-                  kind="tun"
-                  onError={handleProxyControlError}
-                />
               </Box>
             </Stack>
           </Paper>

@@ -173,7 +173,7 @@ test('source imports do not reference the retired consumer surface', () => {
   }
 })
 
-test('consumer proxy, TUN, and update controls remain without PAC or raw-error editors', () => {
+test('consumer mode and update controls remain without PAC or raw-error editors', () => {
   const proxyControlsSource = readFileSync(
     resolve(repoRoot, 'src/components/shared/proxy-control-switches.tsx'),
     'utf8',
@@ -214,42 +214,12 @@ test('consumer proxy, TUN, and update controls remain without PAC or raw-error e
   assert.match(tunControlSource, /<TunViewer ref={tunRef} \/>/)
   assert.doesNotMatch(systemProxyControlSource, /<TunViewer ref={tunRef} \/>/)
   assert.doesNotMatch(tunControlSource, /<SysproxyViewer ref={sysproxyRef} \/>/)
-  assert.match(
-    connectSource,
-    /import ProxyControlSwitches from '@\/components\/shared\/proxy-control-switches'/,
-  )
-  assert.match(
-    connectSource,
-    /<ProxyControlSwitches\s+kind="systemProxy"\s+onError={handleProxyControlError}\s+\/>/,
-  )
-  assert.match(
-    connectSource,
-    /<ProxyControlSwitches\s+kind="tun"\s+onError={handleProxyControlError}\s+\/>/,
-  )
-  assert.match(
-    connectSource,
-    /reportSafeClientFailure\('connect-proxy-control', error\)/,
-  )
-  assert.match(
-    connectSource,
-    /toSafeClientErrorMessage\(classifyClientError\(error\)\.kind, t\)/,
-  )
-  assert.match(
-    connectSource,
-    /showNotice\.error\(\s*toSafeClientErrorMessage\(classifyClientError\(error\)\.kind, t\),\s*\)/,
-  )
-  const proxyControlErrorHandlerSource = connectSource.slice(
-    connectSource.indexOf('const handleProxyControlError'),
-    connectSource.indexOf('const [mode, setMode]'),
-  )
-  assert.doesNotMatch(
-    proxyControlErrorHandlerSource,
-    /showNotice\.error\(\s*error\s*(?:,|\))/,
-  )
-  assert.doesNotMatch(
-    proxyControlErrorHandlerSource,
-    /console\.(?:warn|error)\s*\([^)]*\berror\b/,
-  )
+  assert.doesNotMatch(connectSource, /ProxyControlSwitches/)
+  assert.doesNotMatch(connectSource, /handleProxyControlError/)
+  assert.match(connectSource, /useServiceInstaller/)
+  assert.match(connectSource, /await installServiceAndRestartCore\(\)/)
+  assert.match(connectSource, /isTunModeAvailable !== true/)
+  assert.match(connectSource, /setPendingMode\(next\)/)
   assert.match(tunSource, /StackModeSwitch/)
   assert.match(mineSource, /UpdateViewer/)
 
