@@ -2050,7 +2050,7 @@ mod diagnostics_tests {
         json!({
             "schemaVersion": 1,
             "exportedAt": "2026-07-22T12:34:56.789Z",
-            "app": { "version": "2.5.1-rc.1" },
+            "app": { "version": "2.5.2-rc.1" },
             "system": { "platform": "windows", "uptimeMs": 1000 },
             "authSession": {
                 "status": "authenticated",
@@ -2071,7 +2071,7 @@ mod diagnostics_tests {
             "runtimeCore": { "status": "observed", "runningMode": "rule" },
             "dataPlane": { "status": "not-tested" },
             "updater": {
-                "currentVersionClass": "2.5.1-rc.1",
+                "currentVersionClass": "2.5.2-rc.1",
                 "lastCheckStatus": "present",
                 "lastCheckAgeBucket": "<1h"
             },

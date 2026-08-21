@@ -99,7 +99,7 @@ function loadDiagnosticsModule(extraContext = {}) {
         nodes: [{ id: 'private-node-id' }],
       }),
     },
-    '@root/package.json': { version: '2.5.1-rc.1' },
+    '@root/package.json': { version: '2.5.2-rc.1' },
   }
   const localStorage = extraContext.localStorage ?? {
     getItem(key) {
@@ -130,7 +130,7 @@ test('bundle accepts only closed log summaries and never serializes raw state', 
     loadDiagnosticsModule()
   const bundle = buildDiagnosticsBundle(
     {
-      appVersion: '2.5.1-rc.1',
+      appVersion: '2.5.2-rc.1',
       systemInfo: 'Windows 11 private-hostname',
       appUptimeMs: 123_456,
       runningMode: 'rule',
@@ -240,7 +240,7 @@ test('clipboard writes canonical parsed JSON without duplicate-key bytes', async
   const { buildDiagnosticsBundle, writeDiagnosticsJsonToClipboard, calls } =
     loadDiagnosticsModule()
   const bundle = buildDiagnosticsBundle(
-    { appVersion: '2.5.1-rc.1' },
+    { appVersion: '2.5.2-rc.1' },
     { now: () => new Date('2026-06-29T12:00:00.000Z') },
   )
   const canonical = JSON.stringify(bundle, null, 2)
