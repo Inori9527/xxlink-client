@@ -274,6 +274,7 @@ export const translationKeys = [
   'plans.page.current.labels.subUrl',
   'plans.page.current.tooltips.copy',
   'plans.page.card.badge',
+  'plans.page.card.mostPopular',
   'plans.page.card.features.traffic',
   'plans.page.card.features.trafficValue',
   'plans.page.card.features.speed',

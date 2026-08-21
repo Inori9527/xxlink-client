@@ -104,6 +104,13 @@ function getNumericBytes(value: string | number | undefined): number {
   return 0
 }
 
+type PlanWithOptionalRecommendation = PlanView & {
+  recommended?: boolean
+}
+
+const isRecommendedPlan = (plan: PlanView): boolean =>
+  (plan as PlanWithOptionalRecommendation).recommended === true
+
 function formatDate(iso: string | null | undefined, locale: string): string {
   if (!iso) return '--'
   const date = new Date(iso)
@@ -486,9 +493,20 @@ const PlansPage = () => {
           {t('plans.page.actions.refresh')}
         </Button>
       }
-      contentStyle={{ padding: '8px 12px 16px' }}
+      contentStyle={{
+        boxSizing: 'border-box',
+        padding: '8px 12px 16px',
+      }}
     >
-      <Stack spacing={1.5} sx={{ maxWidth: 1080, mx: 'auto' }}>
+      <Stack
+        spacing={1.5}
+        sx={{
+          width: '100%',
+          maxWidth: 420,
+          minWidth: 0,
+          mx: 'auto',
+        }}
+      >
         {error && (
           <Alert severity="error" onClose={() => setError(null)}>
             {error}
@@ -764,6 +782,8 @@ const PlansPage = () => {
           >
             {visiblePlans.map((plan) => {
               const isCurrent = activeSubscription?.planId === plan.id
+              const isRecommended = isRecommendedPlan(plan)
+              const isHighlighted = isCurrent || isRecommended
               const processing = openingPlanId === plan.id
               const price = formatPrice(plan.price)
               const period = getBillingPeriod(plan)
@@ -774,12 +794,19 @@ const PlansPage = () => {
               return (
                 <Paper
                   key={plan.id}
-                  variant={isCurrent ? 'hero' : 'surface'}
+                  variant="surface"
                   sx={{
-                    p: 2.4,
-                    minHeight: 258,
+                    p: 2,
+                    minHeight: 0,
                     display: 'flex',
                     flexDirection: 'column',
+                    borderRadius: '20px',
+                    border: isHighlighted
+                      ? `1.6px solid ${theme.palette.primary.main}`
+                      : `1px solid ${alpha(theme.palette.text.primary, 0.08)}`,
+                    boxShadow: isHighlighted
+                      ? `0 4px 16px ${alpha(theme.palette.primary.main, 0.16)}`
+                      : `0 2px 10px ${alpha(theme.palette.text.primary, 0.06)}`,
                   }}
                 >
                   <Stack
@@ -792,13 +819,33 @@ const PlansPage = () => {
                         {plan.name}
                       </Typography>
                     </Box>
-                    {isCurrent && (
+                    {isHighlighted && (
                       <Chip
                         size="small"
-                        icon={<CheckCircleRounded />}
-                        label={t('plans.page.card.badge')}
-                        color="secondary"
-                        sx={{ fontWeight: 900 }}
+                        icon={
+                          isRecommended ? (
+                            <WorkspacePremiumRounded />
+                          ) : (
+                            <CheckCircleRounded />
+                          )
+                        }
+                        label={
+                          isRecommended
+                            ? t('plans.page.card.mostPopular')
+                            : t('plans.page.card.badge')
+                        }
+                        sx={{
+                          height: 24,
+                          color: 'secondary.dark',
+                          bgcolor: alpha(theme.palette.secondary.main, 0.12),
+                          border: `1px solid ${alpha(theme.palette.secondary.main, 0.2)}`,
+                          fontSize: 11,
+                          fontWeight: 850,
+                          '& .MuiChip-icon': {
+                            color: 'inherit',
+                            fontSize: 15,
+                          },
+                        }}
                       />
                     )}
                   </Stack>
@@ -807,30 +854,39 @@ const PlansPage = () => {
                     direction="row"
                     alignItems="baseline"
                     spacing={0.75}
-                    sx={{ my: 2 }}
+                    sx={{ mt: 2, mb: 1.75 }}
                   >
                     <Typography
                       component="span"
-                      variant="h3"
-                      fontWeight={900}
-                      sx={{ fontVariantNumeric: 'tabular-nums' }}
+                      sx={{
+                        color: 'text.primary',
+                        fontSize: 24,
+                        fontWeight: 850,
+                        lineHeight: 1,
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
                     >
+                      {price.currency}
                       {price.amount}
                     </Typography>
                     <Typography
                       component="span"
-                      variant="body2"
                       color="text.secondary"
-                      fontWeight={800}
+                      sx={{ fontSize: 12, fontWeight: 700 }}
                     >
-                      {price.currency} / {t(periodLabelKey)}
+                      / {t(periodLabelKey)}
                     </Typography>
                   </Stack>
 
-                  <Stack spacing={1.1} sx={{ flex: 1 }}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <CheckRounded color="secondary" sx={{ fontSize: 18 }} />
-                      <Typography variant="body2" color="text.secondary">
+                  <Stack spacing={1} sx={{ flex: 1, minWidth: 0 }}>
+                    <Stack direction="row" spacing={0.9} alignItems="center">
+                      <CheckRounded
+                        color="secondary"
+                        sx={{ fontSize: 17, flexShrink: 0 }}
+                      />
+                      <Typography
+                        sx={{ fontSize: 13, color: 'text.secondary' }}
+                      >
                         {t('plans.page.card.features.trafficValue', {
                           traffic: formatTraffic(
                             getNumericBytes(plan.trafficLimit),
@@ -838,9 +894,14 @@ const PlansPage = () => {
                         })}
                       </Typography>
                     </Stack>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <CheckRounded color="secondary" sx={{ fontSize: 18 }} />
-                      <Typography variant="body2" color="text.secondary">
+                    <Stack direction="row" spacing={0.9} alignItems="center">
+                      <CheckRounded
+                        color="secondary"
+                        sx={{ fontSize: 17, flexShrink: 0 }}
+                      />
+                      <Typography
+                        sx={{ fontSize: 13, color: 'text.secondary' }}
+                      >
                         {plan.speedLimit
                           ? t('plans.page.card.features.speedMbps', {
                               value: plan.speedLimit,
@@ -848,17 +909,27 @@ const PlansPage = () => {
                           : t('plans.page.card.features.unlimited')}
                       </Typography>
                     </Stack>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <CheckRounded color="secondary" sx={{ fontSize: 18 }} />
-                      <Typography variant="body2" color="text.secondary">
+                    <Stack direction="row" spacing={0.9} alignItems="center">
+                      <CheckRounded
+                        color="secondary"
+                        sx={{ fontSize: 17, flexShrink: 0 }}
+                      />
+                      <Typography
+                        sx={{ fontSize: 13, color: 'text.secondary' }}
+                      >
                         {t('plans.page.card.features.devicesValue', {
                           count: plan.maxDevices,
                         })}
                       </Typography>
                     </Stack>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <CheckRounded color="secondary" sx={{ fontSize: 18 }} />
-                      <Typography variant="body2" color="text.secondary">
+                    <Stack direction="row" spacing={0.9} alignItems="center">
+                      <CheckRounded
+                        color="secondary"
+                        sx={{ fontSize: 17, flexShrink: 0 }}
+                      />
+                      <Typography
+                        sx={{ fontSize: 13, color: 'text.secondary' }}
+                      >
                         {t('plans.page.card.features.validUntilExpire')}
                       </Typography>
                     </Stack>
@@ -866,7 +937,7 @@ const PlansPage = () => {
 
                   <Button
                     fullWidth
-                    variant="contained"
+                    variant={isHighlighted ? 'contained' : 'outlined'}
                     color="primary"
                     disabled={isCurrent || processing || openingPlanId !== null}
                     onClick={() => void handleSubscribe(plan)}
@@ -879,7 +950,8 @@ const PlansPage = () => {
                     }
                     sx={{
                       mt: 2,
-                      py: 1.1,
+                      py: 1,
+                      borderRadius: designTokens.radius.pill,
                       fontWeight: 900,
                     }}
                   >

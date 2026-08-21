@@ -2,7 +2,9 @@ import {
   ChevronRightRounded,
   ContentCopyRounded,
   ExitToAppRounded,
+  LanguageRounded,
   OpenInNewRounded,
+  PaletteRounded,
   RefreshRounded,
   SystemUpdateAltRounded,
   TuneRounded,
@@ -39,7 +41,9 @@ import { UpdateButton } from '@/components/layout/update-button'
 import { PromoRedeemPanel } from '@/components/mine/promo-redeem-panel'
 import { UpdateViewer } from '@/components/setting/mods/update-viewer'
 import { useConnectModeControl } from '@/hooks/use-connect-mode-control'
+import { useI18n } from '@/hooks/use-i18n'
 import { useUpdate } from '@/hooks/use-update'
+import { useVerge } from '@/hooks/use-verge'
 import { designTokens } from '@/pages/_theme'
 import { useAppData } from '@/providers/app-data-context'
 import {
@@ -72,6 +76,7 @@ import {
   toSafeClientErrorMessage,
 } from '@/services/safe-client-error'
 import { manualLogout } from '@/services/secure-session-controller'
+import { useSetThemeMode } from '@/services/states'
 import parseTraffic from '@/utils/parse-traffic'
 
 const DASHBOARD_URL = 'https://xxlink.net/dashboard'
@@ -96,6 +101,7 @@ interface MineRowProps {
   description: string
   action?: ReactNode
   danger?: boolean
+  showChevron?: boolean
   onClick?: () => void
 }
 
@@ -106,6 +112,7 @@ const MineRow = ({
   action,
   danger,
   onClick,
+  showChevron = Boolean(onClick),
 }: MineRowProps) => {
   const theme = useTheme()
   return (
@@ -144,7 +151,11 @@ const MineRow = ({
         {icon}
       </Box>
       <Box sx={{ minWidth: 0, flex: 1 }}>
-        <Typography fontWeight={900} color={danger ? 'error.main' : undefined}>
+        <Typography
+          fontWeight={850}
+          color={danger ? 'error.main' : undefined}
+          noWrap
+        >
           {title}
         </Typography>
         <Typography variant="body2" color="text.secondary" noWrap>
@@ -152,10 +163,44 @@ const MineRow = ({
         </Typography>
       </Box>
       {action}
-      {onClick && <ChevronRightRounded color={danger ? 'error' : 'disabled'} />}
+      {showChevron && (
+        <ChevronRightRounded color={danger ? 'error' : 'disabled'} />
+      )}
     </Box>
   )
 }
+
+interface MineSectionProps {
+  title: string
+  children: ReactNode
+}
+
+const MineSection = ({ title, children }: MineSectionProps) => (
+  <Stack spacing={0.75} sx={{ minWidth: 0 }}>
+    <Typography
+      variant="overline"
+      color="text.secondary"
+      sx={{ px: 0.5, fontSize: 11, fontWeight: 850, lineHeight: 1.4 }}
+    >
+      {title}
+    </Typography>
+    <Paper
+      variant="surface"
+      sx={{
+        p: 0.5,
+        overflow: 'hidden',
+        borderRadius: '20px',
+        boxShadow: '0 2px 10px rgba(23, 42, 77, 0.06)',
+      }}
+    >
+      {children}
+    </Paper>
+  </Stack>
+)
+
+type MineThemePreference = 'system' | 'light' | 'dark'
+
+const THEME_PREFERENCES: MineThemePreference[] = ['system', 'light', 'dark']
 
 const MinePage = () => {
   const { t } = useTranslation()
@@ -163,6 +208,22 @@ const MinePage = () => {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { refreshProxy } = useAppData()
+  const { verge } = useVerge()
+  const {
+    currentLanguage,
+    supportedLanguages,
+    switchLanguage,
+    isLoading: languageLoading,
+  } = useI18n()
+  const setThemeMode = useSetThemeMode()
+  const configuredThemeMode: MineThemePreference =
+    verge?.theme_mode === 'light' ||
+    verge?.theme_mode === 'dark' ||
+    verge?.theme_mode === 'system'
+      ? verge.theme_mode
+      : theme.palette.mode
+  const [selectedThemeMode, setSelectedThemeMode] =
+    useState<MineThemePreference>(configuredThemeMode)
   const updateViewerRef = useRef<DialogRef>(null)
   const { updateInfo, checkUpdate, loading: checkingUpdate } = useUpdate(false)
   const modeControl = useConnectModeControl({ onRefreshProxy: refreshProxy })
@@ -199,6 +260,13 @@ const MinePage = () => {
     usageRefreshFailed: t('mine.usageRefreshFailed'),
     connectMode: t('mine.rows.connectMode.title'),
     connectModeDescription: t('mine.rows.connectMode.description'),
+    theme: t('settings.simplified.rows.theme.title'),
+    themeDescription: t('settings.simplified.rows.theme.description'),
+    language: t('settings.simplified.rows.language.title'),
+    languageDescription: t('settings.simplified.rows.language.description'),
+    themeSystem: t('settings.sections.appearance.system'),
+    themeLight: t('settings.sections.appearance.light'),
+    themeDark: t('settings.sections.appearance.dark'),
   }
 
   useEffect(() => {
@@ -352,27 +420,33 @@ const MinePage = () => {
     >
       <UpdateViewer ref={updateViewerRef} />
       <Stack
-        spacing={2}
+        spacing={1.5}
         sx={{
-          maxWidth: 980,
+          width: '100%',
+          maxWidth: 420,
+          minWidth: 0,
           mx: 'auto',
-          py: 2,
+          py: 1.25,
           height: '100%',
-          overflow: 'auto',
+          overflowX: 'hidden',
+          overflowY: 'auto',
         }}
       >
-        <Paper variant="surface" sx={{ p: 2.5 }}>
-          <Stack
-            direction={{ xs: 'column', md: 'row' }}
-            spacing={2}
-            justifyContent="space-between"
-            alignItems={{ xs: 'stretch', md: 'center' }}
-          >
-            <Stack direction="row" spacing={1.5} alignItems="center">
+        <Paper
+          variant="surface"
+          sx={{
+            p: 2,
+            borderRadius: '20px',
+            boxShadow: '0 2px 10px rgba(23, 42, 77, 0.06)',
+          }}
+        >
+          <Stack spacing={1.5} sx={{ minWidth: 0 }}>
+            <Stack direction="row" spacing={1.25} alignItems="center">
               <Box
                 sx={{
-                  width: 58,
-                  height: 58,
+                  width: 52,
+                  height: 52,
+                  flexShrink: 0,
                   borderRadius: designTokens.radius.pill,
                   display: 'grid',
                   placeItems: 'center',
@@ -385,35 +459,37 @@ const MinePage = () => {
                 </Typography>
               </Box>
               <Box sx={{ minWidth: 0 }}>
-                <Typography variant="h6" fontWeight={900} noWrap>
+                <Typography
+                  sx={{ fontSize: 16, fontWeight: 850, lineHeight: 1.3 }}
+                  noWrap
+                >
                   {accountLabel}
                 </Typography>
                 <Stack
                   direction="row"
                   spacing={1}
-                  sx={{ mt: 0.8, flexWrap: 'wrap' }}
+                  sx={{ mt: 0.7, flexWrap: 'wrap' }}
                 >
                   <Chip
                     size="small"
+                    variant="outlined"
                     label={
                       usage?.plan?.name ??
                       (usage ? text.currentAccount : text.usageUnavailable)
                     }
-                  />
-                  <Chip
-                    size="small"
-                    color={usage ? 'success' : 'default'}
-                    label={`${text.remaining} ${remainingLabel}`}
+                    sx={{ fontSize: 11, fontWeight: 750 }}
                   />
                 </Stack>
               </Box>
             </Stack>
-            <Box sx={{ minWidth: { md: 320 } }}>
-              <Stack direction="row" justifyContent="space-between">
-                <Typography variant="body2" color="text.secondary">
+            <Box sx={{ minWidth: 0, width: '100%' }}>
+              <Stack direction="row" justifyContent="space-between" gap={1}>
+                <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
                   {text.usage}
                 </Typography>
-                <Typography variant="body2" fontWeight={900}>
+                <Typography
+                  sx={{ fontSize: 12, fontWeight: 850, textAlign: 'right' }}
+                >
                   {usageLabel}
                 </Typography>
               </Stack>
@@ -422,8 +498,8 @@ const MinePage = () => {
                 color={percent > 80 ? 'error' : 'primary'}
                 value={percent}
                 sx={{
-                  mt: 1,
-                  height: 8,
+                  mt: 0.75,
+                  height: 6,
                   borderRadius: designTokens.radius.pill,
                   bgcolor: 'action.hover',
                   '& .MuiLinearProgress-bar': {
@@ -431,12 +507,24 @@ const MinePage = () => {
                   },
                 }}
               />
+              <Stack direction="row" justifyContent="space-between" gap={1}>
+                <Typography
+                  sx={{ mt: 0.55, fontSize: 11, color: 'text.secondary' }}
+                >
+                  {text.remaining}
+                </Typography>
+                <Typography
+                  sx={{ mt: 0.55, fontSize: 11, color: 'text.secondary' }}
+                >
+                  {remainingLabel}
+                </Typography>
+              </Stack>
               <Button
                 variant="outlined"
                 size="small"
                 startIcon={<OpenInNewRounded />}
                 onClick={() => void open(DASHBOARD_URL)}
-                sx={{ mt: 1.5, fontWeight: 900 }}
+                sx={{ mt: 1.1, fontWeight: 850 }}
               >
                 {text.openDashboard}
               </Button>
@@ -450,21 +538,16 @@ const MinePage = () => {
 
         <PromoRedeemPanel />
 
-        <Paper variant="surface" sx={{ p: 1, overflow: 'hidden' }}>
-          <Typography
-            variant="overline"
-            color="text.secondary"
-            sx={{ px: 2, fontWeight: 800 }}
-          >
-            {text.common}
-          </Typography>
+        <MineSection title={text.common}>
           <MineRow
             icon={<ContentCopyRounded />}
             title={text.diagnostics}
             description={text.diagnosticsDesc}
             onClick={() => void handleCopyDiagnostics()}
           />
-          <Divider />
+        </MineSection>
+
+        <MineSection title={text.settings}>
           <MineRow
             icon={<SystemUpdateAltRounded />}
             title={text.update}
@@ -490,18 +573,12 @@ const MinePage = () => {
             }
             onClick={() => void handleCheckUpdate()}
           />
-          <Divider />
-          <Typography
-            variant="overline"
-            color="text.secondary"
-            sx={{ px: 2, fontWeight: 800 }}
-          >
-            {text.settings}
-          </Typography>
+          <Divider sx={{ mx: 1.5 }} />
           <MineRow
             icon={<TuneRounded />}
             title={text.connectMode}
             description={text.connectModeDescription}
+            showChevron
             action={
               <ButtonGroup
                 size="small"
@@ -589,14 +666,87 @@ const MinePage = () => {
               {t('settings.sections.proxyControl.tooltips.tunUnavailable')}
             </Alert>
           )}
-          <Divider />
-          <Typography
-            variant="overline"
-            color="text.secondary"
-            sx={{ px: 2, fontWeight: 800 }}
-          >
-            {text.account}
-          </Typography>
+          <Divider sx={{ mx: 1.5 }} />
+          <MineRow
+            icon={<PaletteRounded />}
+            title={text.theme}
+            description={text.themeDescription}
+            showChevron
+            action={
+              <ButtonGroup
+                size="small"
+                aria-label={text.theme}
+                sx={{
+                  flexShrink: 0,
+                  '& .MuiButton-root': {
+                    minWidth: 0,
+                    px: { xs: 0.7, sm: 1 },
+                    fontSize: { xs: 11, sm: 13 },
+                    fontWeight: 850,
+                  },
+                }}
+              >
+                {THEME_PREFERENCES.map((mode) => (
+                  <Button
+                    key={mode}
+                    variant={
+                      selectedThemeMode === mode ? 'contained' : 'outlined'
+                    }
+                    onClick={() => {
+                      setSelectedThemeMode(mode)
+                      setThemeMode(mode === 'dark' ? 'dark' : 'light')
+                    }}
+                  >
+                    {mode === 'system'
+                      ? text.themeSystem
+                      : mode === 'light'
+                        ? text.themeLight
+                        : text.themeDark}
+                  </Button>
+                ))}
+              </ButtonGroup>
+            }
+          />
+          <Divider sx={{ mx: 1.5 }} />
+          <MineRow
+            icon={<LanguageRounded />}
+            title={text.language}
+            description={text.languageDescription}
+            showChevron
+            action={
+              <ButtonGroup
+                size="small"
+                aria-label={text.language}
+                sx={{
+                  flexShrink: 0,
+                  '& .MuiButton-root': {
+                    minWidth: 0,
+                    px: { xs: 1, sm: 1.25 },
+                    fontSize: { xs: 11, sm: 13 },
+                    fontWeight: 850,
+                  },
+                }}
+              >
+                {supportedLanguages.map((language) => (
+                  <Button
+                    key={language}
+                    variant={
+                      currentLanguage.startsWith(language)
+                        ? 'contained'
+                        : 'outlined'
+                    }
+                    disabled={languageLoading}
+                    onClick={() => void switchLanguage(language)}
+                  >
+                    {language.toUpperCase()}
+                  </Button>
+                ))}
+              </ButtonGroup>
+            }
+          />
+        </MineSection>
+
+        <MineSection title={text.account}>
           <MineRow
             danger
             icon={<ExitToAppRounded />}
@@ -604,7 +754,7 @@ const MinePage = () => {
             description={text.logoutDesc}
             onClick={() => setLogoutOpen(true)}
           />
-        </Paper>
+        </MineSection>
       </Stack>
 
       <Dialog open={logoutOpen} onClose={() => setLogoutOpen(false)}>

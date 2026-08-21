@@ -34,6 +34,7 @@
     },
     "card": {
       "badge": "Current",
+      "mostPopular": "Most popular",
       "features": {
         "traffic": "Traffic",
         "trafficValue": "{{traffic}} traffic",

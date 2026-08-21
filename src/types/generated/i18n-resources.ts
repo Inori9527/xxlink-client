@@ -430,6 +430,7 @@ export interface TranslationResources {
             unlimited: string
             validUntilExpire: string
           }
+          mostPopular: string
         }
         current: {
           expirePrefix: string

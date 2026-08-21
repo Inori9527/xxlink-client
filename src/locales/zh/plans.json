@@ -34,6 +34,7 @@
     },
     "card": {
       "badge": "当前",
+      "mostPopular": "最受欢迎",
       "features": {
         "traffic": "流量",
         "trafficValue": "{{traffic}} 流量",
