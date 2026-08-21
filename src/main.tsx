@@ -144,7 +144,7 @@ const renderSplashTimeoutFallback = (error: unknown) => {
   const reloadBtn = document.createElement('button')
   reloadBtn.textContent = 'Restart app'
   reloadBtn.style.cssText =
-    'padding:8px 16px;border-radius:6px;border:none;background:#4f46e5;color:#fff;font-size:14px;cursor:pointer;'
+    'padding:8px 16px;border-radius:6px;border:none;background:var(--primary-main, #2F80ED);color:#fff;font-size:14px;cursor:pointer;'
   reloadBtn.addEventListener('click', () => {
     window.location.reload()
   })

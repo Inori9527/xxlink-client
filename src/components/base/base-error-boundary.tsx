@@ -55,7 +55,10 @@ function ErrorFallback({ error }: FallbackProps) {
             padding: '6px 14px',
             borderRadius: 4,
             border: 'none',
-            background: '#4f46e5',
+            // Crash surface: stays MUI-theme-free on purpose. Brand color via
+            // runtime CSS variable with a literal fallback for the case where
+            // the theme hook never ran.
+            background: 'var(--primary-main, #2F80ED)',
             color: '#fff',
             cursor: 'pointer',
           }}
