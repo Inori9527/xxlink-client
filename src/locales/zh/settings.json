@@ -100,17 +100,10 @@
     },
     "proxyControl": {
       "tooltips": {
-        "systemProxy": "适合浏览器和常见应用使用",
-        "tunMode": "让大多数应用都通过 XXLink 连接",
         "tunUnavailable": "全局加速需要启用服务模式或管理员模式"
       },
       "actions": {
-        "installService": "安装服务",
-        "uninstallService": "卸载服务"
-      },
-      "fields": {
-        "systemProxy": "浏览器加速",
-        "tunMode": "全局加速"
+        "installService": "安装服务"
       }
     },
     "externalController": {

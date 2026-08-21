@@ -100,17 +100,10 @@
     },
     "proxyControl": {
       "tooltips": {
-        "systemProxy": "Enable to modify the operating system's proxy settings. If enabling fails, modify the operating system's proxy settings manually",
-        "tunMode": "Tun (Virtual NIC) mode: Captures all system traffic, when enabled, there is no need to enable system proxy.",
         "tunUnavailable": "TUN requires Service Mode or Admin Mode"
       },
       "actions": {
-        "installService": "Install Service",
-        "uninstallService": "Uninstall Service"
-      },
-      "fields": {
-        "systemProxy": "System Proxy",
-        "tunMode": "Tun Mode"
+        "installService": "Install Service"
       }
     },
     "externalController": {

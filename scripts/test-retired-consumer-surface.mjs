@@ -38,6 +38,7 @@ const retiredPaths = [
   'src/components/setting/mods/theme-mode-switch.tsx',
   'src/services/monaco.ts',
   'src/utils/yaml.worker.ts',
+  'src/components/shared/proxy-control-switches.tsx',
   'src/hooks/use-connection-data.ts',
   'src/hooks/use-connection-setting.ts',
   'src/hooks/use-current-proxy.ts',
@@ -50,7 +51,6 @@ const retainedPaths = [
   'src/pages/nodes.tsx',
   'src/pages/plans.tsx',
   'src/pages/mine.tsx',
-  'src/components/shared/proxy-control-switches.tsx',
   'src/components/setting/mods/stack-mode-switch.tsx',
   'src/components/setting/mods/sysproxy-viewer.tsx',
   'src/components/setting/mods/tun-viewer.tsx',
@@ -173,11 +173,7 @@ test('source imports do not reference the retired consumer surface', () => {
   }
 })
 
-test('consumer mode and update controls remain without PAC or raw-error editors', () => {
-  const proxyControlsSource = readFileSync(
-    resolve(repoRoot, 'src/components/shared/proxy-control-switches.tsx'),
-    'utf8',
-  )
+test('consumer TUN and update controls remain without PAC or raw-error editors', () => {
   const sysproxySource = readFileSync(
     resolve(repoRoot, 'src/components/setting/mods/sysproxy-viewer.tsx'),
     'utf8',
@@ -195,25 +191,6 @@ test('consumer mode and update controls remain without PAC or raw-error editors'
     'utf8',
   )
 
-  assert.match(proxyControlsSource, /kind: ProxyControlKind/)
-  assert.match(proxyControlsSource, /onError: \(error: unknown\) => void/)
-  assert.doesNotMatch(proxyControlsSource, /onError\?/)
-  assert.doesNotMatch(proxyControlsSource, /showNotice\.error/)
-  const systemProxyControlSource = proxyControlsSource.slice(
-    proxyControlsSource.indexOf('const SystemProxyControl'),
-    proxyControlsSource.indexOf('const TunControl'),
-  )
-  const tunControlSource = proxyControlsSource.slice(
-    proxyControlsSource.indexOf('const TunControl'),
-    proxyControlsSource.indexOf('const ProxyControlSwitches'),
-  )
-  assert.match(
-    systemProxyControlSource,
-    /<SysproxyViewer ref={sysproxyRef} \/>/,
-  )
-  assert.match(tunControlSource, /<TunViewer ref={tunRef} \/>/)
-  assert.doesNotMatch(systemProxyControlSource, /<TunViewer ref={tunRef} \/>/)
-  assert.doesNotMatch(tunControlSource, /<SysproxyViewer ref={sysproxyRef} \/>/)
   assert.doesNotMatch(connectSource, /ProxyControlSwitches/)
   assert.doesNotMatch(connectSource, /handleProxyControlError/)
   assert.match(connectSource, /useServiceInstaller/)

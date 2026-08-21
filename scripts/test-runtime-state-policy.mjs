@@ -207,10 +207,6 @@ test('runtime controls reject failed reads and gate unsafe mutations', () => {
     resolve(repoRoot, 'src/services/cmds.ts'),
     'utf8',
   )
-  const controls = readFileSync(
-    resolve(repoRoot, 'src/components/shared/proxy-control-switches.tsx'),
-    'utf8',
-  )
   const proxyState = readFileSync(
     resolve(repoRoot, 'src/hooks/use-system-proxy-state.ts'),
     'utf8',
@@ -250,13 +246,8 @@ test('runtime controls reject failed reads and gate unsafe mutations', () => {
     /service-availability-check'[\s\S]{0,160}return false/,
   )
   assert.doesNotMatch(commands, /admin-check'[\s\S]{0,160}return false/)
-  assert.match(controls, /disabled=\{!canToggleSystemProxy\}/)
-  assert.match(controls, /if \(value && !isTunModeAvailable\)/)
-  assert.match(
-    controls,
-    /enable_tun_mode !== true && \(!isReady \|\| !isTunModeAvailable\)/,
-  )
-  assert.doesNotMatch(controls, /if \(!isTunModeAvailable\)/)
+  assert.doesNotMatch(connect, /ProxyControlSwitches/)
+  assert.doesNotMatch(connect, /handleProxyControlError/)
   assert.match(proxyState, /canSetSystemProxyEnabled\(\{/)
   assert.match(proxyState, /proxy_host_valid === true/)
   assert.match(

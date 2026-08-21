@@ -1290,15 +1290,8 @@ export interface TranslationResources {
         proxyControl: {
           actions: {
             installService: string
-            uninstallService: string
-          }
-          fields: {
-            systemProxy: string
-            tunMode: string
           }
           tooltips: {
-            systemProxy: string
-            tunMode: string
             tunUnavailable: string
           }
         }

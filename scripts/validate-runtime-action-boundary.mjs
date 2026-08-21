@@ -18,7 +18,6 @@ const nodes = read('src/pages/nodes.tsx')
 const mine = read('src/pages/mine.tsx')
 const selection = read('src/hooks/use-proxy-selection.ts')
 const systemProxy = read('src/hooks/use-system-proxy-state.ts')
-const controls = read('src/components/shared/proxy-control-switches.tsx')
 const systemState = read('src/hooks/use-system-state.ts')
 const tunViewer = read('src/components/setting/mods/tun-viewer.tsx')
 const sysproxyViewer = read('src/components/setting/mods/sysproxy-viewer.tsx')
@@ -245,7 +244,6 @@ for (const [name, source] of [
   ['mine', mine],
   ['selection', selection],
   ['system-proxy', systemProxy],
-  ['proxy-controls', controls],
   ['system-state', systemState],
 ]) {
   assert(
