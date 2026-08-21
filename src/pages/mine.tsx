@@ -578,64 +578,62 @@ const MinePage = () => {
             icon={<TuneRounded />}
             title={text.connectMode}
             description={text.connectModeDescription}
-            showChevron
-            action={
-              <ButtonGroup
-                size="small"
-                aria-label={text.connectMode}
-                sx={{
-                  flex: '0 0 auto',
-                  '& .MuiButton-root': {
-                    minWidth: { xs: 0, sm: 58 },
-                    px: { xs: 0.9, sm: 1.25 },
-                    fontWeight: 850,
-                  },
-                }}
-              >
-                <Button
-                  variant={
-                    modeControl.mode === 'system' ? 'contained' : 'outlined'
-                  }
-                  onClick={() => modeControl.handleModeChange('system')}
-                  disabled={
-                    !modeControl.preferencesReady ||
-                    modeControl.modeChanging ||
-                    modeControl.serviceInstalling
-                  }
-                >
-                  {t('layout.components.connect.mode.system')}
-                </Button>
-                <Button
-                  variant={
-                    modeControl.mode === 'both' ? 'contained' : 'outlined'
-                  }
-                  onClick={() => modeControl.handleModeChange('both')}
-                  disabled={
-                    !modeControl.preferencesReady ||
-                    modeControl.modeChanging ||
-                    modeControl.serviceInstalling ||
-                    !modeControl.systemStateReady
-                  }
-                >
-                  {t('layout.components.connect.mode.both')}
-                </Button>
-                <Button
-                  variant={
-                    modeControl.mode === 'smart' ? 'contained' : 'outlined'
-                  }
-                  onClick={() => modeControl.handleModeChange('smart')}
-                  disabled={
-                    !modeControl.preferencesReady ||
-                    modeControl.modeChanging ||
-                    modeControl.serviceInstalling ||
-                    !modeControl.systemStateReady
-                  }
-                >
-                  {t('layout.components.connect.mode.smart')}
-                </Button>
-              </ButtonGroup>
-            }
           />
+          <Box sx={{ px: 2, pb: 1.25 }}>
+            <ButtonGroup
+              fullWidth
+              size="small"
+              aria-label={text.connectMode}
+              sx={{
+                '& .MuiButton-root': {
+                  flex: 1,
+                  minWidth: { xs: 0, sm: 58 },
+                  px: { xs: 0.9, sm: 1.25 },
+                  fontWeight: 850,
+                },
+              }}
+            >
+              <Button
+                variant={
+                  modeControl.mode === 'system' ? 'contained' : 'outlined'
+                }
+                onClick={() => modeControl.handleModeChange('system')}
+                disabled={
+                  !modeControl.preferencesReady ||
+                  modeControl.modeChanging ||
+                  modeControl.serviceInstalling
+                }
+              >
+                {t('layout.components.connect.mode.system')}
+              </Button>
+              <Button
+                variant={modeControl.mode === 'both' ? 'contained' : 'outlined'}
+                onClick={() => modeControl.handleModeChange('both')}
+                disabled={
+                  !modeControl.preferencesReady ||
+                  modeControl.modeChanging ||
+                  modeControl.serviceInstalling ||
+                  !modeControl.systemStateReady
+                }
+              >
+                {t('layout.components.connect.mode.both')}
+              </Button>
+              <Button
+                variant={
+                  modeControl.mode === 'smart' ? 'contained' : 'outlined'
+                }
+                onClick={() => modeControl.handleModeChange('smart')}
+                disabled={
+                  !modeControl.preferencesReady ||
+                  modeControl.modeChanging ||
+                  modeControl.serviceInstalling ||
+                  !modeControl.systemStateReady
+                }
+              >
+                {t('layout.components.connect.mode.smart')}
+              </Button>
+            </ButtonGroup>
+          </Box>
           {modeControl.serviceInstallMode && (
             <Alert
               severity="warning"

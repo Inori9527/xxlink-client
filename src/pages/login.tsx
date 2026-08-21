@@ -90,17 +90,18 @@ export default function LoginPage(): ReactNode {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        bgcolor: '#f0f2ff',
+        bgcolor: 'background.default',
         p: 2,
       }}
     >
       <Paper
-        elevation={3}
+        variant="surface"
         sx={{
           width: '100%',
           maxWidth: 420,
           p: 4,
-          borderRadius: 3,
+          borderRadius: '20px',
+          boxShadow: '0 2px 10px rgba(23, 42, 77, 0.06)',
         }}
       >
         {/* Header */}
@@ -108,7 +109,7 @@ export default function LoginPage(): ReactNode {
           <Typography
             variant="h5"
             fontWeight={700}
-            sx={{ color: '#4f46e5', letterSpacing: 1 }}
+            sx={{ color: 'primary.main', letterSpacing: 1 }}
           >
             XXLink
           </Typography>
@@ -168,13 +169,12 @@ export default function LoginPage(): ReactNode {
           <Button
             type="submit"
             variant="contained"
+            color="primary"
             fullWidth
             disabled={loading}
             sx={{
               py: 1.2,
-              bgcolor: '#4f46e5',
-              '&:hover': { bgcolor: '#4338ca' },
-              fontWeight: 600,
+              fontWeight: 800,
               fontSize: 15,
             }}
           >
@@ -193,7 +193,7 @@ export default function LoginPage(): ReactNode {
           <RouterLink
             to="/register"
             style={{
-              color: '#4f46e5',
+              color: 'var(--primary-main)',
               fontWeight: 600,
               textDecoration: 'none',
             }}

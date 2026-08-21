@@ -1,6 +1,7 @@
 import { createBrowserRouter, type RouteObject } from 'react-router'
 import { Navigate } from 'react-router'
 
+import { PublicThemeShell } from '@/components/layout/public-theme-shell'
 import { RequireAuth } from '@/components/require-auth'
 import { AppDataProvider } from '@/providers/app-data-provider'
 
@@ -60,8 +61,13 @@ const redirectRoutes: RouteObject[] = [
 
 export const router = createBrowserRouter([
   // Public routes — accessible without authentication
-  { path: '/login', Component: LoginPage },
-  { path: '/register', Component: RegisterPage },
+  {
+    element: <PublicThemeShell />,
+    children: [
+      { path: '/login', Component: LoginPage },
+      { path: '/register', Component: RegisterPage },
+    ],
+  },
 
   // Protected routes — wrapped in the auth guard
   {

@@ -164,7 +164,7 @@ const NodesPage = () => {
           }}
         />
 
-        {recommendedNode && (
+        {recommendedNode && recommendedDelay > 0 && (
           <Paper variant="hero" sx={{ p: { xs: 1.5, sm: 2 } }}>
             <Stack
               direction={{ xs: 'column', sm: 'row' }}
