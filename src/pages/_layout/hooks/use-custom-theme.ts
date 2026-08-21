@@ -229,6 +229,8 @@ export const useCustomTheme = () => {
       rootEle.style.setProperty('--surface-color', mt.surface)
       rootEle.style.setProperty('--surface-raised-color', mt.surfaceRaised)
       rootEle.style.setProperty('--outline-color', mt.outline)
+      rootEle.style.setProperty('--text-primary', dt.primary_text)
+      rootEle.style.setProperty('--text-secondary', dt.secondary_text)
     }
 
     let styleElement = document.querySelector('style#verge-theme')

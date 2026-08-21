@@ -34,8 +34,8 @@
     gap: 2px;
     padding: 6px 12px 8px;
     box-sizing: border-box;
-    background: #ffffff;
-    border-top: 1px solid rgba(23, 42, 77, 0.08);
+    background: var(--surface-color);
+    border-top: 1px solid var(--outline-color);
     box-shadow: 0 -8px 22px rgba(23, 42, 77, 0.06);
     z-index: 3;
 
@@ -56,7 +56,7 @@
       border: 0;
       border-radius: 12px;
       background: transparent;
-      color: #5d6b84;
+      color: var(--text-secondary);
       cursor: pointer;
       font: inherit;
       transition:
@@ -78,7 +78,7 @@
       }
 
       &.is-active {
-        color: #2f80ed;
+        color: var(--primary-main);
       }
     }
 
@@ -89,7 +89,7 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      color: #98a6b8;
+      color: var(--text-secondary);
 
       svg {
         width: 24px;
@@ -109,7 +109,7 @@
     }
 
     .layout-item__button.is-active .layout-item__icon {
-      color: #2f80ed;
+      color: var(--primary-main);
     }
   }
 }
