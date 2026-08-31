@@ -53,7 +53,11 @@ pub async fn run_ipc_server() -> Result<JoinHandle<Result<()>>> {
             use tokio::fs;
 
             tokio::time::sleep(Duration::from_millis(50)).await;
-            fs::set_permissions(IPC_PATH, Permissions::from_mode(0o777)).await?;
+            // Re-apply the same mode the listener was created with. This call
+            // used to widen the socket to 0o777, undoing `create_ipc_server`'s
+            // 0o660 a few milliseconds after it took effect and handing every
+            // local account access to a root-owned endpoint (2026-08-28 audit).
+            fs::set_permissions(IPC_PATH, Permissions::from_mode(IPC_SOCKET_MODE)).await?;
 
             spawn_socket_dir_watchdog();
         }
@@ -105,8 +109,28 @@ async fn make_ipc_dir() -> Result<()> {
             return Ok(());
         };
 
-        if !dir_path.exists() {
-            fs::create_dir_all(dir_path).await?;
+        // `Path::exists` follows symlinks, so a user who pre-creates
+        // /tmp/xxlink as a link to a privileged directory used to redirect the
+        // chown and chmod below onto the link's target -- /tmp is
+        // world-writable, which is what made that reachable (2026-08-28 audit).
+        // symlink_metadata does not follow, so the link is seen for what it is
+        // and refused rather than adopted.
+        match std::fs::symlink_metadata(dir_path) {
+            Ok(meta) if meta.file_type().is_symlink() => {
+                return Err(kode_bridge::KodeBridgeError::configuration(format!(
+                    "refusing to use {dir_path:?}: it is a symlink"
+                )));
+            }
+            Ok(meta) if !meta.is_dir() => {
+                return Err(kode_bridge::KodeBridgeError::configuration(format!(
+                    "refusing to use {dir_path:?}: it exists and is not a directory"
+                )));
+            }
+            Ok(_) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                fs::create_dir_all(dir_path).await?;
+            }
+            Err(err) => return Err(err.into()),
         }
 
         // We need to ensure compatibility with sudo GID through the terminal
@@ -119,12 +143,7 @@ async fn make_ipc_dir() -> Result<()> {
             unsafe {
                 if platform_lib::chown(c_path.as_ptr(), platform_lib::uid_t::MAX, gid) != 0 {
                     let err = std::io::Error::last_os_error();
-                    log::warn!(
-                        "Failed to chown directory {:?} to gid {}: {}",
-                        dir_path,
-                        gid,
-                        err
-                    );
+                    log::warn!("Failed to chown directory {:?} to gid {}: {}", dir_path, gid, err);
                 }
             }
         }
@@ -182,10 +201,7 @@ async fn cleanup_stale_ipc_socket() -> Result<()> {
         .await
         {
             Ok(Ok(_stream)) => {
-                warn!(
-                    "Another instance listening on {}, removing stale socket",
-                    IPC_PATH
-                );
+                warn!("Another instance listening on {}, removing stale socket", IPC_PATH);
                 tokio::fs::remove_file(IPC_PATH).await?;
             }
             _ => {
@@ -236,6 +252,36 @@ async fn init_ipc_state() -> Result<()> {
     Ok(())
 }
 
+/// Who may talk to the privileged endpoint.
+///
+/// This is the boundary. The service runs as SYSTEM and will change system
+/// network state on request, so the endpoint's access control is what stops an
+/// unprivileged local process from driving it. The previous value was
+/// `D:(A;;GA;;;WD)` -- `WD` is Everyone and `GA` is GENERIC_ALL, i.e. every
+/// process on the machine had full access (2026-08-28 audit).
+///
+/// `P` blocks inherited ACEs. SYSTEM and Administrators keep full control
+/// because they own the service; interactive users get read/write only,
+/// because that is what an IPC client needs and nothing more. A service
+/// account, a sandboxed process, or a remote session is no longer admitted.
+///
+/// Residual, stated plainly rather than papered over: on a machine with more
+/// than one interactive user, another logged-in user is still inside `IU`.
+/// Narrowing further needs the caller's identity, which the IPC library does
+/// not expose (`kode_bridge::ClientInfo` carries only a connection id and a
+/// timestamp), so it is not reachable without changing that library.
+#[cfg(windows)]
+pub(crate) const IPC_PIPE_SECURITY_DESCRIPTOR: &str = "D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;IU)";
+
+/// Socket mode for the Unix endpoint: owner and group only, never `other`.
+///
+/// The enclosing directory is created `0o2770` (SetGID) so the socket inherits
+/// the desktop user's group, which is how an unelevated client reaches a
+/// root-owned socket. `other` bits would hand that same access to every local
+/// account and are never correct here.
+#[cfg(unix)]
+pub(crate) const IPC_SOCKET_MODE: u32 = 0o660;
+
 fn create_ipc_server() -> Result<IpcHttpServer> {
     use crate::IPC_PATH;
 
@@ -243,16 +289,13 @@ fn create_ipc_server() -> Result<IpcHttpServer> {
 
     #[cfg(unix)]
     {
-        use platform_lib::{S_IRGRP, S_IRUSR, S_IWGRP, S_IWUSR, mode_t};
-
-        let mode: mode_t = platform_lib::mode_t::from(S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-        let server = server.with_listener_mode(mode);
+        let server = server.with_listener_mode(IPC_SOCKET_MODE as platform_lib::mode_t);
         Ok(server)
     }
 
     #[cfg(windows)]
     {
-        let server = server.with_listener_security_descriptor("D:(A;;GA;;;WD)");
+        let server = server.with_listener_security_descriptor(IPC_PIPE_SECURITY_DESCRIPTOR);
         Ok(server)
     }
 }
