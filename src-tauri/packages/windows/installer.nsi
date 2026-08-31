@@ -1289,6 +1289,28 @@ Section Uninstall
     SetShellVarContext current
     RmDir /r "$APPDATA\${BUNDLEID}"
     RmDir /r "$LOCALAPPDATA\${BUNDLEID}"
+
+    ; The session tokens do not live under $APPDATA. They are keyring entries
+    ; in Windows Credential Manager, so removing the directories above leaves
+    ; them behind and "delete app data" silently keeps the credential that
+    ; matters most. The keyring target name is "<account>.<service>" and the
+    ; service is "${BUNDLEID}.secure-session" -- kept in terms of BUNDLEID so
+    ; a bundle id change cannot leave this pointing at a stale target.
+    ; "primary" holds the tokens; "logout-pending" holds a partially-completed
+    ; logout, which still contains them.
+    ; cmdkey exits non-zero when the target is absent, which is the normal
+    ; case for a user who never signed in -- the return value is discarded on
+    ; purpose.
+    ; Residual, stated rather than assumed away: this runs in the elevating
+    ; account's context, exactly like the SetShellVarContext current and HKCU
+    ; operations above. When a standard user elevates with a *different*
+    ; administrator account, all of them address the wrong profile. That
+    ; mismatch is pre-existing and is tracked separately; this change does not
+    ; widen it, and closes the common single-account case.
+    nsExec::Exec 'cmdkey /delete:primary.${BUNDLEID}.secure-session'
+    Pop $0
+    nsExec::Exec 'cmdkey /delete:logout-pending.${BUNDLEID}.secure-session'
+    Pop $0
   ${EndIf}
 
   !ifmacrodef NSIS_HOOK_POSTUNINSTALL
