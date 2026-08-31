@@ -5,7 +5,8 @@ on:
   # ! 不再使用 workflow_dispatch 触发。
   # workflow_dispatch:
   push:
-    # -rc tag 时预览发布, 跳过 telegram 通知、跳过 winget 提交、跳过 latest.json 文件更新
+    # -rc tag 时预览发布, 跳过 winget 提交、跳过 latest.json 文件更新
+    # (telegram 通知作业已随 scripts/telegram.mjs 的退役一并移除)
     tags:
       - 'v*.*.*'
 # Least privilege: these workflows create releases and manage their assets
@@ -577,73 +578,3 @@ jobs:
           release-tag: v${{env.VERSION}}
           installers-regex: '_x64-setup\.exe$'
           token: ${{ secrets.WINGET_TOKEN  }}
-
-  notify-telegram:
-    if: ${{ !contains(github.ref_name, '-rc') }}
-    name: Notify Telegram
-    runs-on: ubuntu-latest
-    needs: [update_tag, release-update, submit-to-winget]
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-
-      - name: Fetch UPDATE logs
-        id: fetch_update_logs
-        run: bash ./scripts/extract_update_logs.sh
-        shell: bash
-
-      - name: Install Node
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: '24.14.1'
-
-      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
-        name: Install pnpm
-        with:
-          run_install: false
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Get Version and Release Info
-        run: |
-          sudo apt-get update
-          sudo apt-get install jq
-          echo "VERSION=$(cat package.json | jq '.version' | tr -d '"')" >> $GITHUB_ENV
-          echo "DOWNLOAD_URL=https://github.com/Inori9527/xxlink-client/releases/download/v$(cat package.json | jq '.version' | tr -d '"')" >> $GITHUB_ENV
-          echo "BUILDTIME=$(TZ=Asia/Shanghai date)" >> $GITHUB_ENV
-
-      - name: Generate release.txt
-        run: |
-          if [ -z "$UPDATE_LOGS" ]; then
-            echo "No update logs found, using default message"
-            UPDATE_LOGS="More new features are now supported. Check for detailed changelog soon."
-          else
-            echo "Using found update logs"
-          fi
-
-          cat > release.txt << EOF
-          $UPDATE_LOGS
-
-          ## 下载地址
-
-          ### Windows (不再支持Win7)
-          #### 正常版本(推荐)
-          - [64位(常用)](${{ env.DOWNLOAD_URL }}/XXLink_${{ env.VERSION }}_x64-setup.exe)
-
-          ### FAQ
-          - [常见问题](https://xxlink.dev/docs/faq/windows.html)
-
-          ### 稳定机场VPN推荐
-          - [狗狗加速](https://verge.dginv.click/#/register?code=oaxsAGo6)
-
-          Created at ${{ env.BUILDTIME }}.
-          EOF
-
-      - name: Send Telegram Notification
-        run: node scripts/telegram.mjs
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          BUILD_TYPE: release
-          VERSION: ${{ env.VERSION }}
-          DOWNLOAD_URL: ${{ env.DOWNLOAD_URL }}
