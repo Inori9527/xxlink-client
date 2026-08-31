@@ -2,7 +2,6 @@ use crate::WriterConfig;
 use crate::core::ClashConfig;
 use crate::core::logger::{get_writer, set_or_update_writer};
 use anyhow::{Result, anyhow};
-use xxlink_logging::AsyncLogger;
 use compact_str::CompactString;
 use flexi_logger::writers::LogWriter;
 use flexi_logger::{DeferredNow, Record};
@@ -14,6 +13,7 @@ use tokio::io::AsyncBufReadExt;
 use tokio::{io::BufReader, process::Command};
 use tokio::{process::Child, sync::Mutex, task::JoinHandle};
 use tracing::{error, info, warn};
+use xxlink_logging::AsyncLogger;
 
 #[derive(Debug)]
 pub struct CoreExitInfo {
@@ -118,6 +118,14 @@ impl CoreManager {
     }
 
     pub async fn start_core(&self, config: ClashConfig) -> Result<()> {
+        // The caller names the executable this privileged process will run.
+        // It has to: the service is installed separately and does not know
+        // where the app lives, so `core_path` arrives in the request body
+        // (src-tauri/src/core/service.rs computes it next to the app binary).
+        // What must not happen is running it unexamined -- that turned the
+        // endpoint into "make SYSTEM execute anything" (2026-08-28 audit).
+        validate_core_path(&config.core_config.core_path)?;
+
         let value = self.running_child.lock().await.take();
         if let Some(child) = value {
             info!("Core is already running, stopping existing instance");
@@ -140,8 +148,7 @@ impl CoreManager {
             config.core_config.core_ipc_path.as_str(),
         ];
 
-        let child_guard =
-            run_with_logging(&config.core_config.core_path, &args, &config.log_config).await?;
+        let child_guard = run_with_logging(&config.core_config.core_path, &args, &config.log_config).await?;
 
         {
             let mut child_lock = self.running_child.lock().await;
@@ -200,11 +207,7 @@ impl CoreManager {
                     if let Some(child) = guard.inner() {
                         match child.try_wait() {
                             Ok(Some(status)) => {
-                                let uptime = start_time_arc
-                                    .lock()
-                                    .await
-                                    .map(|t| t.elapsed())
-                                    .unwrap_or_default();
+                                let uptime = start_time_arc.lock().await.map(|t| t.elapsed()).unwrap_or_default();
 
                                 let exit_info = CoreExitInfo {
                                     exit_code: status.code(),
@@ -238,9 +241,7 @@ impl CoreManager {
                                 drop(child_lock);
 
                                 let now = Instant::now();
-                                restart_timestamps.retain(|t| {
-                                    now.duration_since(*t) < watchdog_config.restart_window
-                                });
+                                restart_timestamps.retain(|t| now.duration_since(*t) < watchdog_config.restart_window);
                                 restart_timestamps.push(now);
 
                                 if restart_timestamps.len() as u32 > watchdog_config.max_restarts {
@@ -252,8 +253,7 @@ impl CoreManager {
                                     break;
                                 }
 
-                                let delay =
-                                    backoff_delay(consecutive_attempt, watchdog_config.max_backoff);
+                                let delay = backoff_delay(consecutive_attempt, watchdog_config.max_backoff);
                                 info!(
                                     "Restart attempt #{} after {}ms backoff",
                                     consecutive_attempt + 1,
@@ -276,22 +276,15 @@ impl CoreManager {
                                         config.core_config.core_ipc_path.as_str(),
                                     ];
 
-                                    match run_with_logging(
-                                        &config.core_config.core_path,
-                                        &args,
-                                        &config.log_config,
-                                    )
-                                    .await
+                                    match run_with_logging(&config.core_config.core_path, &args, &config.log_config)
+                                        .await
                                     {
                                         Ok(new_guard) => {
                                             let mut lock = child_arc.lock().await;
                                             *lock = Some(new_guard);
                                             *start_time_arc.lock().await = Some(Instant::now());
                                             consecutive_attempt += 1;
-                                            info!(
-                                                "Core restarted successfully (attempt #{})",
-                                                consecutive_attempt
-                                            );
+                                            info!("Core restarted successfully (attempt #{})", consecutive_attempt);
                                         }
                                         Err(e) => {
                                             error!("Failed to restart core: {}", e);
@@ -372,11 +365,7 @@ impl CoreManager {
     }
 }
 
-pub async fn run_with_logging(
-    bin_path: &str,
-    args: &Vec<&str>,
-    writer_config: &WriterConfig,
-) -> Result<ChildGuard> {
+pub async fn run_with_logging(bin_path: &str, args: &Vec<&str>, writer_config: &WriterConfig) -> Result<ChildGuard> {
     set_or_update_writer(writer_config).await?;
 
     #[cfg(not(unix))]
@@ -459,7 +448,184 @@ pub async fn run_with_logging(
     Ok(child_guard)
 }
 
-pub static CORE_MANAGER: Lazy<Arc<Mutex<CoreManager>>> =
-    Lazy::new(|| Arc::new(Mutex::new(CoreManager::new())));
+/// Executable names this service will launch. The app ships one proxy core;
+/// the historical names are accepted so an older installation still starts.
+pub(crate) const ALLOWED_CORE_FILE_STEMS: &[&str] = &["xxlink-mihomo", "mihomo", "mihomo-alpha", "verge-mihomo"];
+
+/// Decide whether a caller-supplied executable may be run by this privileged
+/// process. Rejection is the default: every branch that cannot establish the
+/// path is safe returns an error rather than falling through to a launch.
+pub(crate) fn validate_core_path(core_path: &str) -> Result<()> {
+    use std::path::Path;
+
+    let path = Path::new(core_path);
+
+    if !path.is_absolute() {
+        return Err(anyhow!("core path must be absolute: {core_path}"));
+    }
+
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| anyhow!("core path has no file name: {core_path}"))?;
+    if !ALLOWED_CORE_FILE_STEMS.contains(&stem) {
+        return Err(anyhow!("core executable is not allow-listed: {stem}"));
+    }
+
+    #[cfg(windows)]
+    if path.extension().and_then(|e| e.to_str()) != Some("exe") {
+        return Err(anyhow!("core executable must be .exe on windows: {core_path}"));
+    }
+
+    let meta =
+        std::fs::symlink_metadata(path).map_err(|err| anyhow!("core path is not readable: {core_path}: {err}"))?;
+    if meta.file_type().is_symlink() {
+        return Err(anyhow!("core path is a symlink: {core_path}"));
+    }
+    if !meta.is_file() {
+        return Err(anyhow!("core path is not a regular file: {core_path}"));
+    }
+
+    // A binary an unprivileged account can replace is the same escalation by a
+    // slower route, so the directory holding it must not be group- or
+    // world-writable. Windows has no mode bits; there the equivalent check
+    // needs the security APIs this crate does not depend on, and its absence
+    // is why the allow-list above is not the only guard on that platform.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let parent = path
+            .parent()
+            .ok_or_else(|| anyhow!("core path has no parent directory: {core_path}"))?;
+        let parent_meta =
+            std::fs::metadata(parent).map_err(|err| anyhow!("core directory is not readable: {parent:?}: {err}"))?;
+        let mode = parent_meta.permissions().mode();
+        if mode & 0o022 != 0 {
+            return Err(anyhow!(
+                "core directory {parent:?} is writable by group or other (mode {mode:o})"
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+pub static CORE_MANAGER: Lazy<Arc<Mutex<CoreManager>>> = Lazy::new(|| Arc::new(Mutex::new(CoreManager::new())));
 
 pub static LOGGER_MANAGER: Lazy<Arc<AsyncLogger>> = Lazy::new(|| Arc::new(AsyncLogger::new()));
+
+#[cfg(test)]
+mod runtime_boundary_tests {
+    use super::*;
+    use std::io::Write;
+
+    // The name of this module is load-bearing: the client CI runs
+    // `cargo test --workspace --all-features --lib runtime_boundary_tests`,
+    // so a test outside it -- including anything under tests/ -- never runs.
+
+    fn temp_core(stem: &str, ext: &str) -> (tempdirs::Guard, std::path::PathBuf) {
+        let guard = tempdirs::Guard::new();
+        let path = guard.path().join(format!("{stem}{ext}"));
+        let mut f = std::fs::File::create(&path).expect("create fake core");
+        f.write_all(b"not a real binary").expect("write fake core");
+        (guard, path)
+    }
+
+    #[cfg(windows)]
+    const EXT: &str = ".exe";
+    #[cfg(not(windows))]
+    const EXT: &str = "";
+
+    #[test]
+    fn allow_listed_core_in_place_is_accepted() {
+        let (_g, path) = temp_core("xxlink-mihomo", EXT);
+        // On unix the temp directory must not be group/other writable for the
+        // parent-directory rule; Guard creates it 0o700.
+        assert!(
+            validate_core_path(path.to_str().unwrap()).is_ok(),
+            "the installed core must still start"
+        );
+    }
+
+    #[test]
+    fn arbitrary_executable_is_rejected() {
+        let (_g, path) = temp_core("payload", EXT);
+        let err = validate_core_path(path.to_str().unwrap())
+            .expect_err("a non-allow-listed executable must not be run as SYSTEM/root");
+        assert!(
+            err.to_string().contains("not allow-listed"),
+            "unexpected rejection reason: {err}"
+        );
+    }
+
+    #[test]
+    fn relative_path_is_rejected() {
+        let err = validate_core_path("xxlink-mihomo")
+            .expect_err("a relative path must not be resolved against the service's cwd");
+        assert!(err.to_string().contains("absolute"), "unexpected reason: {err}");
+    }
+
+    #[test]
+    fn missing_file_is_rejected_not_ignored() {
+        let guard = tempdirs::Guard::new();
+        let path = guard.path().join(format!("xxlink-mihomo{EXT}"));
+        let err = validate_core_path(path.to_str().unwrap()).expect_err("a path that does not exist must fail closed");
+        assert!(err.to_string().contains("not readable"), "unexpected reason: {err}");
+    }
+
+    /// The endpoint's access control is the boundary; this pins what it grants.
+    #[test]
+    fn endpoint_permissions_exclude_everyone() {
+        #[cfg(windows)]
+        {
+            let sd = crate::core::server::IPC_PIPE_SECURITY_DESCRIPTOR;
+            for wide in [";WD)", ";AU)", ";AN)", ";WD;", ";AU;"] {
+                assert!(!sd.contains(wide), "security descriptor must not admit {wide}: {sd}");
+            }
+            assert!(sd.contains("(A;;GA;;;SY)"), "SYSTEM must keep full control: {sd}");
+            assert!(sd.starts_with("D:P"), "inherited ACEs must be blocked: {sd}");
+        }
+        #[cfg(unix)]
+        {
+            let mode = crate::core::server::IPC_SOCKET_MODE;
+            assert_eq!(
+                mode & 0o007,
+                0,
+                "socket must not be accessible to other (mode {mode:o})"
+            );
+            assert_eq!(mode, 0o660, "socket mode must be exactly 0o660");
+        }
+    }
+
+    mod tempdirs {
+        use std::path::{Path, PathBuf};
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        static N: AtomicU64 = AtomicU64::new(0);
+
+        pub struct Guard(PathBuf);
+
+        impl Guard {
+            pub fn new() -> Self {
+                let n = N.fetch_add(1, Ordering::Relaxed);
+                let dir = std::env::temp_dir().join(format!("xxlink-ipc-boundary-{}-{n}", std::process::id()));
+                std::fs::create_dir_all(&dir).expect("create temp dir");
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).expect("tighten temp dir");
+                }
+                Guard(dir)
+            }
+            pub fn path(&self) -> &Path {
+                &self.0
+            }
+        }
+
+        impl Drop for Guard {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+    }
+}
