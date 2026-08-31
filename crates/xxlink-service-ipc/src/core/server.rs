@@ -101,6 +101,7 @@ async fn make_ipc_dir() -> Result<()> {
     {
         use crate::IPC_PATH;
         use std::fs::Permissions;
+        use std::os::unix::fs::MetadataExt;
         use std::os::unix::fs::PermissionsExt;
         use std::path::Path;
         use tokio::fs;
@@ -126,9 +127,45 @@ async fn make_ipc_dir() -> Result<()> {
                     "refusing to use {dir_path:?}: it exists and is not a directory"
                 )));
             }
-            Ok(_) => {}
+            // An existing directory used to be adopted on the strength of the
+            // two checks above, which ask what it is and never who owns it.
+            // /tmp is world-writable, so an unprivileged user can create
+            // /tmp/xxlink before the service first runs -- no race, just
+            // arriving first -- and the chown below passes uid_t::MAX, POSIX's
+            // "leave the owner alone" sentinel, so it changes only the group.
+            // The attacker therefore stayed the owner of a directory this
+            // process then set to 0o2770 and put a root-owned socket in.
+            //
+            // Exercised on Ubuntu 24.04 as an unprivileged account, with a
+            // second unprivileged user refused the same operations as a
+            // control: the owner can strip the mode back off, unlink the
+            // root-owned socket inside, and remove the directory itself even
+            // under a sticky 1777 /tmp, because the sticky bit exempts the
+            // entry's owner. /tmp is usually tmpfs, so the window reopens on
+            // every boot rather than being a one-time pre-install chance.
+            Ok(meta) => {
+                let owner = meta.uid();
+                let expected = unsafe { platform_lib::geteuid() };
+                if owner != expected {
+                    return Err(kode_bridge::KodeBridgeError::configuration(format!(
+                        "refusing to use {dir_path:?}: owned by uid {owner}, expected {expected}"
+                    )));
+                }
+            }
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                // create_dir_all is not exclusive: it succeeds if the path
+                // appears between the check above and this call. The owner
+                // check is re-run below so that a directory won by that race
+                // is refused rather than adopted.
                 fs::create_dir_all(dir_path).await?;
+                let meta = std::fs::symlink_metadata(dir_path)?;
+                let owner = meta.uid();
+                let expected = unsafe { platform_lib::geteuid() };
+                if meta.file_type().is_symlink() || !meta.is_dir() || owner != expected {
+                    return Err(kode_bridge::KodeBridgeError::configuration(format!(
+                        "refusing to use {dir_path:?}: lost the create race (uid {owner}, expected {expected})"
+                    )));
+                }
             }
             Err(err) => return Err(err.into()),
         }
@@ -231,13 +268,17 @@ pub fn spawn_socket_dir_watchdog() {
                 && !dir.exists()
             {
                 warn!("IPC socket directory {:?} was deleted, recreating", dir);
-                if let Err(e) = tokio::fs::create_dir_all(dir).await {
+                // Recreate through make_ipc_dir rather than inline. This path
+                // used to create_dir_all and chmod 0o777, which skipped the
+                // symlink refusal the create path has and left the directory
+                // world-writable with no SetGID -- so after any recreation any
+                // local account could plant a socket at IPC_PATH. Reusing the
+                // one function keeps the refusals, the ownership check and the
+                // 0o2770 in a single place instead of two that drift apart.
+                if let Err(e) = make_ipc_dir().await {
                     warn!("Failed to recreate IPC socket directory: {}", e);
                     continue;
                 }
-                use std::fs::Permissions;
-                use std::os::unix::fs::PermissionsExt;
-                let _ = tokio::fs::set_permissions(dir, Permissions::from_mode(0o777)).await;
                 info!("IPC socket directory {:?} recreated", dir);
             }
         }

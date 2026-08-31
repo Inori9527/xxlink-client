@@ -158,7 +158,6 @@ impl CoreManager {
 
         *self.running_config.lock().await = Some(config);
 
-        self.after_start().await;
         self.start_watchdog().await;
 
         Ok(())
@@ -320,30 +319,6 @@ impl CoreManager {
         }
     }
 
-    pub async fn after_start(&self) {
-        #[cfg(unix)]
-        {
-            use std::fs::Permissions;
-            use std::os::unix::fs::PermissionsExt;
-            use std::path::Path;
-            use tokio::fs;
-
-            tokio::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-                let target = Path::new("/tmp/xxlink/xxlink-mihomo.sock");
-                info!("Setting permissions for {:?}", target);
-                if !target.exists() {
-                    warn!("{:?} does not exist, skipping permission setting", target);
-                    return;
-                }
-                match fs::set_permissions(target, Permissions::from_mode(0o777)).await {
-                    Ok(_) => info!("Permissions set to 777 for {:?}", target),
-                    Err(e) => warn!("Failed to set permissions for {:?}: {}", target, e),
-                }
-            });
-        }
-    }
-
     pub async fn after_stop(&self) {
         #[cfg(unix)]
         {
@@ -382,6 +357,13 @@ pub async fn run_with_logging(bin_path: &str, args: &Vec<&str>, writer_config: &
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .pre_exec(|| {
+                // Sole authority for the mode of the core's -ext-ctl-unix
+                // control socket. The core creates that socket itself, so the
+                // only way to keep `other` off it is to deny those bits here,
+                // before exec. after_start() used to chmod it back to 0o777
+                // two hundred milliseconds later -- handing every local
+                // account full control of a root-owned RESTful control API --
+                // which is why that hook is gone rather than narrowed.
                 platform_lib::umask(0o007);
                 Ok(())
             })
@@ -627,5 +609,118 @@ mod runtime_boundary_tests {
                 let _ = std::fs::remove_dir_all(&self.0);
             }
         }
+    }
+
+    // Strip comment lines before matching. These tests read the very files
+    // they guard, so a needle written literally in an assertion -- or merely
+    // mentioned in a comment explaining the old defect -- would match itself
+    // and report a regression that is not there. Needles are also assembled
+    // with concat! for the same reason.
+    fn code_only(source: &str) -> String {
+        source
+            .lines()
+            .filter(|l| !l.trim_start().starts_with("//"))
+            .collect::<Vec<_>>()
+            .join(
+                "
+",
+            )
+    }
+
+    // The mihomo core's -ext-ctl-unix control socket is a root-owned RESTful
+    // API. It is created by the core itself, so the only lever on its mode is
+    // the umask set before exec. after_start() used to chmod it to 0o777 two
+    // hundred milliseconds after every start_core, handing that API to every
+    // local account -- unconditionally, no race to win and nothing to
+    // pre-plant. Asserted on the source rather than a live socket because this
+    // crate's CI runners cannot observe one: a Windows runner never compiles
+    // the path, so an observation-based test would pass without looking.
+    #[test]
+    fn core_socket_is_not_widened_after_start() {
+        let source = code_only(include_str!("manager.rs"));
+
+        assert!(
+            !source.contains(concat!("pub async fn ", "after_start")),
+            "after_start is back; it existed only to widen the core control socket"
+        );
+        assert!(
+            !source.contains(concat!("self.", "after_start().await")),
+            "after_start is being called again"
+        );
+        // Catch a reintroduction under any other name: no chmod in this file
+        // may set a mode carrying `other` bits.
+        for bad in ["0o777", "0o666", "0o707", "0o776"] {
+            for line in source.lines() {
+                assert!(
+                    !(line.contains("from_mode") && line.contains(bad)),
+                    "a chmod grants `other` bits ({bad}): {line}"
+                );
+            }
+        }
+        assert!(
+            source.contains("platform_lib::umask(0o007)"),
+            "the umask before exec is the only thing keeping `other` off the core socket"
+        );
+    }
+
+    // The IPC directory used to be adopted whatever its owner: the guards asked
+    // what it was, never whose it was, and the chown passes uid_t::MAX, POSIX's
+    // "leave the owner alone" sentinel. An unprivileged user who created
+    // /tmp/xxlink first therefore kept it, and -- exercised on Ubuntu 24.04
+    // with a second unprivileged user refused the same steps as a control --
+    // could unlink the root-owned socket inside it and remove the directory
+    // even under a sticky 1777 /tmp, because sticky exempts the entry's owner.
+    #[test]
+    fn ipc_directory_is_refused_when_not_ours() {
+        let source = code_only(include_str!("server.rs"));
+
+        // Every binding of `expected` must come from geteuid, not just one of
+        // them. There are two comparison sites -- the adopt path and the
+        // re-check after the non-exclusive create -- and an earlier version of
+        // this assertion only required the string to appear somewhere in the
+        // file, so neutering either site alone still passed. Mutation testing
+        // caught that; this form catches it.
+        let bindings: Vec<&str> = source.lines().filter(|l| l.contains("let expected")).collect();
+        assert!(
+            bindings.len() >= 2,
+            "expected an owner comparison at both the adopt and post-create paths, found {}",
+            bindings.len()
+        );
+        for line in &bindings {
+            assert!(
+                line.contains("geteuid()"),
+                "an owner comparison is not against our euid: {line}"
+            );
+        }
+        assert!(
+            source.contains("owned by uid {owner}, expected {expected}"),
+            "the ownership refusal is gone from make_ipc_dir"
+        );
+        assert!(
+            source.contains("lost the create race"),
+            "create_dir_all is not exclusive; the post-create owner re-check must stay"
+        );
+
+        // The watchdog must recreate through make_ipc_dir. Doing it inline is
+        // how it skipped the symlink refusal and left the directory 0o777.
+        let watchdog = source
+            .split(concat!("pub fn ", "spawn_socket_dir_watchdog"))
+            .nth(1)
+            .expect("watchdog missing");
+        let watchdog = watchdog
+            .split(
+                "
+async fn ",
+            )
+            .next()
+            .unwrap_or(watchdog);
+        assert!(
+            watchdog.contains("make_ipc_dir().await"),
+            "the watchdog recreates the directory itself instead of via make_ipc_dir"
+        );
+        assert!(
+            !watchdog.contains("create_dir_all"),
+            "the watchdog still creates the directory inline"
+        );
     }
 }
