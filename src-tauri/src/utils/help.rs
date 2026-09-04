@@ -217,48 +217,46 @@ pub fn parse_str<T: FromStr>(target: &str, key: &str) -> Option<T> {
 /// - `https://example.com/api/v1/clash?token=abc123` → `https://example.com/api/v1/clash?token=***`
 /// - `https://example.com/abc123def456ghi789/clash` → `https://example.com/***/clash`
 pub fn mask_url(url: &str) -> String {
-    // Split off query string
-    let (path_part, query_part) = match url.find('?') {
-        Some(pos) => (&url[..pos], Some(&url[pos + 1..])),
-        None => (url, None),
-    };
-
-    // Rebuild scheme://host[:port] from the parsed URL rather than slicing the
-    // original text. The slice used to run from "://" to the first '/', which
-    // is exactly the span that holds `user:password@` -- so any credentials in
-    // an imported subscription URL were copied verbatim into the log line this
-    // function exists to make safe. `host_str()` cannot carry userinfo, so the
-    // leak is closed by construction rather than by another pattern to match.
+    // Every part below comes from the parsed URL. An earlier version rebuilt
+    // the prefix from the parser but still sliced the path out of the ORIGINAL
+    // text by byte offset, to avoid the trailing "/" the parser adds to an
+    // empty path. That offset is what put the credentials back: in
+    // "https:////u:p@h/x" the parser skips the extra slashes and reads the
+    // authority as "u:p@h", while the offset walk stops at the first '/' after
+    // "://" and hands "//u:p@h/x" back as the path. The trailing "/" is
+    // cosmetic; the credential is not, so the offset arithmetic is gone.
     //
     // A URL that does not parse is summarised by length only: returning any of
     // its text risks returning the part we are trying to withhold.
-    let (scheme_and_host, path) = match Url::parse(path_part) {
-        Ok(parsed) if parsed.host_str().is_some() => {
-            let mut prefix = format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or_default());
-            if let Some(port) = parsed.port() {
-                prefix.push_str(&format!(":{port}"));
-            }
-            // Offset the path out of the ORIGINAL text: parsed.path()
-            // normalises (adds a trailing "/" for an empty path), which would
-            // otherwise alter output for URLs that have no path at all.
-            let host_end = path_part
-                .find("://")
-                .and_then(|scheme_end| {
-                    path_part[scheme_end + 3..]
-                        .find('/')
-                        .map(|slash| scheme_end + 3 + slash)
-                })
-                .unwrap_or(path_part.len());
-            (prefix, &path_part[host_end..])
-        }
-        _ => return format!("<unparseable-url len={}>", url.len()),
+    let Ok(parsed) = Url::parse(url) else {
+        return format!("<unparseable-url len={}>", url.len());
     };
 
-    let mut result = scheme_and_host;
+    let scheme = parsed.scheme();
+
+    // Only these four have an authority the parser separates from the payload.
+    // For every other scheme the "host" IS the payload: a vmess:// link is a
+    // base64 blob sitting in host position, which host_str() hands back whole,
+    // and ss:// and trojan:// carry the credential there directly. Masking the
+    // path and query of such a URL redacts the parts that hold nothing, so
+    // none of it is kept.
+    if !matches!(scheme, "http" | "https" | "ws" | "wss") {
+        return format!("{scheme}://***");
+    }
+
+    let Some(host) = parsed.host_str() else {
+        return format!("<unparseable-url len={}>", url.len());
+    };
+
+    let mut result = format!("{scheme}://{host}");
+    if let Some(port) = parsed.port() {
+        result.push_str(&format!(":{port}"));
+    }
 
     // Mask path segments that look like tokens. The bound is >= 8, not > 8:
     // an XXLink subscription token is 8-128 characters, so a token of exactly
     // the minimum length used to pass through intact.
+    let path = parsed.path();
     if !path.is_empty() {
         let masked: Vec<&str> = path
             .split('/')
@@ -268,7 +266,7 @@ pub fn mask_url(url: &str) -> String {
     }
 
     // Keep query param keys, mask values
-    if let Some(query) = query_part {
+    if let Some(query) = parsed.query() {
         result.push('?');
         let masked_query: Vec<String> = query
             .split('&')
@@ -294,16 +292,25 @@ fn find_scheme_start(text: &str) -> Option<usize> {
     while let Some(rel) = text[from..].find("://") {
         let sep = from + rel;
         let head = &text[..sep];
-        let scheme_start = head
+        let mut scheme_start = head
             .rfind(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.')))
             .map_or(0, |i| i + head[i..].chars().next().map_or(1, char::len_utf8));
-        // A scheme must be non-empty and start with a letter.
-        if scheme_start < sep
-            && head[scheme_start..]
+        // A scheme must start with a letter, and "+", "-" and "." are legal
+        // INSIDE one but not at its start -- so the walk-back above can stop on
+        // a character that cannot begin a scheme. Trim forward to the first
+        // letter instead of rejecting the span: rejecting it is what let
+        // "-https://u:p@h/x" through untouched, because the walk-back swallowed
+        // the leading "-" and then this "://" was skipped entirely.
+        while scheme_start < sep
+            && !head[scheme_start..]
                 .chars()
                 .next()
                 .is_some_and(|c| c.is_ascii_alphabetic())
         {
+            scheme_start += head[scheme_start..].chars().next().map_or(1, char::len_utf8);
+        }
+        // Non-empty after the trim: "://" on its own is not a URL.
+        if scheme_start < sep {
             return Some(scheme_start);
         }
         from = sep + 3;
@@ -337,9 +344,25 @@ pub fn mask_err(err: &str) -> String {
         result.push_str(&remaining[..start]);
         remaining = &remaining[start..];
 
-        let url_end = remaining
-            .find(|c: char| c.is_whitespace() || matches!(c, ')' | ']' | '"' | '\''))
+        // The span ends at whitespace or a quote only. It used to end at ')'
+        // and ']' as well, which reads a password character as a delimiter: for
+        // `https://u:)secret@h/a` the span stopped inside the userinfo and
+        // everything after it -- the rest of the credential -- was copied
+        // through as prose. Closing punctuation is instead given back after the
+        // span is taken, so it still appears in the output but cannot cut a URL
+        // short.
+        let hard_end = remaining
+            .find(|c: char| c.is_whitespace() || matches!(c, '"' | '\''))
             .unwrap_or(remaining.len());
+        // `.max(1)` guarantees the loop advances. `remaining` begins at a
+        // scheme letter, so trimming punctuation cannot empty the span -- but
+        // an empty span would leave `remaining` unchanged and spin forever, and
+        // that is too quiet a failure to leave resting on an invariant proved
+        // somewhere else.
+        let url_end = remaining[..hard_end]
+            .trim_end_matches([')', '.', ',', ';', ']'])
+            .len()
+            .max(1);
 
         result.push_str(&mask_url(&remaining[..url_end]));
         remaining = &remaining[url_end..];
@@ -474,8 +497,12 @@ mod runtime_boundary_tests {
         assert!(masked.contains("token=***"), "query value must be masked: {masked}");
         assert!(!masked.contains("xyz"), "query value leaked: {masked}");
 
-        // No credentials, no path, no query: output stays recognisable.
-        assert_eq!(mask_url("https://example.com"), "https://example.com");
+        // No credentials, no path, no query: output stays recognisable. The
+        // trailing "/" is the parser's normalisation of an empty path. An
+        // earlier version sliced the path out of the original text to avoid
+        // exactly this cosmetic difference, and that arithmetic is what leaked
+        // the userinfo back for "https:////u:p@h/x" -- see the test below.
+        assert_eq!(mask_url("https://example.com"), "https://example.com/");
     }
 
     // The three inputs the C1 review cited, plus the edge shape from its
@@ -505,12 +532,18 @@ mod runtime_boundary_tests {
         assert!(masked.contains("v1"), "short segment must survive: {masked}");
     }
 
-    // The reviewer's MINOR: the prefix comes from the parsed URL while the path
-    // offset is taken from the original text. Measured across the shapes where
-    // those two could disagree -- they do not, and userinfo is stripped in all
-    // of them. Kept as a regression fence, not because a defect was found.
+    // These shapes were measured against the earlier implementation, where the
+    // prefix came from the parser and the path from an offset into the original
+    // text, and none of them disagreed -- which is why that MINOR was called
+    // refuted. The list was not exhaustive, and the shape it missed is the last
+    // entry here: an authority reached through extra slashes, which the parser
+    // folds away and the offset walk did not, so "u:p@h" came back as a path
+    // segment short enough to escape masking too.
+    //
+    // A fence is not an enumeration. This one now guards the property directly
+    // instead of the agreement of two mechanisms, because only one is left.
     #[test]
-    fn mask_url_prefix_and_path_offset_agree_on_edge_shapes() {
+    fn mask_url_takes_every_part_from_the_parser() {
         for raw in [
             "https://user:pw@h.example",
             "https://user:pw@h.example?q=1",
@@ -518,11 +551,49 @@ mod runtime_boundary_tests {
             "https://user:pw@h.example./x",
             "https://user:pw@[::1]:8080/abcdefghij",
             "https://user:pw@h.example//double",
+            "https:////user:pw@h.example/x",
         ] {
             let masked = mask_url(raw);
             assert!(!masked.contains("user"), "userinfo survived {raw:?}: {masked}");
-            assert!(!masked.contains("pw@"), "userinfo survived {raw:?}: {masked}");
+            assert!(!masked.contains("pw"), "userinfo survived {raw:?}: {masked}");
+            assert!(!masked.contains('@'), "userinfo separator survived {raw:?}: {masked}");
             assert!(masked.starts_with("https://"), "prefix malformed for {raw:?}: {masked}");
+        }
+
+        // The reviewer's exact input, asserted whole rather than by absence:
+        // the authority is folded away by the parser, so nothing of it can
+        // reappear as a path segment.
+        assert_eq!(mask_url("https:////u:p@h/x"), "https://h/x");
+    }
+
+    // A scheme whose authority is not an authority. For ss://, vmess:// and
+    // trojan:// the payload sits in host position -- a vmess link is a base64
+    // blob there -- so host_str() hands the whole secret back and masking the
+    // path and query redacts the parts that held nothing.
+    #[test]
+    fn mask_url_withholds_all_of_a_non_hierarchical_scheme() {
+        assert_eq!(mask_url("vmess://czNjcjN0"), "vmess://***");
+        for raw in [
+            "vmess://czNjcjN0",
+            "ss://YWVzOnMzY3IzdA@1.2.3.4:8388#tag",
+            "trojan://s3cr3tpw@host.example:443?sni=x#tag",
+        ] {
+            let masked = mask_url(raw);
+            assert!(masked.ends_with("://***"), "payload survived {raw:?}: {masked}");
+            for secret in ["czNjcjN0", "YWVzOnMzY3IzdA", "s3cr3tpw", "1.2.3.4", "host.example"] {
+                assert!(!masked.contains(secret), "leaked {secret:?} from {raw:?}: {masked}");
+            }
+        }
+
+        // The four hierarchical schemes keep their host: a log line that cannot
+        // say which server failed is not worth writing.
+        for raw in [
+            "http://h.example/a",
+            "https://h.example/a",
+            "ws://h.example/a",
+            "wss://h.example/a",
+        ] {
+            assert!(mask_url(raw).contains("h.example"), "host lost from {raw:?}");
         }
     }
 
@@ -553,6 +624,48 @@ mod runtime_boundary_tests {
         let m = mask_err("note: see trojan://pw@h.example now");
         assert!(m.starts_with("note: see "), "{m}");
         assert!(m.ends_with(" now"), "{m}");
+    }
+
+    // Both of these are mine: one a delimiter chosen without asking what else
+    // could be there, one a regression I introduced while widening coverage.
+    #[test]
+    fn mask_err_span_survives_punctuation_inside_and_around_a_url() {
+        // A ')' inside the password used to END the span, so the redactor
+        // stopped mid-userinfo and copied the rest of the credential through as
+        // prose. The reviewer's exact input.
+        let masked = mask_err("err https://u:)CANARY@h.invalid/a end");
+        assert!(!masked.contains("CANARY"), "credential survived: {masked}");
+        assert!(!masked.contains('@'), "userinfo separator survived: {masked}");
+        assert!(masked.starts_with("err ") && masked.ends_with(" end"), "{masked}");
+
+        // Closing punctuation is still given back, so prose keeps its shape.
+        let masked = mask_err("see (https://u:pw@h.example/x) here");
+        assert_eq!(masked, "see (https://h.example/x) here");
+        assert_eq!(
+            mask_err("tried https://u:pw@h.example/x, then gave up."),
+            "tried https://h.example/x, then gave up."
+        );
+
+        // My regression: "-" is legal inside a scheme, so the walk-back
+        // swallowed the leading one and the whole "://" was then skipped --
+        // leaving the URL, and its credentials, entirely untouched. The
+        // substring search this replaced would have caught it.
+        let masked = mask_err("-https://u:p@h.invalid/x");
+        assert_eq!(masked, "-https://h.invalid/x");
+        for raw in [
+            "+https://u:s3cr3t@h.invalid/x",
+            ".https://u:s3cr3t@h.invalid/x",
+            "9https://u:s3cr3t@h.invalid/x",
+            "--https://u:s3cr3t@h.invalid/x",
+        ] {
+            let masked = mask_err(raw);
+            assert!(!masked.contains("s3cr3t"), "leaked from {raw:?}: {masked}");
+        }
+
+        // "://" with nothing that can begin a scheme in front of it is not a
+        // URL, and must not send the scanner into a loop.
+        assert_eq!(mask_err("://bare"), "://bare");
+        assert_eq!(mask_err("-://bare"), "-://bare");
     }
 
     #[test]
