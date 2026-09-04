@@ -682,18 +682,33 @@ FunctionEnd
         DetailPrint "Stop ${PRODUCTNAME} Service..."
         SimpleSC::StopService "xxlink_service" 1 30
         Pop $0 ; returns an errorcode (<>0) otherwise success (0)
-        ${If} $0 == 0
-          DetailPrint "Removing ${PRODUCTNAME} Service..."
-          SimpleSC::RemoveService "xxlink_service"
-        ${ElseIf} $0 != 0
+        ${If} $0 != 0
+          ; Report the stop failure and carry on to the removal below. This
+          ; branch used to return without removing anything while the uninstall
+          ; continued, so a service that refused to stop stayed registered and
+          ; nothing said so. Attempting is strictly better than skipping: the
+          ; SCM marks a running service delete-pending and removes it at the
+          ; next reboot.
           Push $0
           SimpleSC::GetErrorMessage
           Pop $0
-          MessageBox MB_OK|MB_ICONSTOP "${PRODUCTNAME} Service Stop Error ($0)"
+          DetailPrint "${PRODUCTNAME} Service Stop Error ($0); removing anyway"
         ${EndIf}
-      ${ElseIf} $1 == 0
-        DetailPrint "Removing ${PRODUCTNAME} Service..."
-        SimpleSC::RemoveService "xxlink_service"
+      ${EndIf}
+      ; One removal for both the running and the already-stopped case.
+      DetailPrint "Removing ${PRODUCTNAME} Service..."
+      SimpleSC::RemoveService "xxlink_service"
+      Pop $0 ; returns an errorcode (<>0) otherwise success (0)
+      ; Read the result. Both former RemoveService calls left it on the stack
+      ; unread, so a failed removal and a successful one produced identical
+      ; output -- which made this macro one that ATTEMPTS removal, while its
+      ; callers reasoned as though it removes. Say which one happened, and name
+      ; the command that finishes the job.
+      ${If} $0 != 0
+        Push $0
+        SimpleSC::GetErrorMessage
+        Pop $0
+        MessageBox MB_OK|MB_ICONEXCLAMATION "${PRODUCTNAME} Service could not be removed ($0).$\r$\n$\r$\nTo remove it, run this from an elevated command prompt:$\r$\n$\r$\n    sc delete xxlink_service"
       ${EndIf}
     ${ElseIf} $0 != 0
       Push $0
