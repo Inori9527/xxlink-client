@@ -1290,12 +1290,46 @@ Section Uninstall
     RmDir /r "$APPDATA\${BUNDLEID}"
     RmDir /r "$LOCALAPPDATA\${BUNDLEID}"
 
+    ; The two lines above resolve $APPDATA against the account running this
+    ; uninstaller. With RequestExecutionLevel admin (:109 for perMachine), a
+    ; standard user who elevates with a DIFFERENT administrator account gets
+    ; that administrator's profile -- so both RmDir calls silently succeed
+    ; against a directory the product never used, and the real user's data
+    ; stays. Nothing fails; the checkbox just does not do what it says.
+    ;
+    ; Sweep every profile as well, using the same ProfileList enumeration this
+    ; installer already relies on for legacy desktop shortcuts (:1205-1219).
+    ; Redundant when the elevating account is the user's own -- the paths are
+    ; then the same directory, and RmDir on an absent path is a no-op.
+    SetRegView 64
+    StrCpy $R1 0
+    AppDataProfileLoop:
+      EnumRegKey $R2 HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList" $R1
+      ${If} $R2 == ""
+        Goto AppDataProfileDone
+      ${EndIf}
+      ReadRegStr $R3 HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$R2" "ProfileImagePath"
+      ${If} $R3 != ""
+        RmDir /r "$R3\AppData\Roaming\${BUNDLEID}"
+        RmDir /r "$R3\AppData\Local\${BUNDLEID}"
+      ${EndIf}
+      IntOp $R1 $R1 + 1
+      Goto AppDataProfileLoop
+    AppDataProfileDone:
+
     ; The session tokens do not live under $APPDATA. They are keyring entries
     ; in Windows Credential Manager, so removing the directories above leaves
     ; them behind and "delete app data" silently keeps the credential that
-    ; matters most. The keyring target name is "<account>.<service>" and the
-    ; service is "${BUNDLEID}.secure-session" -- kept in terms of BUNDLEID so
-    ; a bundle id change cannot leave this pointing at a stale target.
+    ; matters most. The keyring target name is "<account>.<service>".
+    ;
+    ; The service segment is written literally, matching secure_session.rs:6
+    ; VAULT_SERVICE. An earlier version of this comment claimed that writing it
+    ; as "${BUNDLEID}.secure-session" meant a bundle id change could not leave a
+    ; stale target. That guarantee was inverted: the producing side is the Rust
+    ; literal, so parameterising only the consumer would make the installer
+    ; follow a new id while the vault stayed on the old one -- exactly the
+    ; failure the claim denied. Both sides are literal now, and
+    ; test-uninstall-credential-cleanup.mjs asserts they agree.
     ; "primary" holds the tokens; "logout-pending" holds a partially-completed
     ; logout, which still contains them.
     ; cmdkey exits non-zero when the target is absent, which is the normal
@@ -1307,9 +1341,9 @@ Section Uninstall
     ; administrator account, all of them address the wrong profile. That
     ; mismatch is pre-existing and is tracked separately; this change does not
     ; widen it, and closes the common single-account case.
-    nsExec::Exec 'cmdkey /delete:primary.${BUNDLEID}.secure-session'
+    nsExec::Exec 'cmdkey /delete:primary.com.xxlink.desktop.secure-session'
     Pop $0
-    nsExec::Exec 'cmdkey /delete:logout-pending.${BUNDLEID}.secure-session'
+    nsExec::Exec 'cmdkey /delete:logout-pending.com.xxlink.desktop.secure-session'
     Pop $0
   ${EndIf}
 
