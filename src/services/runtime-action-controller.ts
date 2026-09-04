@@ -141,10 +141,6 @@ export const runtimeActionController = {
     return invoke<void>('runtime_install_service_and_restart_core')
   },
 
-  uninstallServiceAndRestartCore() {
-    return invoke<void>('runtime_uninstall_service_and_restart_core')
-  },
-
   selectNode({
     groupName,
     proxyName,

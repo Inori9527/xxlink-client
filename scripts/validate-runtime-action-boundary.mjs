@@ -55,7 +55,6 @@ for (const command of [
   'runtime_update_preferences',
   'runtime_refresh_system_proxy',
   'runtime_install_service_and_restart_core',
-  'runtime_uninstall_service_and_restart_core',
   'runtime_select_node',
   'runtime_check_update',
   'runtime_install_update',
@@ -323,7 +322,6 @@ assert(
 assert(
   rust.includes('static SERVICE_ACTION_LOCK') &&
     rust.includes('runtime_install_service_and_restart_core') &&
-    rust.includes('runtime_uninstall_service_and_restart_core') &&
     rust.includes('service_rollback') &&
     rust.includes('core_rollback') &&
     rust.includes('runtime_disable_tun_if_unavailable'),

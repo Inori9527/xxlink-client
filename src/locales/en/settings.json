@@ -699,8 +699,7 @@
         "geoDataUpdated": "GeoData Updated"
       },
       "clashService": {
-        "installSuccess": "Service Installed Successfully",
-        "uninstallSuccess": "Service Uninstalled Successfully"
+        "installSuccess": "Service Installed Successfully"
       },
       "updater": {
         "withClashProxySuccess": "Updated with current proxy successfully",
@@ -714,8 +713,7 @@
       "restarting": "Restarting Core..."
     },
     "clashService": {
-      "installing": "Installing Service...",
-      "uninstalling": "Uninstalling Service..."
+      "installing": "Installing Service..."
     }
   }
 }

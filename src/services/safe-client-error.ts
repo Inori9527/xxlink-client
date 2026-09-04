@@ -69,7 +69,6 @@ export const SAFE_CLIENT_FAILURE_SCOPES = [
   'service-restart-after-install',
   'service-restart-after-uninstall',
   'service-stop-before-uninstall',
-  'service-uninstall',
   'startup-timeout',
   'startup-timeout-copy',
   'subscription-auto-sync',

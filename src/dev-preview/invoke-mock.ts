@@ -217,7 +217,6 @@ export async function invoke<T = unknown>(
       publishRuntimeState()
       return undefined as T
     case 'runtime_install_service_and_restart_core':
-    case 'runtime_uninstall_service_and_restart_core':
       return undefined as T
     case 'runtime_select_node': {
       const proxyName = String(args?.proxyName ?? '')

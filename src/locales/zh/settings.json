@@ -699,8 +699,7 @@
         "geoDataUpdated": "已更新地区数据"
       },
       "clashService": {
-        "installSuccess": "已成功安装服务",
-        "uninstallSuccess": "已成功卸载服务"
+        "installSuccess": "已成功安装服务"
       },
       "updater": {
         "withClashProxySuccess": "使用当前代理更新成功",
@@ -714,8 +713,7 @@
       "restarting": "重启内核中..."
     },
     "clashService": {
-      "installing": "安装服务中...",
-      "uninstalling": "卸载服务中..."
+      "installing": "安装服务中..."
     }
   }
 }

@@ -330,15 +330,18 @@ test('raw runtime reads are retired behind typed TUN actions', () => {
     'restart_core',
     'install_service',
     'uninstall_service',
+    // Retired 2026-09-04: d05df58f removed the only user-facing entry
+    // point and the hook was orphaned, while the command stayed
+    // registered -- a privileged IPC surface with no caller. The
+    // uninstaller removes the service itself (installer.nsi:1097 inside
+    // Section Uninstall), so the capability is not lost.
+    'runtime_uninstall_service_and_restart_core',
   ]) {
     assert.equal(runtimeControllerSource.includes(`'${command}'`), false)
     assert.doesNotMatch(libSource, new RegExp(`\\bcmd::${command}\\b`))
   }
 
-  for (const command of [
-    'runtime_install_service_and_restart_core',
-    'runtime_uninstall_service_and_restart_core',
-  ]) {
+  for (const command of ['runtime_install_service_and_restart_core']) {
     assert.equal(runtimeControllerSource.includes(`'${command}'`), true)
     assert.match(libSource, new RegExp(`\\bcmd::${command}\\b`))
   }

@@ -848,7 +848,6 @@ export interface TranslationResources {
           }
           clashService: {
             installSuccess: string
-            uninstallSuccess: string
           }
           updater: {
             withClashProxyFailed: string
@@ -1420,7 +1419,6 @@ export interface TranslationResources {
         }
         clashService: {
           installing: string
-          uninstalling: string
         }
       }
     }

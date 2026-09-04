@@ -1349,40 +1349,6 @@ pub async fn runtime_install_service_and_restart_core() -> CmdResult<()> {
     Ok(())
 }
 
-#[tauri::command]
-pub async fn runtime_uninstall_service_and_restart_core() -> CmdResult<()> {
-    let _transaction_guard = CoreManager::begin_config_transaction().await;
-    let _service_action_guard = SERVICE_ACTION_LOCK.lock().await;
-    let verge = Config::verge().await.data_arc();
-    ensure_verge_source_readable(&verge)?;
-    if configured_tun_enabled(&verge) {
-        return Err("tun_must_be_disabled".into());
-    }
-
-    let service_availability = super::service::probe_service_availability().await?;
-    if !service_availability.is_installed() {
-        return Err("service_not_installed".into());
-    }
-
-    let stop_result = CoreManager::global().stop_core().await;
-    if stop_result.is_err() && service_availability.is_ready() {
-        return Err(safe_error());
-    }
-    let uninstall_result = super::service::uninstall_service().await;
-    if uninstall_result.is_err() || !service_availability_is(super::service::ServiceAvailabilityView::Absent).await {
-        let service_rollback = restore_service_availability(service_availability).await;
-        let core_rollback = CoreManager::global().restart_core().await.is_ok();
-        return Err(service_action_failure(service_rollback, core_rollback));
-    }
-    if CoreManager::global().restart_core().await.is_err() {
-        let service_rollback = restore_service_availability(service_availability).await;
-        let core_rollback = CoreManager::global().restart_core().await.is_ok();
-        return Err(service_action_failure(service_rollback, core_rollback));
-    }
-    handle::Handle::refresh_clash();
-    Ok(())
-}
-
 async fn persist_node_selection(group_name: &str, proxy_name: &str) -> CmdResult<(String, Option<Vec<PrfSelected>>)> {
     let profiles = Config::profiles().await.data_arc();
     let current = profiles.current.clone().ok_or_else(safe_error)?;

@@ -146,7 +146,6 @@ mod app_init {
             cmd::runtime_update_preferences,
             cmd::runtime_refresh_system_proxy,
             cmd::runtime_install_service_and_restart_core,
-            cmd::runtime_uninstall_service_and_restart_core,
             cmd::runtime_select_node,
             cmd::runtime_probe_node_delay,
             cmd::runtime_check_update,
