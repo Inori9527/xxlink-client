@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 
 import { AuthError } from './auth'
 import { authStore, type AuthUser } from './auth-store'
+import { queryClient } from './query-client'
 
 type SessionProbe = 'operational' | 'missing' | 'subject_mismatch'
 const VAULT_OPERATION_TIMEOUT_MS = 5_000
@@ -154,6 +155,14 @@ export async function signInWithSecureSession(
 export async function manualLogout(): Promise<boolean> {
   const cleanup = invoke('secure_session_logout')
   authStore.clearAuth()
+  // clearAuth drops the LKG cache and the xxlink: localStorage keys, but not
+  // the react-query cache. The session-expiry path already clears it
+  // (main.tsx:228, on SESSION_EXPIRED_EVENT); manual logout never dispatches
+  // that event, so account A's entries outlived a manual logout. Narrower
+  // than a subject-check bypass -- account replies are subject-bound at
+  // backend-controller.ts:195-198 -- but a stale entry is still account A's
+  // data sitting in a cache account B will read from.
+  queryClient.clear()
   try {
     await cleanup
     return true
