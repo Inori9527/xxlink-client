@@ -907,7 +907,10 @@ Section Install
     !insertmacro NSIS_HOOK_PREINSTALL
   !endif
 
-  nsExec::Exec 'netsh int tcp res'
+  ; Absolute path. This section runs elevated from whatever directory the user
+  ; launched the installer in, so a bare program name goes through the
+  ; executable search order and a netsh.exe planted beside the installer wins.
+  nsExec::Exec '"$SYSDIR\netsh.exe" int tcp res'
 
   !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
   !insertmacro CheckAllVergeProcesses
@@ -1295,40 +1298,23 @@ Section Uninstall
     ; standard user who elevates with a DIFFERENT administrator account gets
     ; that administrator's profile -- so both RmDir calls silently succeed
     ; against a directory the product never used, and the real user's data
-    ; stays. Nothing fails; the checkbox just does not do what it says.
+    ; stays. They are kept as they are: that account's own profile is its own
+    ; to delete, and when it is also the user's the pair below is a no-op.
     ;
-    ; Sweep every profile as well, using the same ProfileList enumeration this
-    ; installer already relies on for legacy desktop shortcuts (:1205-1219).
-    ; Redundant when the elevating account is the user's own -- the paths are
-    ; then the same directory, and RmDir on an absent path is a no-op.
-    SetRegView 64
-    StrCpy $R1 0
-    AppDataProfileLoop:
-      EnumRegKey $R2 HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList" $R1
-      ${If} $R2 == ""
-        Goto AppDataProfileDone
-      ${EndIf}
-      ReadRegStr $R3 HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$R2" "ProfileImagePath"
-      ; Shape-check before a recursive delete. This value comes from HKLM, so
-      ; writing it already needs administrator rights -- but `RmDir /r` on an
-      ; unvalidated path is an amplifier, and a destructive operation should
-      ; not trust a registry value whatever the write requirement. Require a
-      ; drive-qualified path with something after the root: "" , "C:\" and
-      ; anything not shaped "?:\..." are skipped rather than joined and
-      ; deleted.
-      StrCpy $R4 $R3 1 1          ; second character, expected ":"
-      StrCpy $R5 $R3 1 2          ; third character, expected "\"
-      StrCpy $R6 $R3 "" 3         ; remainder after "?:\" -- empty at a bare root
-      ${If} $R3 != ""
-      ${AndIf} $R4 == ":"
-      ${AndIf} $R5 == "\"
-      ${AndIf} $R6 != ""
-        RmDir /r "$R3\AppData\Roaming\${BUNDLEID}"
-        RmDir /r "$R3\AppData\Local\${BUNDLEID}"
-      ${EndIf}
-      IntOp $R1 $R1 + 1
-      Goto AppDataProfileLoop
-    AppDataProfileDone:
+    ; An earlier revision instead swept every profile from ProfileList. That is
+    ; withdrawn. Recursively deleting inside directories another user controls,
+    ; from an elevated context, is the escalation surface itself: `RmDir /r`
+    ; does not exclude reparse points, so a junction planted by a standard user
+    ; redirects an administrator's delete outside that profile. Making the
+    ; delete reparse-aware would be new mechanism. Deleting as the owner cannot
+    ; have that shape at all -- running as U, it can only reach what U may
+    ; reach -- and the shape check and REG_EXPAND_SZ handling the sweep needed
+    ; go away with it.
+    ;
+    ; %APPDATA% and %LOCALAPPDATA% are expanded by the child, which carries the
+    ; desktop user's token, so they name that user's own directories.
+    nsis_tauri_utils::RunAsUser "$SYSDIR\cmd.exe" '/c rmdir /s /q "%APPDATA%\${BUNDLEID}" & rmdir /s /q "%LOCALAPPDATA%\${BUNDLEID}"'
+    Pop $0
 
     ; The session tokens do not live under $APPDATA. They are keyring entries
     ; in Windows Credential Manager, so removing the directories above leaves
@@ -1345,28 +1331,45 @@ Section Uninstall
     ; test-uninstall-credential-cleanup.mjs asserts they agree.
     ; "primary" holds the tokens; "logout-pending" holds a partially-completed
     ; logout, which still contains them.
-    ; cmdkey exits non-zero when the target is absent, which is the normal
-    ; case for a user who never signed in -- the return value is discarded on
-    ; purpose.
-    ; Residual, stated exactly rather than assumed away. The directory sweep
-    ; above covers every profile, but this does not, and the two are no longer
-    ; equivalent:
     ;
-    ;   directory sweep : every profile on the machine
-    ;   vault           : the elevating account's store only
-    ;   cross-account   : NOT POSSIBLE from the uninstaller
+    ; Deleted twice, because the two contexts reach different stores. Windows
+    ; Credential Manager entries are DPAPI-encrypted per user and `cmdkey
+    ; /delete` acts on the caller's own store: the elevated pair clears the
+    ; elevating account's, the RunAsUser pair clears the desktop user's. When
+    ; those are the same account the second pair is a no-op.
     ;
-    ; `cmdkey /delete` acts on the caller's own credential store, and Windows
-    ; Credential Manager entries are DPAPI-encrypted per user. An uninstaller
-    ; elevated as administrator A therefore cannot reach user U's vault at all
-    ; -- there is no equivalent of the ProfileList sweep for credentials. So
-    ; when a standard user elevates with a different administrator account,
-    ; U's tokens survive an uninstall-with-delete-data. The residue is
-    ; readable only by U, and the app is gone; clearing it would need the app
-    ; itself to do so on a later run, which is filed, not built here.
-    nsExec::Exec 'cmdkey /delete:primary.com.xxlink.desktop.secure-session'
+    ; An earlier version of this comment stated that clearing another user's
+    ; vault was NOT POSSIBLE from the uninstaller. That was wrong, and wrong in
+    ; a specific way worth naming: it reasoned forward from DPAPI's semantics
+    ; without ever checking what this installer can already do. RunAsUser is
+    ; used at :407 and :1064, and the plugin is already loaded in this very
+    ; section through CheckAllVergeProcesses.
+    ;
+    ; What RunAsUser does and does not give, read from nsis_tauri_utils v0.5.3
+    ; (the release tauri-cli 2.10.1 pins): elevated, it duplicates the token of
+    ; the process owning GetShellWindow() -- the interactive desktop shell --
+    ; and launches with it; not elevated, it launches directly as the current
+    ; user. Either way the child holds the desktop user's token, which is what
+    ; DPAPI resolves against. It does NOT wait: on success it closes the
+    ; process handle and returns. So the value popped below says the child was
+    ; LAUNCHED, not that the credential is gone; there is no exit code to read
+    ; and nothing here may report success from it. A console window flashes.
+    ;
+    ; Residual, narrowed rather than closed: a silent or SYSTEM uninstall has
+    ; no shell window, GetShellWindow() returns null and RunAsUser fails; and
+    ; if the interactive desktop user is not the vault's owner, the child
+    ; clears the wrong store. Either way that owner's tokens stay.
+    nsExec::Exec '"$SYSDIR\cmdkey.exe" /delete:primary.com.xxlink.desktop.secure-session'
     Pop $0
-    nsExec::Exec 'cmdkey /delete:logout-pending.com.xxlink.desktop.secure-session'
+    nsExec::Exec '"$SYSDIR\cmdkey.exe" /delete:logout-pending.com.xxlink.desktop.secure-session'
+    Pop $0
+    ; cmdkey exits non-zero when the target is simply absent, the normal case
+    ; for a user who never signed in -- a wrong target and a clean run are
+    ; indistinguishable from the return value, so it is discarded rather than
+    ; reported as an outcome.
+    nsis_tauri_utils::RunAsUser "$SYSDIR\cmdkey.exe" "/delete:primary.com.xxlink.desktop.secure-session"
+    Pop $0
+    nsis_tauri_utils::RunAsUser "$SYSDIR\cmdkey.exe" "/delete:logout-pending.com.xxlink.desktop.secure-session"
     Pop $0
   ${EndIf}
 
