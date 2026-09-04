@@ -256,11 +256,13 @@ pub fn mask_url(url: &str) -> String {
 
     let mut result = scheme_and_host;
 
-    // Mask path segments that look like tokens (longer than 8 chars)
+    // Mask path segments that look like tokens. The bound is >= 8, not > 8:
+    // an XXLink subscription token is 8-128 characters, so a token of exactly
+    // the minimum length used to pass through intact.
     if !path.is_empty() {
         let masked: Vec<&str> = path
             .split('/')
-            .map(|seg| if seg.len() > 8 { "***" } else { seg })
+            .map(|seg| if seg.len() >= 8 { "***" } else { seg })
             .collect();
         result.push_str(&masked.join("/"));
     }
@@ -270,9 +272,12 @@ pub fn mask_url(url: &str) -> String {
         result.push('?');
         let masked_query: Vec<String> = query
             .split('&')
+            // A parameter with no "=" used to be copied verbatim, so a bare
+            // token in the query string survived the redaction entirely. There
+            // is no key to keep in that case, so the whole parameter goes.
             .map(|param| match param.find('=') {
                 Some(eq) => format!("{}=***", &param[..eq]),
-                None => param.to_owned(),
+                None => "***".to_owned(),
             })
             .collect();
         result.push_str(&masked_query.join("&"));
@@ -471,6 +476,54 @@ mod runtime_boundary_tests {
 
         // No credentials, no path, no query: output stays recognisable.
         assert_eq!(mask_url("https://example.com"), "https://example.com");
+    }
+
+    // The three inputs the C1 review cited, plus the edge shape from its
+    // MINOR. Each one passed through the redactor intact before the predicates
+    // were tightened: a query parameter with no "=" was copied verbatim, and a
+    // path segment of exactly the minimum token length fell under a "longer
+    // than 8" bound.
+    #[test]
+    fn mask_url_masks_bare_query_tokens_and_minimum_length_segments() {
+        // No "=" in the query: there is no key worth keeping, so the whole
+        // parameter is replaced rather than echoed.
+        let masked = mask_url("https://alice:pw@sub.example.invalid/?bearer-7f3c");
+        assert!(!masked.contains("bearer-7f3c"), "bare query token survived: {masked}");
+        assert!(!masked.contains("alice"), "userinfo survived: {masked}");
+
+        // Exactly 8 characters is a real XXLink token length (8-128).
+        let masked = mask_url("https://alice:pw@sub.example.invalid/abc12345");
+        assert!(!masked.contains("abc12345"), "8-char path token survived: {masked}");
+
+        // 9 characters was already masked; it must stay masked.
+        let masked = mask_url("https://alice:pw@sub.example.invalid/abc123456");
+        assert!(!masked.contains("abc123456"), "9-char path token survived: {masked}");
+
+        // Short, non-secret segments stay readable so a log line keeps its shape.
+        let masked = mask_url("https://h.example/api/v1/sub");
+        assert!(masked.contains("api"), "short segment must survive: {masked}");
+        assert!(masked.contains("v1"), "short segment must survive: {masked}");
+    }
+
+    // The reviewer's MINOR: the prefix comes from the parsed URL while the path
+    // offset is taken from the original text. Measured across the shapes where
+    // those two could disagree -- they do not, and userinfo is stripped in all
+    // of them. Kept as a regression fence, not because a defect was found.
+    #[test]
+    fn mask_url_prefix_and_path_offset_agree_on_edge_shapes() {
+        for raw in [
+            "https://user:pw@h.example",
+            "https://user:pw@h.example?q=1",
+            "https://user:pw@h.example:8443",
+            "https://user:pw@h.example./x",
+            "https://user:pw@[::1]:8080/abcdefghij",
+            "https://user:pw@h.example//double",
+        ] {
+            let masked = mask_url(raw);
+            assert!(!masked.contains("user"), "userinfo survived {raw:?}: {masked}");
+            assert!(!masked.contains("pw@"), "userinfo survived {raw:?}: {masked}");
+            assert!(masked.starts_with("https://"), "prefix malformed for {raw:?}: {masked}");
+        }
     }
 
     #[test]

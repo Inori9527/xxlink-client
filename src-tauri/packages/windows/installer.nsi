@@ -1309,7 +1309,20 @@ Section Uninstall
         Goto AppDataProfileDone
       ${EndIf}
       ReadRegStr $R3 HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$R2" "ProfileImagePath"
+      ; Shape-check before a recursive delete. This value comes from HKLM, so
+      ; writing it already needs administrator rights -- but `RmDir /r` on an
+      ; unvalidated path is an amplifier, and a destructive operation should
+      ; not trust a registry value whatever the write requirement. Require a
+      ; drive-qualified path with something after the root: "" , "C:\" and
+      ; anything not shaped "?:\..." are skipped rather than joined and
+      ; deleted.
+      StrCpy $R4 $R3 1 1          ; second character, expected ":"
+      StrCpy $R5 $R3 1 2          ; third character, expected "\"
+      StrCpy $R6 $R3 "" 3         ; remainder after "?:\" -- empty at a bare root
       ${If} $R3 != ""
+      ${AndIf} $R4 == ":"
+      ${AndIf} $R5 == "\"
+      ${AndIf} $R6 != ""
         RmDir /r "$R3\AppData\Roaming\${BUNDLEID}"
         RmDir /r "$R3\AppData\Local\${BUNDLEID}"
       ${EndIf}
@@ -1335,12 +1348,22 @@ Section Uninstall
     ; cmdkey exits non-zero when the target is absent, which is the normal
     ; case for a user who never signed in -- the return value is discarded on
     ; purpose.
-    ; Residual, stated rather than assumed away: this runs in the elevating
-    ; account's context, exactly like the SetShellVarContext current and HKCU
-    ; operations above. When a standard user elevates with a *different*
-    ; administrator account, all of them address the wrong profile. That
-    ; mismatch is pre-existing and is tracked separately; this change does not
-    ; widen it, and closes the common single-account case.
+    ; Residual, stated exactly rather than assumed away. The directory sweep
+    ; above covers every profile, but this does not, and the two are no longer
+    ; equivalent:
+    ;
+    ;   directory sweep : every profile on the machine
+    ;   vault           : the elevating account's store only
+    ;   cross-account   : NOT POSSIBLE from the uninstaller
+    ;
+    ; `cmdkey /delete` acts on the caller's own credential store, and Windows
+    ; Credential Manager entries are DPAPI-encrypted per user. An uninstaller
+    ; elevated as administrator A therefore cannot reach user U's vault at all
+    ; -- there is no equivalent of the ProfileList sweep for credentials. So
+    ; when a standard user elevates with a different administrator account,
+    ; U's tokens survive an uninstall-with-delete-data. The residue is
+    ; readable only by U, and the app is gone; clearing it would need the app
+    ; itself to do so on a later run, which is filed, not built here.
     nsExec::Exec 'cmdkey /delete:primary.com.xxlink.desktop.secure-session'
     Pop $0
     nsExec::Exec 'cmdkey /delete:logout-pending.com.xxlink.desktop.secure-session'

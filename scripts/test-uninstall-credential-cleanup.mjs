@@ -78,10 +78,16 @@ test('uninstaller clears the credential vault when app data is deleted', () => {
   const branchEnd = nsi.indexOf(terminator, branchStart)
   assert.notEqual(branchEnd, -1, 'delete-app-data branch has no terminator')
   const branch = nsi.slice(branchStart, branchEnd)
-  assert.ok(
-    branch.includes('cmdkey /delete:primary'),
-    'credential deletion is outside the delete-app-data branch',
-  )
+  // Both targets, not just the first. Asserting only `primary` let the
+  // logout-pending deletion drift outside the branch unnoticed -- and that is
+  // the one carrying an interrupted logout's secret, so it is the half that
+  // must not be skipped on an update or a plain uninstall either.
+  for (const account of [primary, pending]) {
+    assert.ok(
+      branch.includes(`cmdkey /delete:${account}.`),
+      `deletion of "${account}" is outside the delete-app-data branch`,
+    )
+  }
 })
 
 // The vault side of the same defect: logout persists the secret under the
