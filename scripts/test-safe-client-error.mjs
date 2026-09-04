@@ -809,3 +809,56 @@ test('deep-link scheme keeps its existing redaction and masking guards', () => {
   assert.match(source, /\[query-redacted\]/)
   assert.match(source, /help::mask_err/)
 })
+
+// The config validator quotes the offending fragment back, which for a proxy
+// config means server hosts, UUIDs and passwords. That text used to be logged
+// at info level and returned to the caller, reaching the UI. Masking it was the
+// smaller half of the job: mask_err redacts URL shapes, and the validator also
+// emits bare config fields -- `password: x`, a UUID on its own line -- that
+// nothing URL-shaped can see. A masked line that still carries the secret is
+// indistinguishable from a redacted one, so this is a boundary rather than a
+// filter: only the byte count and the exit status leave the function.
+//
+// Written as an enumeration of what the two buffers may be used for, not as a
+// search for the leak that was there. A guard that matches one known bad string
+// stays green for the next path out.
+test('config validator output never reaches a log line or the UI', () => {
+  const raw = readFileSync(
+    resolve(repoRoot, 'src-tauri/src/core/validate.rs'),
+    'utf8',
+  )
+  // Comments name both buffers and would otherwise count as uses.
+  const source = raw
+    .split('\n')
+    .map((line) => {
+      const at = line.indexOf('//')
+      return at === -1 ? line : line.slice(0, at)
+    })
+    .join('\n')
+
+  assert.doesNotMatch(
+    source,
+    /from_utf8/,
+    'validator output is being decoded again; only its length may leave this function',
+  )
+
+  const ALLOWED = [
+    /^let (?:stdout|stderr) = &output\.(?:stdout|stderr);$/,
+    /^if !(?:stdout|stderr)\.is_empty\(\) \{$/,
+    /^(?:stdout|stderr)\.len\(\)$/,
+    /^"验证器 (?:stdout|stderr) \{\} 字节（内容不记录）",$/,
+    /^let has_error = !status\.success\(\) \|\| contains_any_keyword\(stderr, &error_keywords\);$/,
+  ]
+  const unexpected = source
+    .split('\n')
+    .map((line, index) => `${index + 1}: ${line.trim()}`)
+    .filter((line) => /\bstdout\b|\bstderr\b/.test(line))
+    .filter((line) => !ALLOWED.some((shape) => shape.test(line.split(': ')[1])))
+
+  assert.deepEqual(
+    unexpected,
+    [],
+    `validate.rs uses the validator's output in a way this guard has not \
+approved -- if the new use is safe, add its shape to ALLOWED and say why:\n  ${unexpected.join('\n  ')}`,
+  )
+})

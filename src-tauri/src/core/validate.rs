@@ -7,7 +7,6 @@ use tauri_plugin_shell::ShellExt as _;
 use crate::config::{Config, ConfigType};
 use crate::core::handle;
 use crate::singleton;
-use crate::utils::help;
 use crate::utils::{arch_check, dirs};
 use xxlink_logging::{Type, logging};
 
@@ -105,30 +104,49 @@ impl CoreConfigValidator {
 
         logging!(info, Type::Validate, "-------- 验证结果 --------");
 
+        // The validator's own output does not cross this boundary. Masking it
+        // was the smaller half of the job: mask_err redacts URL shapes, and the
+        // validator also quotes bare config fields back -- `password: x`, a
+        // UUID, a server host on its own line -- which nothing URL-shaped can
+        // see. Redaction there would have to understand the config's meaning,
+        // not its syntax, and getting that wrong looks exactly like getting it
+        // right. What stays is the part that helps triage and cannot carry a
+        // secret: how much the process wrote, and how it ended. Diagnosing a
+        // bad config moves to the backend, which served that config.
         if !stderr.is_empty() {
-            // Decode before masking. `{:?}` on the raw bytes escapes the text
-            // into a Debug form, and mask_err's scheme scan cannot see a URL
-            // through that escaping -- the mask would be applied and still
-            // emit the credential.
-            let decoded = str::from_utf8(stderr).unwrap_or_default();
-            logging!(info, Type::Validate, "stderr: {}", help::mask_err(decoded));
+            logging!(
+                info,
+                Type::Validate,
+                "验证器 stderr {} 字节（内容不记录）",
+                stderr.len()
+            );
+        }
+        if !stdout.is_empty() {
+            logging!(
+                info,
+                Type::Validate,
+                "验证器 stdout {} 字节（内容不记录）",
+                stdout.len()
+            );
         }
 
         if has_error {
             logging!(info, Type::Validate, "发现错误，开始处理错误信息");
-            // The validator quotes the offending config fragment back, which
-            // for a proxy config means server hosts, UUIDs and passwords. It
-            // is logged AND returned to callers, reaching the UI via
-            // config.rs:135 and core/manager/config.rs:82 -- so it is masked
-            // here, where it is built, rather than at each consumer.
-            let error_msg: String = if !stdout.is_empty() {
-                help::mask_err(str::from_utf8(stdout).unwrap_or_default()).into()
-            } else if !stderr.is_empty() {
-                help::mask_err(str::from_utf8(stderr).unwrap_or_default()).into()
-            } else if let Some(code) = status.code() {
-                format!("验证进程异常退出，退出码: {code}").into()
-            } else {
-                "验证进程被终止".into()
+            // This string is returned to callers and reaches the UI via
+            // config.rs:135 and core/manager/config.rs:82. It used to be the
+            // validator's own output with mask_err applied; it is now a fixed
+            // message, for the reason given above the stderr log. The exit code
+            // is the only variable part, and it comes from the OS rather than
+            // from the config.
+            //
+            // Note for whoever traces the UI path: safe-client-error.ts does
+            // not redact this. It classifies a JS-side error into {kind,
+            // retryable} and discards the payload entirely -- strong, but on a
+            // different path, and it never sees a string that arrived from a
+            // Tauri command like this one.
+            let error_msg: String = match status.code() {
+                Some(code) => format!("配置验证失败，退出码: {code}（详细内容不记录）").into(),
+                None => "配置验证失败：验证进程被终止".into(),
             };
 
             logging!(info, Type::Validate, "-------- 验证结束 --------");
