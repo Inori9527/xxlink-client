@@ -7,6 +7,7 @@ use tauri_plugin_shell::ShellExt as _;
 use crate::config::{Config, ConfigType};
 use crate::core::handle;
 use crate::singleton;
+use crate::utils::help;
 use crate::utils::{arch_check, dirs};
 use xxlink_logging::{Type, logging};
 
@@ -105,15 +106,25 @@ impl CoreConfigValidator {
         logging!(info, Type::Validate, "-------- 验证结果 --------");
 
         if !stderr.is_empty() {
-            logging!(info, Type::Validate, "stderr输出:\n{:?}", stderr);
+            // Decode before masking. `{:?}` on the raw bytes escapes the text
+            // into a Debug form, and mask_err's scheme scan cannot see a URL
+            // through that escaping -- the mask would be applied and still
+            // emit the credential.
+            let decoded = str::from_utf8(stderr).unwrap_or_default();
+            logging!(info, Type::Validate, "stderr: {}", help::mask_err(decoded));
         }
 
         if has_error {
             logging!(info, Type::Validate, "发现错误，开始处理错误信息");
+            // The validator quotes the offending config fragment back, which
+            // for a proxy config means server hosts, UUIDs and passwords. It
+            // is logged AND returned to callers, reaching the UI via
+            // config.rs:135 and core/manager/config.rs:82 -- so it is masked
+            // here, where it is built, rather than at each consumer.
             let error_msg: String = if !stdout.is_empty() {
-                str::from_utf8(stdout).unwrap_or_default().into()
+                help::mask_err(str::from_utf8(stdout).unwrap_or_default()).into()
             } else if !stderr.is_empty() {
-                str::from_utf8(stderr).unwrap_or_default().into()
+                help::mask_err(str::from_utf8(stderr).unwrap_or_default()).into()
             } else if let Some(code) = status.code() {
                 format!("验证进程异常退出，退出码: {code}").into()
             } else {
