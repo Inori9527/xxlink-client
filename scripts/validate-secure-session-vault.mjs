@@ -2,6 +2,9 @@ import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
+// PROVES:         Source text only. Two unequal things.
+// DOES NOT PROVE: That any shipped session code behaves this way.
+
 const readSource = (path) =>
   readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 

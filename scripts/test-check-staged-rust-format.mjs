@@ -3,6 +3,12 @@ import test from 'node:test'
 
 import { main } from './check-staged-rust-format.mjs'
 
+// PROVES:         Executes the code under test. A green run is real behavioural
+//                 evidence, not text matching: the file imports main() from
+//                 scripts/check-staged-rust-format.mjs and calls it four times with a
+//                 fake runCommand injected, so every assertion ...
+// DOES NOT PROVE: Nothing outside main's argument-building and short-circuit logic.
+
 function runnerFor(stagedOutput, { unstagedPaths = [] } = {}) {
   const calls = []
   const runCommand = (command, args) => {

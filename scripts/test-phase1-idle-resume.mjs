@@ -5,6 +5,13 @@ import test from 'node:test'
 import ts from 'typescript'
 import vm from 'node:vm'
 
+// PROVES:         Part executed, part source text. Ten of the twelve tests genuinely
+//                 EXECUTE the code under test.
+// DOES NOT PROVE: Nothing about src/pages/plans.tsx or src/pages/mine.tsx beyond the
+//                 presence of text: those two tests never render, mount, or import the
+//                 components, so green means the characters are in the file — not that
+//                 the ...
+
 const repoRoot = resolve(import.meta.dirname, '..')
 
 function loadTsModule(relativePath, stubs = {}, cache = new Map()) {

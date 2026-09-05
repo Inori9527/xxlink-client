@@ -5,6 +5,13 @@ import test from 'node:test'
 
 import ts from 'typescript'
 
+// PROVES:         Part executed, part source text. One of the five tests genuinely
+//                 executes the code under test.
+// DOES NOT PROVE: That managed-subscription-profile.ts works, or even runs — nothing in
+//                 the file imports or calls the adapter, so the three exported
+//                 functions are parsed but never invoked, and a green run says nothing
+//                 about ...
+
 const repoRoot = resolve(import.meta.dirname, '..')
 const adapterPath = resolve(
   repoRoot,

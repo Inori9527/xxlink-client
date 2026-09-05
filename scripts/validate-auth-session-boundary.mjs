@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
+// PROVES:         Source text only. Two unequal things.
+// DOES NOT PROVE: That any shipped auth code behaves as claimed.
+
 const AUTH_FATAL_CODES = new Set([
   'ACCOUNT_DISABLED',
   'ACCOUNT_NOT_FOUND',

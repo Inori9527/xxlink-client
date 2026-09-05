@@ -3,6 +3,11 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import test from 'node:test'
 
+// PROVES:         Source text only. A green run proves only that five source files
+//                 contain (or lack) certain text.
+// DOES NOT PROVE: Nothing is executed: no module is imported, no Rust is compiled, no
+//                 Tauri command is invoked, no logout is run.
+
 const root = resolve(import.meta.dirname, '..')
 const read = (path) => readFileSync(resolve(root, path), 'utf8')
 

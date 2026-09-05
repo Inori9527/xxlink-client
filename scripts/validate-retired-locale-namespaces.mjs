@@ -3,6 +3,12 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+// PROVES:         Source text only. For each of src/locales/en and src/locales/zh: (a)
+//                 the five retired namespace files connections.json, logs.json,
+//                 proxies.json, rules.json, tests.json are absent from that directory
+//                 (real existsSync filesystem ...
+// DOES NOT PROVE: It never executes the code under test.
+
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const retiredNamespaces = ['connections', 'logs', 'proxies', 'rules', 'tests']
 const activeNamespaces = [

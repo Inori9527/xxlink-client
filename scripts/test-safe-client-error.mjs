@@ -206,6 +206,42 @@ const HOSTILE_ERROR_FRAGMENTS = [
   'proxies:\n  - name: private-profile\n    password: profile-password-fixture',
 ]
 
+// Compare DECODED leaves, never a serialization. JSON.stringify escapes a
+// newline into two characters, and `raw` is built by joining the fixtures with
+// one, so all three checks written as
+// `JSON.stringify(x).includes(raw)` could not match ANY fixture -- not just the
+// multiline one. Two of them had a strict deepEqual beside them doing the real
+// work; the third did not, and had been passing on nothing at all.
+function assertNoHostileMaterial(label, value) {
+  const leaves = []
+  const walk = (node) => {
+    if (typeof node === 'string') leaves.push(node)
+    else if (node && typeof node === 'object') Object.values(node).forEach(walk)
+  }
+  walk(value)
+  for (const fragment of HOSTILE_ERROR_FRAGMENTS) {
+    const hit = leaves.find((leaf) => leaf.includes(fragment))
+    assert.equal(
+      hit,
+      undefined,
+      `${label} leaked hostile material: ${JSON.stringify(fragment.slice(0, 40))}`,
+    )
+  }
+}
+
+// The positive control the three dead checks never had. If this stops failing,
+// the walker has stopped looking.
+test('the hostile-material check can fail', () => {
+  for (const fragment of HOSTILE_ERROR_FRAGMENTS) {
+    assert.throws(
+      () =>
+        assertNoHostileMaterial('control', { nested: [{ text: fragment }] }),
+      /leaked hostile material/,
+      `the walker does not detect ${JSON.stringify(fragment.slice(0, 30))}`,
+    )
+  }
+})
+
 test('classifies ApiError status and transport code-like shapes without exposing details', () => {
   const { classifyClientError } = loadSafeClientErrorModule()
 
@@ -354,7 +390,7 @@ test('production-enableable debug wrapper emits only allowlisted categorical met
 
   debug.debugLog(raw, { url: raw })
   assert.deepEqual(asPlainValue(calls), [[{ event: 'client-debug' }]])
-  assert.equal(JSON.stringify(calls).includes(raw), false)
+  assertNoHostileMaterial('debug log', calls)
 })
 
 test('safe failure records exclude hostile client material from logs, copies, and persistence payloads', () => {
@@ -436,7 +472,7 @@ test('global browser failure handlers suppress raw WebView defaults after safe r
       },
     ],
   )
-  assert.equal(JSON.stringify(calls).includes(raw), false)
+  assertNoHostileMaterial('debug log', calls)
 })
 
 test('safe clipboard and notice sinks receive generic material only', async () => {
@@ -509,7 +545,7 @@ test('legacy error notices map unknown values to generic copy without extracting
       },
     )
     assert.equal(copied, 'Something went wrong. Please try again.')
-    assert.equal(JSON.stringify(notice).includes(raw), false)
+    assertNoHostileMaterial('legacy notice', notice)
   }
 })
 

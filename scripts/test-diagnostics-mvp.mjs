@@ -7,6 +7,14 @@ import vm from 'node:vm'
 
 import ts from 'typescript'
 
+// PROVES:         Part executed, part source text. Five of the six tests execute the
+//                 real renderer code: they read src/services/diagnostics-bundle.ts,
+//                 transpile it with the TypeScript compiler API (ts.transpileModule),
+//                 and run it in a node:vm context where ...
+// DOES NOT PROVE: Nothing about the Rust side or the real clipboard: both IPC commands
+//                 are mocked, so no Tauri command, no log collection and no clipboard
+//                 write is exercised.
+
 const repoRoot = path.resolve(import.meta.dirname, '..')
 const require = createRequire(import.meta.url)
 

@@ -4,6 +4,14 @@ import vm from 'node:vm'
 
 import ts from 'typescript'
 
+// PROVES:         Part executed, part source text. For
+//                 src/services/update-content-policy.ts only, the script EXECUTES the
+//                 code under test: it reads the real .ts file, transpiles it with the
+//                 TypeScript compiler, runs it in a vm sandbox, and calls the exported
+//                 ...
+// DOES NOT PROVE: Nothing about the runtime behaviour of the viewer or the Rust updater
+//                 — neither is imported, compiled or run, only string-matched.
+
 const policyPath = 'src/services/update-content-policy.ts'
 const viewerPath = 'src/components/setting/mods/update-viewer.tsx'
 const updaterPath = 'src-tauri/src/core/updater.rs'

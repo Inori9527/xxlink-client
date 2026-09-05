@@ -2,6 +2,11 @@ import { readFileSync } from 'node:fs'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+// PROVES:         Source text only. Only textual facts about 26 checked-in source files
+//                 read as plain strings and matched with String#includes/indexOf plus
+//                 three regexes.
+// DOES NOT PROVE: That any of the asserted behaviour happens at runtime.
+
 const root = process.cwd()
 const read = (path) => readFileSync(resolve(root, path), 'utf8')
 const assert = (condition, message) => {

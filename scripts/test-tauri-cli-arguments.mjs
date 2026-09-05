@@ -5,6 +5,11 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
 import {
+  // PROVES:         Executes the code under test. Two layers, both of which actually run
+  //                 the code under test;
+  // DOES NOT PROVE: Nothing is ever packaged: every wrapper probe is --help or --version,
+  //                 so no build, bundle, signing or notarization step runs and none of
+  //                 this shows the guard holds during a real `tauri build`.
   getTauriCommandIndex,
   getTauriPackagingInputs,
   getTauriPackagingPlan,

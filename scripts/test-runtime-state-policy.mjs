@@ -5,6 +5,16 @@ import test from 'node:test'
 import ts from 'typescript'
 import vm from 'node:vm'
 
+// PROVES:         Part executed, part source text. Six of the seven tests genuinely
+//                 EXECUTE the code under test: loadPolicy() reads
+//                 src/services/runtime-state-policy.ts, transpiles it with
+//                 ts.transpileModule to CommonJS, runs it in a bare `vm` context, and
+//                 ...
+// DOES NOT PROVE: The seventh test, 'runtime controls reject failed reads and gate
+//                 unsafe mutations', executes nothing — it is readFileSync + regex over
+//                 ten files (src/services/cmds.ts, src/hooks/use-system-proxy-state.ts,
+//                 ...
+
 const repoRoot = resolve(import.meta.dirname, '..')
 
 const loadPolicy = () => {

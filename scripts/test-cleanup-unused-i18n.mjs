@@ -8,6 +8,12 @@ import { fileURLToPath } from 'node:url'
 
 import { updateLocaleData } from './cleanup-unused-i18n.mjs'
 
+// PROVES:         Part executed, part source text. Two unrelated things by two
+//                 different means.
+// DOES NOT PROVE: That `pnpm i18n:format` / `i18n:align` / `i18n:prune` actually behave
+//                 safely -- the five assertSafeI18nScripts assertions only prove the
+//                 flag text is present in package.json;
+
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const root = path.resolve(__dirname, '..')

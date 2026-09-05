@@ -2,6 +2,10 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+// PROVES:         Source text only. A green run proves facts about the current content
+//                 of seven checked-in files, read from disk relative to process.cwd().
+// DOES NOT PROVE: That the shipped app is actually minimized.
+
 const root = process.cwd()
 const read = (path) => readFileSync(resolve(root, path), 'utf8')
 const json = (path) => JSON.parse(read(path))

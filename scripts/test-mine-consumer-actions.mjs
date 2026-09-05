@@ -3,6 +3,10 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import test from 'node:test'
 
+// PROVES:         Source text only. A green run establishes filesystem and source-TEXT
+//                 facts only.
+// DOES NOT PROVE: Any behaviour.
+
 const repoRoot = resolve(import.meta.dirname, '..')
 
 const readSource = (relativePath) =>

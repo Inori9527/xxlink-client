@@ -5,6 +5,11 @@ import test from 'node:test'
 import ts from 'typescript'
 import vm from 'node:vm'
 
+// PROVES:         Part executed, part source text. Split roughly down the middle
+//                 between real execution and text matching.
+// DOES NOT PROVE: Nothing about the React pages: main.tsx, connect.tsx, plans.tsx and
+//                 mine.tsx are never compiled, rendered, or run.
+
 const repoRoot = resolve(import.meta.dirname, '..')
 
 function loadTsModule(relativePath, stubs = {}, cache = new Map()) {

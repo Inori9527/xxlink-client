@@ -1,5 +1,10 @@
 import { readFileSync } from 'node:fs'
 
+// PROVES:         Source text only. A green run proves only facts about text on disk.
+// DOES NOT PROVE: It never executes the code under test: no Rust is compiled, no
+//                 TypeScript is imported or type-checked, no function is called, no
+//                 runtime behaviour is observed.
+
 const read = (path) => readFileSync(path, 'utf8')
 const fail = (message) => {
   throw new Error(`[typed-backend-boundary] ${message}`)

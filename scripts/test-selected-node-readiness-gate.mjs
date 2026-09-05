@@ -5,6 +5,13 @@ import test from 'node:test'
 import ts from 'typescript'
 import vm from 'node:vm'
 
+// PROVES:         Part executed, part source text. Six of the eight tests genuinely
+//                 execute the code under test: the file transpiles
+//                 src/services/selected-node-readiness.ts in-process
+//                 (typescript.transpileModule + node:vm, with ...
+// DOES NOT PROVE: Nothing about connect.tsx behaviour - tests 7 and 8 are substring
+//                 matches on file text;
+
 const repoRoot = resolve(import.meta.dirname, '..')
 
 function loadTsModule(relativePath, stubs = {}, cache = new Map()) {

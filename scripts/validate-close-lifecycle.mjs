@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
+// PROVES:         Source text only. A green run proves only that certain text is
+//                 present in two Rust files it reads with readFileSync —
+//                 src-tauri/src/lib.rs and src-tauri/src/utils/window_manager.rs.
+// DOES NOT PROVE: That any of the checked code runs, compiles, or has the asserted
+//                 effect.
+
 const libSource = readFileSync('src-tauri/src/lib.rs', 'utf8')
 const windowManagerSource = readFileSync(
   'src-tauri/src/utils/window_manager.rs',

@@ -3,6 +3,10 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, posix, relative, resolve } from 'node:path'
 import test from 'node:test'
 
+// PROVES:         Source text only. A green run proves two filesystem facts and nothing
+//                 more.
+// DOES NOT PROVE: Anything about behaviour.
+
 const repoRoot = resolve(import.meta.dirname, '..')
 const sourceRoot = resolve(repoRoot, 'src')
 

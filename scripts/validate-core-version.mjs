@@ -2,6 +2,12 @@ import { execFileSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 
+// PROVES:         Executes the code under test. A green run proves that ONE mihomo
+//                 sidecar binary — argv[2] if passed, otherwise the first existing of
+//                 src-tauri/sidecar/xxlink-mihomo-x86_64-pc-windows-gnu.exe then
+//                 ...-x86_64-pc-windows-msvc.exe — exists on ...
+// DOES NOT PROVE: It does not prove every bundled sidecar is at the pinned version.
+
 const EXPECTED_VERSION =
   process.env.XXLINK_EXPECTED_MIHOMO_VERSION || 'v1.19.25'
 const cwd = process.cwd()

@@ -4,6 +4,11 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { load as parseYaml } from 'js-yaml'
 
+// PROVES:         Part executed, part source text. That six checked-in DATA files hold
+//                 the reviewed values, plus that this file's own inline helpers reject
+//                 its negative fixtures.
+// DOES NOT PROVE: That any application, build, or Tauri code works.
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const tauriRoot = path.join(root, 'src-tauri')
 const configPath = path.join(tauriRoot, 'tauri.conf.json')
