@@ -238,6 +238,10 @@ pub fn fetch_error_class(err: &anyhow::Error) -> &'static str {
         "body"
     } else if err.is_request() {
         "request"
+    } else if err.is_redirect() {
+        "redirect"
+    } else if err.is_builder() {
+        "builder"
     } else {
         "unknown"
     }

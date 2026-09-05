@@ -223,7 +223,7 @@ async fn refresh_core_config() {
 }
 
 #[cfg(test)]
-mod tests {
+mod runtime_boundary_tests {
     use super::*;
 
     #[test]
@@ -248,15 +248,20 @@ mod tests {
             "xxlink://install?name=prod&url=https%3A%2F%2Fapi.xxlink.net%2Fapi%2Fv1%2Fsubscription%2Fsecret-token-123456%3Fformat%3Dclash%26token%3Dabc123",
         );
 
-        assert!(summary.contains("scheme=xxlink"));
-        assert!(summary.contains("has_url=true"));
-        assert!(summary.contains("has_name=true"));
-        assert!(summary.contains("/subscription/***"));
-        assert!(summary.contains("[query-redacted]"));
+        // Pinned whole rather than by fragments. The fragment form asserted
+        // "/subscription/***" and "[query-redacted]", which are the shapes the
+        // deleted local redactor produced; after the deep-link summary was
+        // routed through the one redactor those asserts could not hold, and the
+        // test failed deterministically for anyone who ran it. It failed
+        // silently in the sense that mattered: CI only runs
+        // `--lib runtime_boundary_tests`, and this module was named `tests`.
+        assert_eq!(
+            summary,
+            "scheme=xxlink, has_url=true, has_name=true, subscription_url=https://api.xxlink.net/***?***"
+        );
         assert!(!summary.contains("secret-token"));
         assert!(!summary.contains("format=clash"));
         assert!(!summary.contains("token=abc123"));
-        assert!(!summary.contains("url="));
     }
 
     #[test]

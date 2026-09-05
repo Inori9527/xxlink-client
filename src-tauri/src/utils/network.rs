@@ -1,5 +1,5 @@
 use crate::config::Config;
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use base64::{Engine as _, engine::general_purpose};
 use reqwest::{
     Client, Proxy, StatusCode,
@@ -183,7 +183,13 @@ impl NetworkManager {
         let response = match request_builder.send().await {
             Ok(resp) => resp,
             Err(e) => {
-                return Err(anyhow::anyhow!("Request failed: {}", e));
+                // `.context`, not `anyhow!("... {e}")`. Formatting the error
+                // into a new message flattens it to a string, and every layer
+                // above -- PrfItem::from_url, then the five call sites that ask
+                // `fetch_error_class` what went wrong -- then has nothing to
+                // downcast, so all of them reported "unknown" for every failure
+                // there is. Keeping the source is what makes the class real.
+                return Err(e).context("request failed");
             }
         };
 
@@ -192,7 +198,7 @@ impl NetworkManager {
         let body = match response.text().await {
             Ok(text) => text.into(),
             Err(e) => {
-                return Err(anyhow::anyhow!("Failed to read response body: {}", e));
+                return Err(e).context("failed to read response body");
             }
         };
 

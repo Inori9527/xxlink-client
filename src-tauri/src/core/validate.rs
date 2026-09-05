@@ -81,14 +81,13 @@ impl CoreConfigValidator {
                 // 216 from the spawn failure and flag it for the caller.
                 let rendered = err.to_string();
                 if rendered.contains("os error 216") {
-                    logging!(
-                        error,
-                        Type::Validate,
-                        "Sidecar 架构不匹配（通过 spawn 错误识别）: {}",
-                        rendered
-                    );
-                    let flagged: String = format!("{ARCH_MISMATCH_PREFIX}{rendered}").into();
-                    return Ok((false, flagged));
+                    // The match reads the string; the string does not leave.
+                    // The sentinel alone tells the caller which failure this is,
+                    // and both consumers already strip_prefix it. Carrying
+                    // `rendered` was the last place on this path where the
+                    // spawn error's own text crossed into a log and the UI.
+                    logging!(error, Type::Validate, "Sidecar 架构不匹配（通过 spawn 错误识别）");
+                    return Ok((false, ARCH_MISMATCH_PREFIX.into()));
                 }
                 return Err(err.into());
             }
