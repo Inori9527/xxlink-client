@@ -809,12 +809,30 @@ test('deep-link scheme keeps its existing redaction and masking guards', () => {
   // carry its own -- `redacted_subscription_url_for_log` with a `> 8` path
   // threshold -- and neither of the two rulings that corrected `mask_url`
   // ever reached it, so a vmess payload and an eight-byte token came through
-  // here after both were closed. Assert there is no second implementation.
-  assert.match(source, /help::mask_url/)
-  assert.doesNotMatch(
-    source,
-    /fn redacted_subscription_(url_for_log|path)/,
-    'a second subscription redactor is back; there must be exactly one',
+  // here after both were closed.
+  //
+  // Scoped to the function body, not matched against the whole file. A
+  // whole-file `/help::mask_url/` is satisfied by any mention anywhere --
+  // including this test's own subject line in a comment -- so it stayed green
+  // when the call was replaced by a raw pass-through. And a name denylist only
+  // catches a second redactor that keeps the old name.
+  const summaryBody = source.match(
+    /fn redacted_deep_link_url_summary\([\s\S]*?\n\}/,
+  )?.[0]
+  assert.ok(summaryBody, 'redacted_deep_link_url_summary must still exist')
+  assert.match(
+    summaryBody,
+    /\.map\(help::mask_url\)/,
+    'the deep-link summary must mask its subscription URL through help::mask_url',
+  )
+  // Anchored at column zero so it counts the module's own helpers and not the
+  // test functions, whose names also contain "redact" -- written unanchored
+  // first, it reported four and failed on the correct file.
+  assert.deepEqual(
+    source.match(/^fn\s+\w*redact\w*/gm) ?? [],
+    ['fn redacted_deep_link_for_log', 'fn redacted_deep_link_url_summary'],
+    'exactly two redaction helpers belong in this file; a third is a second ' +
+      'implementation of a predicate that has already drifted once',
   )
   assert.doesNotMatch(
     source,
@@ -840,28 +858,22 @@ test('config validator output never reaches a log line or the UI', () => {
     resolve(repoRoot, 'src-tauri/src/core/validate.rs'),
     'utf8',
   )
-  // Comments name both buffers and would otherwise count as uses. The cut has
-  // to know about string literals: Rust source is full of "https://..." and a
-  // plain indexOf('//') truncates such a line at the scheme separator, hiding
-  // whatever follows. A mutation that added a stderr leak to a line carrying a
-  // URL literal passed this guard for exactly that reason.
+  // Comments name both buffers and would otherwise count as uses, so they are
+  // dropped -- but only when the WHOLE line is a comment. Truncating at the
+  // first "//" outside a string was tried and is not safe: Rust also has raw
+  // strings, byte strings, char literals and lifetimes, and every one of those
+  // is a way to make the scanner cut early and hide the rest of a line from
+  // this sweep. Three mutations that added a real stderr-to-log leak passed
+  // that version.
+  //
+  // Dropping whole comment lines only is the fail-closed choice. A trailing
+  // comment that happens to say "stderr" now trips the sweep and costs one
+  // review; the other direction ships the leak. Where a real trailing comment
+  // needs to mention a buffer, reword it or give its shape an ALLOWED entry --
+  // deliberately, not by accident of a lexer this file has no business owning.
   const source = raw
     .split('\n')
-    .map((line) => {
-      let quote = null
-      for (let i = 0; i < line.length; i += 1) {
-        const c = line[i]
-        if (quote) {
-          if (c === '\\') i += 1
-          else if (c === quote) quote = null
-        } else if (c === '"' || c === "'") {
-          quote = c
-        } else if (c === '/' && line[i + 1] === '/') {
-          return line.slice(0, i)
-        }
-      }
-      return line
-    })
+    .filter((line) => !/^\s*(?:\/\/|\/\*|\*)/.test(line))
     .join('\n')
 
   assert.doesNotMatch(

@@ -16,11 +16,23 @@ const readSource = (relativePath) =>
 // same whether or not the thing it checks is there.
 const executableSource = (nsi) =>
   nsi
+    // NSIS honours /* */ as well. Blank the body but keep the line breaks so
+    // the indentation-based branch delimiting further down still lines up. A
+    // mutation that wrapped the credential cleanup in a block comment left
+    // every assertion in this file green.
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\r\n]/g, ''))
     .split('\n')
     .map((line) => {
       let quote = null
       for (let i = 0; i < line.length; i += 1) {
         const c = line[i]
+        // $\"  $\'  $\`  $\n: NSIS escapes, never delimiters.
+        // Skipping the pair stops a quote inside a string from flipping the
+        // scanner's state for the rest of the line.
+        if (c === '$' && line[i + 1] === '\\') {
+          i += 1
+          continue
+        }
         if (quote) {
           if (c === quote) quote = null
         } else if (c === "'" || c === '"' || c === '`') {
@@ -152,6 +164,33 @@ test('uninstaller clears the credential vault when app data is deleted', () => {
 // there gets their own cmdkey.exe or netsh.exe executed with the elevated
 // token. The uninstaller shipped `cmdkey /delete:...` bare for two review
 // rounds without anyone reading it as a program lookup.
+// The two reinstall launches pass the OTHER product's UninstallString, which
+// already carries its own quoting plus arguments -- ours is written quoted at
+// installer.nsi:1049. Wrapping the whole value makes CreateProcess read the
+// program path as the entire string, so the reinstall/upgrade path fails
+// outright. A previous revision shipped exactly that, while closing a
+// search-order hole that did not exist on this branch.
+test('the reinstall launches pass UninstallString unwrapped', () => {
+  const executable = executableSource(
+    readSource('src-tauri/packages/windows/installer.nsi'),
+  )
+  const wrapped = [...executable.matchAll(/ExecWait[^\S\r\n]+(\S+)/g)]
+    .map((m) => m[1])
+    // The captured operand still carries NSIS's own delimiters, so strip them
+    // before comparing. Compared without stripping first, this assertion never
+    // fired: the mutation that re-introduced the regression walked straight
+    // through the line written to catch it, and only a mutation run said so.
+    .map((op) => op.replace(/^['"`]/, '').replace(/['"`]$/, ''))
+    .filter((op) => op === '"$R1"')
+  assert.deepEqual(
+    wrapped,
+    [],
+    'ExecWait must pass $R1 unwrapped: the value already contains a quoted ' +
+      'program path followed by arguments, so another pair of quotes makes ' +
+      'the whole command line the program name',
+  )
+})
+
 test('every external program is invoked by an absolute path', () => {
   const executable = executableSource(
     readSource('src-tauri/packages/windows/installer.nsi'),
@@ -164,14 +203,45 @@ test('every external program is invoked by an absolute path', () => {
   // entirely was a real bypass -- `Exec 'cmdkey /list'` and
   // `ExecShellWait "open" "cmdkey"` both launched a bare program past this
   // scan while it reported the file clean.
+  // ExecShell's syntax is `ExecShell "verb" "command" [params] [SW_*]`, so its
+  // program is the SECOND operand. Reading operand 1 as the program both let
+  // `ExecShell "$R2" "netsh.exe"` through and reported the legitimate
+  // `ExecShell "open" "$INSTDIR\\app.exe"` as an offender.
   const CALL =
-    /(?:nsExec::Exec(?:ToLog|ToStack)?|nsis_tauri_utils::RunAsUser|\bExecShellWait|\bExecShell|\bExecWait|\bExec)\s+(\S+)/g
+    /(?:nsExec::Exec(?:ToLog|ToStack)?|nsis_tauri_utils::RunAsUser|\bExecShellWait|\bExecShell|\bExecWait|\bExec)[^\S\r\n]+(.*)/g
+  const operands = (rest) => {
+    const out = []
+    let cur = ''
+    let quote = null
+    for (const c of rest) {
+      if (quote) {
+        if (c === quote) {
+          quote = null
+          out.push(cur)
+          cur = ''
+        } else cur += c
+      } else if (c === "'" || c === '"' || c === '`') {
+        quote = c
+      } else if (/\s/.test(c)) {
+        if (cur) {
+          out.push(cur)
+          cur = ''
+        }
+      } else cur += c
+    }
+    if (cur) out.push(cur)
+    return out
+  }
   const offenders = []
-  for (const [whole, rawFirst] of executable.matchAll(CALL)) {
-    const program = rawFirst.replace(/^[`'"]+/, '').replace(/[`'"]+$/, '')
+  for (const [whole, rest] of executable.matchAll(CALL)) {
+    const isShell = /^\s*ExecShell/.test(whole)
+    const ops = operands(rest)
+    // A quoted command string carries the program as its own first token.
+    const first = (ops[isShell ? 1 : 0] || '').trim().split(/\s+/)[0]
+    const program = first.replace(/^[`'"]+/, '').replace(/[`'"]+$/, '')
     // Every legitimate call names an NSIS variable or constant: $SYSDIR,
     // $INSTDIR, $TEMP, or a register holding a path read from the registry.
-    if (!program.startsWith('$')) offenders.push(whole.trim())
+    if (program && !program.startsWith('$')) offenders.push(whole.trim())
   }
 
   assert.deepEqual(
