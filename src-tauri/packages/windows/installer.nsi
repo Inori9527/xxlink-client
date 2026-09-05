@@ -337,14 +337,24 @@ Function PageLeaveReinstall
 
     ${If} $WixMode = 1
       ReadRegStr $R1 HKLM "$R6" "UninstallString"
-      ExecWait '$R1' $0
+      ; Quoted. The value is whatever the other product wrote to
+      ; UninstallString, and an MSI product conventionally writes a bare
+      ; "MsiExec.exe /X{...}" -- resolved through the executable search order,
+      ; which reaches the directory the user launched this from, with our
+      ; elevated token.
+      ExecWait '"$R1"' $0
     ${Else}
       ReadRegStr $4 SHCTX "${MANUPRODUCTKEY}" ""
       ReadRegStr $R1 SHCTX "${UNINSTKEY}" "UninstallString"
       ${IfThen} $UpdateMode = 1 ${|} StrCpy $R1 "$R1 /UPDATE" ${|} ; append /UPDATE
       ${IfThen} $PassiveMode = 1 ${|} StrCpy $R1 "$R1 /P" ${|} ; append /P
       StrCpy $R1 "$R1 _?=$4" ; append uninstall directory
-      ExecWait '$R1' $0
+      ; Quoted. The value is whatever the other product wrote to
+      ; UninstallString, and an MSI product conventionally writes a bare
+      ; "MsiExec.exe /X{...}" -- resolved through the executable search order,
+      ; which reaches the directory the user launched this from, with our
+      ; elevated token.
+      ExecWait '"$R1"' $0
     ${EndIf}
 
     BringToFront
@@ -365,7 +375,7 @@ Function PageLeaveReinstall
       ${EndIf}
 
       ; Other erros? show generic error message and return to select un/reinstall page
-      MessageBox MB_ICONEXCLAMATION "$(unableToUninstall)"
+      MessageBox MB_ICONEXCLAMATION /SD IDOK "$(unableToUninstall)"
       Abort
     ${EndIf}
   reinst_done:
@@ -660,7 +670,7 @@ FunctionEnd
       Push $0
       SimpleSC::GetErrorMessage
       Pop $0
-      MessageBox MB_OK|MB_ICONSTOP "Check Service Status Error ($0)"
+      MessageBox MB_OK|MB_ICONSTOP /SD IDOK "Check Service Status Error ($0)"
     ${EndIf}
   ${EndIf}
 !macroend
@@ -671,50 +681,50 @@ FunctionEnd
   Pop $0  ; 0: service exists; other: service not exists
   ; Service exists
   ${If} $0 == 0
-    Push $0
     ; Check if the service is running
     SimpleSC::ServiceIsRunning "xxlink_service"
     Pop $0 ; returns an errorcode (<>0) otherwise success (0)
     Pop $1 ; returns 1 (service is running) - returns 0 (service is not running)
     ${If} $0 == 0
-      Push $0
       ${If} $1 == 1
         DetailPrint "Stop ${PRODUCTNAME} Service..."
         SimpleSC::StopService "xxlink_service" 1 30
         Pop $0 ; returns an errorcode (<>0) otherwise success (0)
         ${If} $0 != 0
-          ; Report the stop failure and carry on to the removal below. This
-          ; branch used to return without removing anything while the uninstall
-          ; continued, so a service that refused to stop stayed registered and
-          ; nothing said so. Attempting is strictly better than skipping: the
-          ; SCM marks a running service delete-pending and removes it at the
-          ; next reboot.
           Push $0
           SimpleSC::GetErrorMessage
           Pop $0
           DetailPrint "${PRODUCTNAME} Service Stop Error ($0); removing anyway"
         ${EndIf}
       ${EndIf}
-      ; One removal for both the running and the already-stopped case.
-      DetailPrint "Removing ${PRODUCTNAME} Service..."
-      SimpleSC::RemoveService "xxlink_service"
-      Pop $0 ; returns an errorcode (<>0) otherwise success (0)
-      ; Read the result. Both former RemoveService calls left it on the stack
-      ; unread, so a failed removal and a successful one produced identical
-      ; output -- which made this macro one that ATTEMPTS removal, while its
-      ; callers reasoned as though it removes. Say which one happened, and name
-      ; the command that finishes the job.
-      ${If} $0 != 0
-        Push $0
-        SimpleSC::GetErrorMessage
-        Pop $0
-        MessageBox MB_OK|MB_ICONEXCLAMATION "${PRODUCTNAME} Service could not be removed ($0).$\r$\n$\r$\nTo remove it, run this from an elevated command prompt:$\r$\n$\r$\n    sc delete xxlink_service"
-      ${EndIf}
-    ${ElseIf} $0 != 0
+    ${Else}
+      ; The status query failed. This branch used to end the macro, so a service
+      ; that could not be queried was never removed and the uninstall carried on
+      ; regardless -- the same skip that the stop-failure branch had, ten lines
+      ; away, which is why fixing only that one left the defect in place.
       Push $0
       SimpleSC::GetErrorMessage
       Pop $0
-      MessageBox MB_OK|MB_ICONSTOP "Check Service Status Error ($0)"
+      DetailPrint "Check Service Status Error ($0); removing anyway"
+    ${EndIf}
+
+    ; Removal is attempted whatever the query and stop outcomes were. The SCM
+    ; marks a running service delete-pending and removes it at the next reboot,
+    ; so not attempting is the only branch that can leave the service registered
+    ; with nobody told.
+    DetailPrint "Removing ${PRODUCTNAME} Service..."
+    SimpleSC::RemoveService "xxlink_service"
+    Pop $0 ; returns an errorcode (<>0) otherwise success (0)
+    ; Read the result. Both former RemoveService calls left it on the stack
+    ; unread, so a failed removal and a successful one produced identical output
+    ; -- which made this macro one that ATTEMPTS removal, while its callers
+    ; reasoned as though it removes. One message, naming the command that
+    ; finishes the job, and /SD so a silent uninstall is not blocked by it.
+    ${If} $0 != 0
+      Push $0
+      SimpleSC::GetErrorMessage
+      Pop $0
+      MessageBox MB_OK|MB_ICONEXCLAMATION /SD IDOK "${PRODUCTNAME} Service could not be removed ($0).$\r$\n$\r$\nTo remove it, run this from an elevated command prompt:$\r$\n$\r$\n    sc delete xxlink_service"
     ${EndIf}
   ${EndIf}
 !macroend
@@ -875,7 +885,10 @@ Section WebView2
       install_webview2:
         DetailPrint "$(installingWebview2)"
         ; $6 holds the path to the webview2 installer
-        ExecWait "$6 ${WEBVIEW2INSTALLERARGS} /install" $1
+        ; Quoted: $6 is an absolute path under $TEMP, and a user name with a
+        ; space in it splits the command line so Windows tries the truncated
+        ; prefix first. A correctness bug as much as a hijack surface.
+        ExecWait '"$6" ${WEBVIEW2INSTALLERARGS} /install' $1
         ${If} $1 = 0
           DetailPrint "$(webview2InstallSuccess)"
         ${Else}
@@ -905,7 +918,7 @@ Section WebView2
             ${If} $1 = 0
               DetailPrint "$(webview2InstallSuccess)"
             ${Else}
-              MessageBox MB_ICONEXCLAMATION|MB_ABORTRETRYIGNORE "$(webview2InstallError)" IDIGNORE ignore IDRETRY update_webview
+              MessageBox MB_ICONEXCLAMATION|MB_ABORTRETRYIGNORE /SD IDIGNORE "$(webview2InstallError)" IDIGNORE ignore IDRETRY update_webview
               Quit
               ignore:
             ${EndIf}
