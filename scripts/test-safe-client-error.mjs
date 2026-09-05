@@ -805,9 +805,22 @@ test('deep-link scheme keeps its existing redaction and masking guards', () => {
 
   assert.match(source, /redacted_deep_link_for_log/)
   assert.match(source, /redacted_deep_link_url_summary/)
-  assert.match(source, /redacted_subscription_path/)
-  assert.match(source, /\[query-redacted\]/)
-  assert.match(source, /help::mask_err/)
+  // The subscription URL goes through the one redactor. This file used to
+  // carry its own -- `redacted_subscription_url_for_log` with a `> 8` path
+  // threshold -- and neither of the two rulings that corrected `mask_url`
+  // ever reached it, so a vmess payload and an eight-byte token came through
+  // here after both were closed. Assert there is no second implementation.
+  assert.match(source, /help::mask_url/)
+  assert.doesNotMatch(
+    source,
+    /fn redacted_subscription_(url_for_log|path)/,
+    'a second subscription redactor is back; there must be exactly one',
+  )
+  assert.doesNotMatch(
+    source,
+    /mask_err/,
+    'mask_err is retired; call sites log typed facts instead',
+  )
 })
 
 // The config validator quotes the offending fragment back, which for a proxy
@@ -827,12 +840,27 @@ test('config validator output never reaches a log line or the UI', () => {
     resolve(repoRoot, 'src-tauri/src/core/validate.rs'),
     'utf8',
   )
-  // Comments name both buffers and would otherwise count as uses.
+  // Comments name both buffers and would otherwise count as uses. The cut has
+  // to know about string literals: Rust source is full of "https://..." and a
+  // plain indexOf('//') truncates such a line at the scheme separator, hiding
+  // whatever follows. A mutation that added a stderr leak to a line carrying a
+  // URL literal passed this guard for exactly that reason.
   const source = raw
     .split('\n')
     .map((line) => {
-      const at = line.indexOf('//')
-      return at === -1 ? line : line.slice(0, at)
+      let quote = null
+      for (let i = 0; i < line.length; i += 1) {
+        const c = line[i]
+        if (quote) {
+          if (c === '\\') i += 1
+          else if (c === quote) quote = null
+        } else if (c === '"' || c === "'") {
+          quote = c
+        } else if (c === '/' && line[i + 1] === '/') {
+          return line.slice(0, i)
+        }
+      }
+      return line
     })
     .join('\n')
 

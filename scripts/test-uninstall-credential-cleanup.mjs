@@ -160,8 +160,12 @@ test('every external program is invoked by an absolute path', () => {
   // The program is the first argument of the call. It may be bare ($R1), or
   // quoted inside the command string ('"$SYSDIR\\netsh.exe" int tcp res'), and
   // NSIS accepts ' " and ` as string delimiters.
+  // Longest first: `Exec` is a prefix of the other three, and leaving it out
+  // entirely was a real bypass -- `Exec 'cmdkey /list'` and
+  // `ExecShellWait "open" "cmdkey"` both launched a bare program past this
+  // scan while it reported the file clean.
   const CALL =
-    /(?:nsExec::Exec(?:ToLog|ToStack)?|ExecWait|ExecShell|nsis_tauri_utils::RunAsUser)\s+(\S+)/g
+    /(?:nsExec::Exec(?:ToLog|ToStack)?|nsis_tauri_utils::RunAsUser|\bExecShellWait|\bExecShell|\bExecWait|\bExec)\s+(\S+)/g
   const offenders = []
   for (const [whole, rawFirst] of executable.matchAll(CALL)) {
     const program = rawFirst.replace(/^[`'"]+/, '').replace(/[`'"]+$/, '')
