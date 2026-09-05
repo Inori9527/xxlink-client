@@ -337,24 +337,34 @@ Function PageLeaveReinstall
 
     ${If} $WixMode = 1
       ReadRegStr $R1 HKLM "$R6" "UninstallString"
-      ; Quoted. The value is whatever the other product wrote to
-      ; UninstallString, and an MSI product conventionally writes a bare
-      ; "MsiExec.exe /X{...}" -- resolved through the executable search order,
-      ; which reaches the directory the user launched this from, with our
-      ; elevated token.
-      ExecWait '"$R1"' $0
+      ; NOT quoted. The value already carries its own quoting: our own
+      ; UninstallString is written as "$INSTDIR\uninstall.exe" at :1049, and a
+      ; WiX product writes MsiExec.exe plus arguments. Wrapping the whole value
+      ; makes CreateProcess read the program path as the entire string, so the
+      ; reinstall/upgrade path fails outright -- which is what the previous
+      ; revision shipped. C1-EXEC-01 (the WiX branch's bare MsiExec.exe going
+      ; through the executable search order) is recorded as residual: that value
+      ; lives in HKLM, writing it already needs administrator rights, and
+      ; parsing an executable out of an arbitrary registry command line is new
+      ; mechanism.
+      ExecWait '$R1' $0
     ${Else}
       ReadRegStr $4 SHCTX "${MANUPRODUCTKEY}" ""
       ReadRegStr $R1 SHCTX "${UNINSTKEY}" "UninstallString"
       ${IfThen} $UpdateMode = 1 ${|} StrCpy $R1 "$R1 /UPDATE" ${|} ; append /UPDATE
       ${IfThen} $PassiveMode = 1 ${|} StrCpy $R1 "$R1 /P" ${|} ; append /P
       StrCpy $R1 "$R1 _?=$4" ; append uninstall directory
-      ; Quoted. The value is whatever the other product wrote to
-      ; UninstallString, and an MSI product conventionally writes a bare
-      ; "MsiExec.exe /X{...}" -- resolved through the executable search order,
-      ; which reaches the directory the user launched this from, with our
-      ; elevated token.
-      ExecWait '"$R1"' $0
+      ; NOT quoted. The value already carries its own quoting: our own
+      ; UninstallString is written as "$INSTDIR\uninstall.exe" at :1049, and a
+      ; WiX product writes MsiExec.exe plus arguments. Wrapping the whole value
+      ; makes CreateProcess read the program path as the entire string, so the
+      ; reinstall/upgrade path fails outright -- which is what the previous
+      ; revision shipped. C1-EXEC-01 (the WiX branch's bare MsiExec.exe going
+      ; through the executable search order) is recorded as residual: that value
+      ; lives in HKLM, writing it already needs administrator rights, and
+      ; parsing an executable out of an arbitrary registry command line is new
+      ; mechanism.
+      ExecWait '$R1' $0
     ${EndIf}
 
     BringToFront
@@ -375,7 +385,10 @@ Function PageLeaveReinstall
       ${EndIf}
 
       ; Other erros? show generic error message and return to select un/reinstall page
-      MessageBox MB_ICONEXCLAMATION /SD IDOK "$(unableToUninstall)"
+      ; /SD goes AFTER the message text. Placed before it, makensis reads the
+      ; text as a return_check label and aborts -- the previous revision did
+      ; that on all four and produced no installer at all.
+      MessageBox MB_ICONEXCLAMATION "$(unableToUninstall)" /SD IDOK
       Abort
     ${EndIf}
   reinst_done:
@@ -670,7 +683,7 @@ FunctionEnd
       Push $0
       SimpleSC::GetErrorMessage
       Pop $0
-      MessageBox MB_OK|MB_ICONSTOP /SD IDOK "Check Service Status Error ($0)"
+      MessageBox MB_OK|MB_ICONSTOP "Check Service Status Error ($0)" /SD IDOK
     ${EndIf}
   ${EndIf}
 !macroend
@@ -724,7 +737,7 @@ FunctionEnd
       Push $0
       SimpleSC::GetErrorMessage
       Pop $0
-      MessageBox MB_OK|MB_ICONEXCLAMATION /SD IDOK "${PRODUCTNAME} Service could not be removed ($0).$\r$\n$\r$\nTo remove it, run this from an elevated command prompt:$\r$\n$\r$\n    sc delete xxlink_service"
+      MessageBox MB_OK|MB_ICONEXCLAMATION "${PRODUCTNAME} Service could not be removed ($0).$\r$\n$\r$\nTo remove it, run this from an elevated command prompt:$\r$\n$\r$\n    sc delete xxlink_service" /SD IDOK
     ${EndIf}
   ${EndIf}
 !macroend
@@ -918,9 +931,14 @@ Section WebView2
             ${If} $1 = 0
               DetailPrint "$(webview2InstallSuccess)"
             ${Else}
-              MessageBox MB_ICONEXCLAMATION|MB_ABORTRETRYIGNORE /SD IDIGNORE "$(webview2InstallError)" IDIGNORE ignore IDRETRY update_webview
+              MessageBox MB_ICONEXCLAMATION|MB_ABORTRETRYIGNORE "$(webview2InstallError)" /SD IDIGNORE IDIGNORE ignore IDRETRY update_webview
               Quit
               ignore:
+              ; /SD IDIGNORE means a silent install takes this branch without a
+              ; prompt. Say so, so the log distinguishes "updated" from
+              ; "continued on the installed version".
+              DetailPrint "WebView2 update failed; continuing with the installed version",
+
             ${EndIf}
           ${EndIf}
       ${EndIf}
