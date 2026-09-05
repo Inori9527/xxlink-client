@@ -195,6 +195,20 @@ impl NetworkManager {
 
         let status = response.status();
         let headers = response.headers().to_owned();
+        // A non-2xx has to become a `reqwest::Error` HERE, because
+        // `reqwest::Error` has no public constructor -- no fix confined to the
+        // caller can ever produce a classifiable one. `prfitem.rs` used to
+        // decide this itself with `status.is_success()` and `bail!`, which
+        // builds a fresh error with no source, so every HTTP status failure
+        // reported its class as "unknown": an expired token and a revoked
+        // account, the two most common real failures, were indistinguishable
+        // from a DNS error in the log and on the two user-visible surfaces.
+        //
+        // `_ref` rather than the consuming form: `response.text()` below still
+        // needs the response, and a non-2xx body stays readable.
+        if let Err(err) = response.error_for_status_ref() {
+            return Err(err).context("remote profile responded with an error status");
+        }
         let body = match response.text().await {
             Ok(text) => text.into(),
             Err(e) => {

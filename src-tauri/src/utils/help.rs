@@ -384,6 +384,104 @@ mod atomic_write_tests {
 mod runtime_boundary_tests {
     use super::*;
 
+    // A one-shot listener on an ephemeral port. Every failure below is produced
+    // against 127.0.0.1: no external network, nothing that can flake on someone
+    // else's DNS. `hang` accepts and never answers, which is the timeout case.
+    //
+    // No `unwrap`/`expect` anywhere: the workspace denies both, and a test that
+    // needs an exemption to exist is a test arguing with the rule rather than
+    // following it.
+    fn serve(response: &'static [u8], hang: bool) -> Result<std::string::String> {
+        use std::io::{Read as _, Write as _};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+        let addr = listener.local_addr()?;
+        std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut discard = [0u8; 1024];
+                let _ = stream.read(&mut discard);
+                if hang {
+                    std::thread::sleep(std::time::Duration::from_secs(5));
+                    return;
+                }
+                let _ = stream.write_all(response);
+                let _ = stream.flush();
+            }
+        });
+        Ok(format!("http://{addr}/"))
+    }
+
+    // The two frames production puts between reqwest and the downcast:
+    // utils/network.rs, then config/prfitem.rs.
+    fn wrapped(err: reqwest::Error) -> anyhow::Error {
+        let inner: Result<()> = Err(err).context("request failed");
+        match inner.context("failed to fetch remote profile") {
+            Ok(()) => anyhow!("unreachable: an Err was wrapped"),
+            Err(err) => err,
+        }
+    }
+
+    async fn class_of(request: reqwest::RequestBuilder) -> std::string::String {
+        match request.send().await {
+            Ok(_) => "no-error".into(),
+            Err(err) => fetch_error_class(&wrapped(err)).into(),
+        }
+    }
+
+    // The class is the only thing five call sites say about a failed update, so
+    // a test that only checked the match arms would have missed what actually
+    // shipped: the arms were right and the error never reached them, because a
+    // frame two levels down had flattened it with `anyhow!("... {e}")`.
+    #[tokio::test]
+    async fn every_fetch_failure_kind_reports_a_class_rather_than_unknown() -> Result<()> {
+        use std::time::Duration;
+
+        let connect = class_of(reqwest::Client::new().get("http://127.0.0.1:1/")).await;
+        assert_eq!(connect, "connect");
+
+        let url = serve(b"", true)?;
+        let slow = reqwest::Client::builder().timeout(Duration::from_millis(150)).build()?;
+        assert_eq!(class_of(slow.get(&url)).await, "timeout");
+
+        let url = serve(b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\nshort", false)?;
+        let decode = match reqwest::Client::new().get(&url).send().await {
+            Err(err) => fetch_error_class(&wrapped(err)).to_string(),
+            Ok(response) => match response.text().await {
+                Ok(_) => "no-error".to_string(),
+                Err(err) => fetch_error_class(&wrapped(err)).to_string(),
+            },
+        };
+        assert_eq!(decode, "decode");
+
+        // The control, and the reason the rest of this test is not enough on its
+        // own: formatting the error into a new message -- what network.rs did
+        // until this batch -- makes every one of them report "unknown". Without
+        // this line the assertions above pass on a build where the class is real
+        // and on one where the classifier is never reached.
+        let flattened = match reqwest::Client::new().get("http://127.0.0.1:1/").send().await {
+            Ok(_) => anyhow!("port 1 answered"),
+            Err(err) => anyhow!("Request failed: {}", err),
+        };
+        assert_eq!(fetch_error_class(&flattened), "unknown");
+        Ok(())
+    }
+
+    // The production-path acceptance test M25 asked for is NOT here, and the
+    // reason is recorded rather than worked around. Written as a `#[tokio::test]`
+    // that calls `NetworkManager::get_with_interrupt` against a local 403 and
+    // asserts the class, it makes this test binary fail to LOAD with
+    // STATUS_ENTRYPOINT_NOT_FOUND (0xc0000139) -- and once it is present, every
+    // other test in the binary fails the same way, so it would take the whole
+    // Rust CI job down with it.
+    //
+    // What was established, so the next attempt does not start from zero: the
+    // four-kind test alone passes; a probe that makes the same
+    // `get_with_interrupt` call and discards the result also passes; sysproxy,
+    // `Config::verge` and `danger_accept_invalid_certs` were each linked in
+    // isolation and none of them reproduces it. The cause is NOT known. It is
+    // filed rather than guessed at, and the property it would prove -- that an
+    // HTTP status failure carries its class through the real call chain -- is
+    // covered for now only by the `unknown` control below and by reading.
+
     // One test for one rule, because there is now one rule. The predicates these
     // replace -- a length threshold on path segments, a key/value split in the
     // query, a scheme allowlist applied after the host was already taken -- each

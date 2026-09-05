@@ -8,42 +8,37 @@ const repoRoot = resolve(import.meta.dirname, '..')
 const readSource = (relativePath) =>
   readFileSync(resolve(repoRoot, relativePath), 'utf8')
 
-// Everything below asserts against installer.nsi with its comments removed.
-// Searching the raw text reads commented-out code as if it were live: a
-// mutation run that prefixed the desktop-user credential delete with "; "
-// left every assertion green, because the string was still in the file. That
-// is the failure this whole change is about -- a check whose output is the
-// same whether or not the thing it checks is there.
-const executableSource = (nsi) =>
-  nsi
-    // NSIS honours /* */ as well. Blank the body but keep the line breaks so
-    // the indentation-based branch delimiting further down still lines up. A
-    // mutation that wrapped the credential cleanup in a block comment left
-    // every assertion in this file green.
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\r\n]/g, ''))
-    .split('\n')
-    .map((line) => {
-      let quote = null
-      for (let i = 0; i < line.length; i += 1) {
-        const c = line[i]
-        // $\"  $\'  $\`  $\n: NSIS escapes, never delimiters.
-        // Skipping the pair stops a quote inside a string from flipping the
-        // scanner's state for the rest of the line.
-        if (c === '$' && line[i + 1] === '\\') {
-          i += 1
-          continue
-        }
-        if (quote) {
-          if (c === quote) quote = null
-        } else if (c === "'" || c === '"' || c === '`') {
-          quote = c
-        } else if (c === ';' || c === '#') {
-          return line.slice(0, i)
-        }
-      }
-      return line
-    })
-    .join('\n')
+// PROVES:         that these exact strings appear at the head of a line in
+//                 src-tauri/packages/windows/installer.nsi.
+// DOES NOT PROVE: that the line compiles, that the branch runs, that the
+//                 command executes, or that the credential is gone. Proof of
+//                 effect is the bundler's NSIS compile in CI and the C3 VM
+//                 uninstall test; this file is a tripwire, not evidence.
+//
+// Assertions are anchored with ^[ \t]* against the RAW file. A previous
+// revision hand-wrote an NSIS comment stripper so it could search anywhere in
+// the line; the stripper disagreed with makensis in four places in seven lines,
+// in both directions, and one of those let the uninstaller ship with no
+// credential deletion at all while every assertion here stayed green. Anchoring
+// needs no tokenizer: nothing preceded by ";", "#" or a DetailPrint can satisfy
+// it, and there is no second lexer to drift from the first.
+const atLineStart = (literal) =>
+  new RegExp('^[ \\t]*' + literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'm')
+
+// One line instead of a tokenizer. NSIS supports /* */ (verified with makensis),
+// so a block comment around the cleanup would satisfy every line-anchored
+// assertion below while the code never runs. This file uses block comments zero
+// times, so requiring that stays true costs nothing and closes the hole without
+// anything having to understand NSIS. If a block comment is ever wanted here,
+// this fails loudly and that becomes a decision rather than an accident.
+test('installer.nsi uses no block comments, which the assertions below assume', () => {
+  const nsi = readSource('src-tauri/packages/windows/installer.nsi')
+  assert.equal(
+    (nsi.match(/\/\*/g) ?? []).length,
+    0,
+    'a /* */ block can hide live code from every line-anchored assertion in this file',
+  )
+})
 
 // The session tokens are keyring entries in Windows Credential Manager, not
 // files under $APPDATA. "Delete app data" removed the directories and left the
@@ -53,9 +48,7 @@ const executableSource = (nsi) =>
 // assertions exist because the leak was invisible from the filesystem: an
 // acceptance test that only inspects $APPDATA passes while the token remains.
 test('uninstaller clears the credential vault when app data is deleted', () => {
-  const nsi = executableSource(
-    readSource('src-tauri/packages/windows/installer.nsi'),
-  )
+  const nsi = readSource('src-tauri/packages/windows/installer.nsi')
 
   // Both keyring accounts must be cleared. "primary" holds the tokens;
   // "logout-pending" holds a partially completed logout, which still contains
@@ -85,12 +78,14 @@ test('uninstaller clears the credential vault when app data is deleted', () => {
   // already using RunAsUser two other places at the time.
   for (const account of [primary, pending]) {
     const target = `/delete:${account}.${service}`
-    assert.ok(
-      nsi.includes(`nsExec::Exec '"$SYSDIR\\cmdkey.exe" ${target}'`),
+    assert.match(
+      nsi,
+      atLineStart(`nsExec::Exec '"$SYSDIR\\cmdkey.exe" ${target}'`),
       `uninstaller does not clear "${account}.${service}" in the elevated context`,
     )
-    assert.ok(
-      nsi.includes(
+    assert.match(
+      nsi,
+      atLineStart(
         `nsis_tauri_utils::RunAsUser "$SYSDIR\\cmdkey.exe" "${target}"`,
       ),
       `uninstaller does not clear "${account}.${service}" as the desktop user`,
@@ -171,9 +166,7 @@ test('uninstaller clears the credential vault when app data is deleted', () => {
 // outright. A previous revision shipped exactly that, while closing a
 // search-order hole that did not exist on this branch.
 test('the reinstall launches pass UninstallString unwrapped', () => {
-  const executable = executableSource(
-    readSource('src-tauri/packages/windows/installer.nsi'),
-  )
+  const executable = readSource('src-tauri/packages/windows/installer.nsi')
   const wrapped = [...executable.matchAll(/ExecWait[^\S\r\n]+(\S+)/g)]
     .map((m) => m[1])
     // The captured operand still carries NSIS's own delimiters, so strip them
@@ -192,9 +185,7 @@ test('the reinstall launches pass UninstallString unwrapped', () => {
 })
 
 test('every external program is invoked by an absolute path', () => {
-  const executable = executableSource(
-    readSource('src-tauri/packages/windows/installer.nsi'),
-  )
+  const executable = readSource('src-tauri/packages/windows/installer.nsi')
 
   // The program is the first argument of the call. It may be bare ($R1), or
   // quoted inside the command string ('"$SYSDIR\\netsh.exe" int tcp res'), and
@@ -207,8 +198,13 @@ test('every external program is invoked by an absolute path', () => {
   // program is the SECOND operand. Reading operand 1 as the program both let
   // `ExecShell "$R2" "netsh.exe"` through and reported the legitimate
   // `ExecShell "open" "$INSTDIR\\app.exe"` as an offender.
+  // Anchored at the head of a line for the same reason as the assertions above:
+  // an NSIS comment starts with ";" or "#", so `^[ \t]*` excludes it without a
+  // stripper. Unanchored, this scan reported the prose line
+  // "; ExecWait failed, set fake exit code" as a bare invocation -- a guard that
+  // cries wolf on its own source is one people learn to switch off.
   const CALL =
-    /(?:nsExec::Exec(?:ToLog|ToStack)?|nsis_tauri_utils::RunAsUser|\bExecShellWait|\bExecShell|\bExecWait|\bExec)[^\S\r\n]+(.*)/g
+    /^[ \t]*(?:nsExec::Exec(?:ToLog|ToStack)?|nsis_tauri_utils::RunAsUser|ExecShellWait|ExecShell|ExecWait|Exec)[^\S\r\n]+(.*)/gm
   const operands = (rest) => {
     const out = []
     let cur = ''

@@ -663,23 +663,30 @@ FunctionEnd
 !macroend
 
 !macro StartVergeService
-  ; Check if the service exists
+  ; Same rule as RemoveVergeService: only 1060 means "not installed".
   SimpleSC::ExistsService "xxlink_service"
-  Pop $0  ; 0: service exists; other: service not exists
-  ; Service exists
-  ${If} $0 == 0
-    Push $0
-    ; Check if the service is running
+  Pop $0
+  ${If} $0 != 1060
     SimpleSC::ServiceIsRunning "xxlink_service"
-    Pop $0 ; returns an errorcode (<>0) otherwise success (0)
-    Pop $1 ; returns 1 (service is running) - returns 0 (service is not running)
+    Pop $0 ; errorcode (<>0) otherwise success (0)
+    Pop $1 ; 1 running / 0 not running
     ${If} $0 == 0
-      Push $0
       ${If} $1 == 0
         DetailPrint "Restart ${PRODUCTNAME} Service..."
         SimpleSC::StartService "xxlink_service" "" 30
+        ; This was the file's only SimpleSC call whose result was never read,
+        ; so a service that would not start was indistinguishable from one that
+        ; did. Two `Push $0` above it were never consumed either; they are gone
+        ; with the branch that leaked them.
+        Pop $0
+        ${If} $0 != 0
+          Push $0
+          SimpleSC::GetErrorMessage
+          Pop $0
+          DetailPrint "${PRODUCTNAME} Service Start Error ($0)"
+        ${EndIf}
       ${EndIf}
-    ${ElseIf} $0 != 0
+    ${Else}
       Push $0
       SimpleSC::GetErrorMessage
       Pop $0
@@ -689,20 +696,31 @@ FunctionEnd
 !macroend
 
 !macro RemoveVergeService
-  ; Check if the service exists
+  ; Only 1060 (ERROR_SERVICE_DOES_NOT_EXIST) means "not installed". Every other
+  ; result means the service may well be there and we could not tell -- 1055
+  ; ERROR_SERVICE_DATABASE_LOCKED is the normal state right after
+  ; CheckAllVergeProcesses kills the process, which runs on the line before this
+  ; macro is inserted. Treating those as "skip removal" left a registered
+  ; service whose binary the uninstaller then deleted, and reinstalling could
+  ; not repair it: InstallVergeService only installs when ExistsService is
+  ; non-zero, so the stale registration answers 0 and the install is skipped
+  ; forever.
+  ;
+  ; This is the same skip that was fixed ten lines below for the stop and query
+  ; branches, and fixing those two instances while leaving this one is what put
+  ; it here. Assume present unless told otherwise, and attempt removal on every
+  ; path that is not a clean "not installed".
   SimpleSC::ExistsService "xxlink_service"
-  Pop $0  ; 0: service exists; other: service not exists
-  ; Service exists
-  ${If} $0 == 0
-    ; Check if the service is running
+  Pop $0 ; 0: exists; 1060: not installed; anything else: could not tell
+  ${If} $0 != 1060
     SimpleSC::ServiceIsRunning "xxlink_service"
-    Pop $0 ; returns an errorcode (<>0) otherwise success (0)
-    Pop $1 ; returns 1 (service is running) - returns 0 (service is not running)
+    Pop $0 ; errorcode (<>0) otherwise success (0)
+    Pop $1 ; 1 running / 0 not running
     ${If} $0 == 0
       ${If} $1 == 1
         DetailPrint "Stop ${PRODUCTNAME} Service..."
         SimpleSC::StopService "xxlink_service" 1 30
-        Pop $0 ; returns an errorcode (<>0) otherwise success (0)
+        Pop $0 ; errorcode (<>0) otherwise success (0)
         ${If} $0 != 0
           Push $0
           SimpleSC::GetErrorMessage
@@ -711,32 +729,29 @@ FunctionEnd
         ${EndIf}
       ${EndIf}
     ${Else}
-      ; The status query failed. This branch used to end the macro, so a service
-      ; that could not be queried was never removed and the uninstall carried on
-      ; regardless -- the same skip that the stop-failure branch had, ten lines
-      ; away, which is why fixing only that one left the defect in place.
       Push $0
       SimpleSC::GetErrorMessage
       Pop $0
       DetailPrint "Check Service Status Error ($0); removing anyway"
     ${EndIf}
 
-    ; Removal is attempted whatever the query and stop outcomes were. The SCM
-    ; marks a running service delete-pending and removes it at the next reboot,
-    ; so not attempting is the only branch that can leave the service registered
-    ; with nobody told.
+    ; Attempted whatever the query and stop outcomes were. The SCM marks a
+    ; running service delete-pending and removes it at the next reboot, so not
+    ; attempting is the only branch that can leave it registered with nobody
+    ; told.
     DetailPrint "Removing ${PRODUCTNAME} Service..."
     SimpleSC::RemoveService "xxlink_service"
-    Pop $0 ; returns an errorcode (<>0) otherwise success (0)
-    ; Read the result. Both former RemoveService calls left it on the stack
-    ; unread, so a failed removal and a successful one produced identical output
-    ; -- which made this macro one that ATTEMPTS removal, while its callers
-    ; reasoned as though it removes. One message, naming the command that
-    ; finishes the job, and /SD so a silent uninstall is not blocked by it.
+    Pop $0 ; errorcode (<>0) otherwise success (0)
     ${If} $0 != 0
       Push $0
       SimpleSC::GetErrorMessage
       Pop $0
+      ; Both channels, because they reach different people. The message box is
+      ; for someone watching; SetErrorLevel is for a silent or managed
+      ; uninstall, which would otherwise exit 0 while leaving the service
+      ; registered -- reporting success for the one outcome that needs a human.
+      DetailPrint "${PRODUCTNAME} Service could not be removed ($0); run: sc delete xxlink_service"
+      SetErrorLevel 1
       MessageBox MB_OK|MB_ICONEXCLAMATION "${PRODUCTNAME} Service could not be removed ($0).$\r$\n$\r$\nTo remove it, run this from an elevated command prompt:$\r$\n$\r$\n    sc delete xxlink_service" /SD IDOK
     ${EndIf}
   ${EndIf}
