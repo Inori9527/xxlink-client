@@ -5,7 +5,7 @@ use crate::{
     core::{CoreManager, handle, tray::Tray},
     feat,
     process::AsyncHandler,
-    utils::{dirs, help},
+    utils::dirs,
 };
 use once_cell::sync::Lazy;
 use smartstring::alias::String;
@@ -233,7 +233,10 @@ async fn handle_success(current_value: Option<&String>) -> CmdResult<bool> {
 }
 
 async fn handle_validation_failure(error_msg: String, current_profile: Option<&String>) -> CmdResult<bool> {
-    let error_msg = help::mask_err(&error_msg);
+    // No masking here any more. Since the validator's own output stops at its
+    // boundary, this string is already a fixed message plus an exit code, and
+    // the only variable branch is the architecture sentinel below, whose text is
+    // this repository's own copy rather than anything remote.
     // If the failure was flagged as an architecture mismatch, surface the
     // dedicated notice so the UI can tell the user to reinstall.
     if let Some(tail) = error_msg.strip_prefix(crate::core::validate::ARCH_MISMATCH_PREFIX) {
@@ -256,17 +259,25 @@ async fn handle_validation_failure(error_msg: String, current_profile: Option<&S
 }
 
 async fn handle_update_error<E: std::fmt::Display>(e: E) -> CmdResult<bool> {
-    let rendered = help::mask_err(&e.to_string());
-    logging!(warn, Type::Cmd, "更新过程发生错误: {}", rendered);
+    // Fixed message. The error derives from the core-config chain, which
+    // carries the user's own config text; `os error 216` is still matched below
+    // to classify, but nothing derived from the string is logged or shown.
+    let rendered = e.to_string();
+    logging!(warn, Type::Cmd, "更新过程发生错误");
     Config::profiles().await.discard();
     // Windows OS error 216 == ERROR_EXE_MACHINE_TYPE_MISMATCH: the sidecar
     // binary is the wrong architecture for this machine. Report it as such
     // instead of a generic boot error, so the UI can guide the user to
     // reinstall the correct build.
+    //
+    // The match reads the string; the string does not leave. Passing `rendered`
+    // to the notice was the whole leak on this path -- the notice key already
+    // says which of the two happened, so the payload only ever added the error
+    // text the user must not be shown.
     if rendered.contains("os error 216") {
-        handle::Handle::notice_message("config_validate::core_arch_mismatch", rendered);
+        handle::Handle::notice_message("config_validate::core_arch_mismatch", "");
     } else {
-        handle::Handle::notice_message("config_validate::boot_error", rendered);
+        handle::Handle::notice_message("config_validate::boot_error", "");
     }
     Ok(false)
 }

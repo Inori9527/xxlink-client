@@ -2,7 +2,7 @@ use crate::{
     cmd,
     config::{Config, PrfItem, PrfOption, profiles::profiles_draft_update_item_safe},
     core::{CoreManager, handle, tray},
-    utils::help::{mask_err, mask_url},
+    utils::help::{self, mask_url},
 };
 use anyhow::{Result, bail};
 use smartstring::alias::String;
@@ -129,8 +129,9 @@ async fn perform_profile_update(
             logging!(
                 warn,
                 Type::Config,
-                "Warning: [订阅更新] 正常更新失败: {}，尝试使用Clash代理更新",
-                mask_err(&err.to_string())
+                "Warning: [订阅更新] 直连更新失败({})，目标 {}；改用 Clash 代理重试",
+                help::fetch_error_class(&err),
+                mask_url(url)
             );
             last_err = err;
         }
@@ -151,8 +152,9 @@ async fn perform_profile_update(
             logging!(
                 warn,
                 Type::Config,
-                "Warning: [订阅更新] Clash代理更新失败: {}，尝试使用系统代理更新",
-                mask_err(&err.to_string())
+                "Warning: [订阅更新] Clash 代理更新失败({})，目标 {}；改用系统代理重试",
+                help::fetch_error_class(&err),
+                mask_url(url)
             );
             last_err = err;
         }
@@ -173,8 +175,9 @@ async fn perform_profile_update(
             logging!(
                 warn,
                 Type::Config,
-                "Warning: [订阅更新] 系统代理更新失败: {}，所有重试均已失败",
-                mask_err(&err.to_string())
+                "Warning: [订阅更新] 系统代理更新失败({})，目标 {}；三次尝试均失败",
+                help::fetch_error_class(&err),
+                mask_url(url)
             );
             last_err = err;
         }
@@ -183,7 +186,10 @@ async fn perform_profile_update(
     if is_mannual_trigger {
         handle::Handle::notice_message(
             "update_failed_even_with_clash",
-            format!("{profile_name} - {}", mask_err(&last_err.to_string())),
+            // The notification surface carries the class only. The user knows
+            // which subscription they asked to update; the URL adds nothing they
+            // do not have and is the part worth withholding.
+            format!("{profile_name} - 更新失败({})", help::fetch_error_class(&last_err)),
         );
     }
     Ok(is_current)
@@ -214,10 +220,13 @@ pub async fn update_profile(
                 handle::Handle::refresh_clash();
             }
             Err(err) => {
-                let rendered = mask_err(&err.to_string());
-                logging!(error, Type::Config, "[订阅更新] 更新失败: {}", rendered);
-                handle::Handle::notice_message("update_failed", rendered.clone());
-                logging!(error, Type::Config, "{rendered}");
+                // The core-config error derives from the user's own config
+                // text, which has no class to read and no part safe to quote.
+                // A fixed message; diagnosing a bad config is the backend's,
+                // which served it (M11 (4)(c)).
+                let _ = &err;
+                logging!(error, Type::Config, "[订阅更新] 应用内核配置失败");
+                handle::Handle::notice_message("update_failed", "");
             }
         }
     }

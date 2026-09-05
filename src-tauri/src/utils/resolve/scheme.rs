@@ -96,8 +96,11 @@ async fn import_subscription(url: &str, name: Option<&String>) {
 
     let uid = item.uid.clone().unwrap_or_default();
     if let Err(e) = profiles::profiles_append_item_safe(&mut item).await {
-        let message = help::mask_err(&e.to_string());
-        logging!(error, Type::Config, "failed to import subscription url: {}", message);
+        // Fixed message: this error comes from the config/filesystem write, so
+        // it has no class worth reading and no part worth quoting.
+        let _ = &e;
+        let message = "failed to import subscription url";
+        logging!(error, Type::Config, "{}", message);
         Config::profiles().await.discard();
         handle::Handle::notice_message("import_sub_url::error", message);
         return;
@@ -117,9 +120,16 @@ async fn fetch_profile_item(url: &str, name: Option<&String>) -> Option<PrfItem>
     match PrfItem::from_url(url, name, None, None).await {
         Ok(item) => Some(item),
         Err(e) => {
-            let message = help::mask_err(&e.to_string());
-            logging!(error, Type::Config, "failed to parse profile from url: {}", message);
-            handle::Handle::notice_message("import_sub_url::error", message);
+            let class = help::fetch_error_class(&e);
+            logging!(
+                error,
+                Type::Config,
+                "failed to parse profile from url ({}): {}",
+                class,
+                help::mask_url(url)
+            );
+            // Class only on the notification surface; the user supplied the link.
+            handle::Handle::notice_message("import_sub_url::error", class);
             None
         }
     }
@@ -152,7 +162,13 @@ fn redacted_deep_link_url_summary(link_parsed: &Url) -> std::string::String {
     let has_url = subscription_url.is_some();
     let subscription_url = subscription_url
         .as_deref()
-        .map(redacted_subscription_url_for_log)
+        // One implementation of this predicate, not two. The local
+        // `redacted_subscription_url_for_log` was a second redactor for the same
+        // job and it drifted exactly as duplication does: neither M10's path
+        // threshold nor M11's non-hierarchical-scheme rule ever reached it, so a
+        // vmess payload and an eight-byte token came through here after both
+        // were closed in `mask_url`.
+        .map(help::mask_url)
         .unwrap_or_else(|| std::string::String::from("<missing>"));
 
     format!(
@@ -162,53 +178,6 @@ fn redacted_deep_link_url_summary(link_parsed: &Url) -> std::string::String {
         has_name,
         subscription_url
     )
-}
-
-fn redacted_subscription_url_for_log(url: &str) -> std::string::String {
-    let Ok(parsed) = Url::parse(url) else {
-        return format!("<unparseable-url len={}>", url.len());
-    };
-
-    let mut output = format!(
-        "{}://{}",
-        parsed.scheme(),
-        parsed.host_str().unwrap_or("<missing-host>")
-    );
-    if let Some(port) = parsed.port() {
-        output.push_str(&format!(":{port}"));
-    }
-    output.push_str(&redacted_subscription_path(parsed.path()));
-    if parsed.query().is_some() {
-        output.push_str(" [query-redacted]");
-    }
-    output
-}
-
-fn redacted_subscription_path(path: &str) -> std::string::String {
-    let mut mask_next_segment = false;
-    let segments = path.split('/').map(|segment| {
-        if segment.is_empty() {
-            return segment.to_string();
-        }
-
-        if mask_next_segment {
-            mask_next_segment = false;
-            return std::string::String::from("***");
-        }
-
-        if segment == "subscription" {
-            mask_next_segment = true;
-            return segment.to_string();
-        }
-
-        if segment.len() > 8 {
-            std::string::String::from("***")
-        } else {
-            segment.to_string()
-        }
-    });
-
-    segments.collect::<Vec<_>>().join("/")
 }
 
 async fn post_import_updates(uid: &String, had_current_profile: bool) {
@@ -314,12 +283,16 @@ mod tests {
         Ok(())
     }
 
+    // The local redactor this replaced masked a path segment only when it
+    // exceeded eight bytes, so "short" survived while a longer token did not --
+    // and that threshold was the very thing M10 corrected in `mask_url` and
+    // never in this file. There is no threshold to get wrong now.
     #[test]
-    fn redacted_subscription_url_masks_short_subscription_tokens() {
-        let summary = redacted_subscription_url_for_log("https://api.xxlink.net/subscription/short?format=clash");
-
-        assert_eq!(summary, "https://api.xxlink.net/subscription/*** [query-redacted]");
-        assert!(!summary.contains("short"));
-        assert!(!summary.contains("format=clash"));
+    fn deep_link_subscription_url_goes_through_the_one_redactor() {
+        assert_eq!(
+            help::mask_url("https://api.xxlink.net/subscription/short?format=clash"),
+            "https://api.xxlink.net/***?***"
+        );
+        assert_eq!(help::mask_url("vmess://Q0FOQVJZUEFZTE9BRA"), "vmess:***");
     }
 }

@@ -313,7 +313,14 @@ impl PrfItem {
             Ok(r) => r,
             Err(e) => {
                 tokio::time::sleep(Duration::from_millis(100)).await;
-                bail!("failed to fetch remote profile: {}", e);
+                // `.context` rather than `bail!("... {e}")`. Formatting the
+                // error into the message baked reqwest's Display -- including
+                // its " for url (...)" suffix -- into the outermost anyhow
+                // message, which is the only part `to_string()` emits, so it
+                // reached every log line downstream. Keeping the source instead
+                // means callers can `downcast_ref::<reqwest::Error>()` for the
+                // failure class, and `to_string()` is a fixed string.
+                return Err(e).context("failed to fetch remote profile");
             }
         };
 
@@ -607,11 +614,11 @@ fn fix_dirty_url(input: &str) -> Result<Url> {
     let mut url = match Url::parse(input) {
         Ok(u) => u,
         Err(e) => {
-            return Err(anyhow::anyhow!(
-                "failed to parse deep link url: {:?}, input: {}",
-                e,
-                help::mask_err(input)
-            ));
+            // The input is not echoed. `url::ParseError` names its variant and
+            // nothing else, so the class survives; the argument that carried the
+            // URL was this call site's own addition, and it was the only free
+            // text here.
+            return Err(anyhow::anyhow!("failed to parse deep link url: {e:?}"));
         }
     };
 
