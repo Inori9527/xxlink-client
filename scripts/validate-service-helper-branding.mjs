@@ -53,8 +53,20 @@ for (const file of files) {
     process.exit(1)
   }
 
+  // Case-insensitive, and the gate no longer decides whether the positive
+  // assertion runs at all -- it used to skip silently for any other name, so
+  // `validate-service-helper-branding.mjs package.json` exited 0 printing
+  // "service helper branding OK".
+  const base = path.basename(filePath).toLowerCase()
+  if (!base.startsWith('xxlink-service')) {
+    console.error(
+      `${filePath}: not a service helper; this guard checks xxlink-service*.exe only`,
+    )
+    process.exit(1)
+  }
+
   if (
-    path.basename(filePath).startsWith('xxlink-service-install') &&
+    base.startsWith('xxlink-service-install') &&
     !binaryIncludesText(buffer, EXPECTED_BRANDING)
   ) {
     console.error(
