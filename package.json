@@ -42,7 +42,7 @@
     "i18n:types": "node scripts/generate-i18n-keys.mjs",
     "typecheck": "tsc --noEmit",
     "test:idle-resume": "node --test scripts/test-phase1-idle-resume.mjs",
-    "test:runtime-boundary": "node scripts/validate-runtime-action-boundary.mjs && node scripts/validate-capability-minimization.mjs && node --test scripts/test-runtime-state-policy.mjs scripts/test-selected-node-readiness-gate.mjs scripts/test-retired-tauri-commands.mjs scripts/test-retired-consumer-surface.mjs",
+    "test:runtime-boundary": "node scripts/validate-runtime-action-boundary.mjs && node scripts/validate-capability-minimization.mjs && node --test scripts/test-runtime-state-policy.mjs scripts/test-selected-node-readiness-gate.mjs scripts/test-retired-tauri-commands.mjs scripts/test-retired-consumer-surface.mjs scripts/test-safe-client-error.mjs scripts/ci/check-scope.test.mjs",
     "test:consumer-continuity": "node --test scripts/test-phase1-idle-resume.mjs scripts/test-mine-consumer-actions.mjs scripts/test-consumer-continuity.mjs scripts/test-uninstall-credential-cleanup.mjs"
   },
   "dependencies": {

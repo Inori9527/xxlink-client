@@ -67,6 +67,46 @@ jobs:
               - 'eslint.config.ts'
               - 'tsconfig.json'
               - 'vite.config.*'
+              # G1 item 1(ii): the exact files this job's guards read, derived by
+              # instrumenting fs during a real run of each guard rather than by
+              # pattern-matching their source. Listed individually, not as
+              # 'src-tauri/**': only these are inputs to a guard this job runs.
+              # The seven that do not exist are absence assertions -- recreating
+              # one must trigger this job, which is why they are here.
+              # Before this list, no filter entry matched .rs or .nsi at all, so an
+              # installer-only change ran none of these guards.
+              - 'src-tauri/packages/windows/installer.nsi'
+              - 'src-tauri/src/cmd/app.rs'
+              - 'src-tauri/src/cmd/clash.rs'
+              - 'src-tauri/src/cmd/lightweight.rs'
+              - 'src-tauri/src/cmd/mod.rs'
+              - 'src-tauri/src/cmd/network.rs'
+              - 'src-tauri/src/cmd/oauth.rs'
+              - 'src-tauri/src/cmd/profile.rs'
+              - 'src-tauri/src/cmd/proxy.rs'
+              - 'src-tauri/src/cmd/runtime.rs'
+              - 'src-tauri/src/cmd/runtime_action_controller.rs'
+              - 'src-tauri/src/cmd/save_profile.rs'
+              - 'src-tauri/src/cmd/secure_session.rs'
+              - 'src-tauri/src/cmd/service.rs'
+              - 'src-tauri/src/cmd/uwp.rs'
+              - 'src-tauri/src/cmd/validate.rs'
+              - 'src-tauri/src/config/profiles.rs'
+              - 'src-tauri/src/config/runtime.rs'
+              - 'src-tauri/src/core/manager/config.rs'
+              - 'src-tauri/src/core/mod.rs'
+              - 'src-tauri/src/core/sysopt.rs'
+              - 'src-tauri/src/core/timer.rs'
+              - 'src-tauri/src/core/validate.rs'
+              - 'src-tauri/src/core/win_uwp.rs'
+              - 'src-tauri/src/enhance/mod.rs'
+              - 'src-tauri/src/feat/clash.rs'
+              - 'src-tauri/src/feat/config.rs'
+              - 'src-tauri/src/lib.rs'
+              - 'src-tauri/src/module/lightweight.rs'
+              - 'src-tauri/src/utils/init.rs'
+              - 'src-tauri/src/utils/resolve/scheme.rs'
+              - 'src-tauri/src/utils/server.rs'
 
       - name: Skip if no frontend changes
         if: steps.check_frontend.outputs.frontend != 'true' && github.event_name != 'workflow_dispatch'
