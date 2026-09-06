@@ -137,6 +137,13 @@ for (const [path, modulePath] of retiredRouteModules) {
   )
 }
 
+// Without this line the guard passes when <RequireAuth> is GONE: indexOf
+// returns -1, slice(-1) is the file's last character, and the negative
+// assertion below is trivially satisfied by a one-character string.
+assert.ok(
+  routerSource.includes('<RequireAuth>'),
+  'router no longer wraps protected routes in <RequireAuth>',
+)
 const protectedRouteSource = routerSource.slice(
   routerSource.indexOf('<RequireAuth>'),
 )

@@ -24,6 +24,10 @@ const profileTimer = read('src-tauri/src/core/timer.rs')
 const deepLinkResolver = read('src-tauri/src/utils/resolve/scheme.rs')
 const fileHelpers = read('src-tauri/src/utils/help.rs')
 const rendererConfig = read('src/services/config.ts')
+assert(
+  secureSession.includes('async fn delete_credential_internal'),
+  'delete_credential_internal is gone; the slice below would silently run to the end of the file',
+)
 const logoutDelete = secureSession.slice(
   secureSession.indexOf('pub(crate) async fn take_session_for_logout'),
   secureSession.indexOf('async fn delete_credential_internal'),
@@ -212,8 +216,11 @@ assert(
   'deep-link profile import can be discarded instead of waiting for the shared mutation guard',
 )
 assert(
-  deepLinkResolver.indexOf('fetch_profile_item(url, name).await') <
-    deepLinkResolver.indexOf('wait_profile_switch_guard().await'),
+  // presence first: a missing fetch is -1 and sorts before the guard call,
+  // satisfying the very ordering this assertion exists to prove.
+  deepLinkResolver.includes('fetch_profile_item(url, name).await') &&
+    deepLinkResolver.indexOf('fetch_profile_item(url, name).await') <
+      deepLinkResolver.indexOf('wait_profile_switch_guard().await'),
   'deep-link network fetch holds the profile mutation guard',
 )
 assert(

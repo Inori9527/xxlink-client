@@ -94,6 +94,9 @@ assert(
     configManager.includes('force_update_config_in_transaction') &&
     configFeature.includes('CoreManager::begin_config_transaction().await') &&
     configFeature.includes('.force_update_config_in_transaction()') &&
+    // presence first: a missing latest_arc() is -1, which sorts before
+    // apply() and satisfies the ordering this line exists to prove.
+    configFeature.includes('Config::verge().await.latest_arc()') &&
     configFeature.indexOf('Config::verge().await.latest_arc()') <
       configFeature.indexOf('Config::verge().await.apply()') &&
     configFeature.includes('previous_verge.save_file().await') &&
@@ -118,6 +121,9 @@ assert(
     rust.includes('ensure_clash_source_readable(&clash)') &&
     rust.includes('rollback_connection_state_in_transaction') &&
     rust.includes('previous_connection_state') &&
+    // a missing end bound is -1, which reshapes the slice instead of failing,
+    // so the includes() below would run on the wrong region and still pass.
+    rust.includes('pub async fn runtime_set_tun_enabled') &&
     rust
       .slice(
         rust.indexOf('pub async fn runtime_set_connection_mode'),
@@ -213,6 +219,7 @@ assert(
     rust.includes('.apply_generate_config_in_transaction()') &&
     rust.includes('Config::clash().await.data_arc()') &&
     rust.includes('existing.cloned().unwrap_or_default()') &&
+    rust.includes('pub async fn runtime_get_tun_settings') &&
     !rust
       .slice(
         rust.indexOf('pub async fn runtime_get_tun_settings'),
@@ -285,6 +292,10 @@ assert(
   selection.includes('runtimeActionController.selectNode') &&
     nodeCatalog.includes('runtimeActionController.testNodeLatency'),
   'node selection or latency test bypasses typed actions',
+)
+assert(
+  rust.includes('pub async fn runtime_check_update'),
+  'runtime_check_update is gone; the slice below would silently run to the end of the file',
 )
 const nodeSelectionCommand = rust.slice(
   rust.indexOf('pub async fn runtime_select_node'),
