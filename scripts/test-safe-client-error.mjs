@@ -214,9 +214,31 @@ const HOSTILE_ERROR_FRAGMENTS = [
 // work; the third did not, and had been passing on nothing at all.
 function assertNoHostileMaterial(label, value) {
   const leaves = []
+  const seen = new Set()
   const walk = (node) => {
-    if (typeof node === 'string') leaves.push(node)
-    else if (node && typeof node === 'object') Object.values(node).forEach(walk)
+    if (typeof node === 'string') return void leaves.push(node)
+    if (!node || typeof node !== 'object') return
+    if (seen.has(node)) return
+    seen.add(node)
+    // `Object.values` enumerates none of the three shapes below: an Error's
+    // `message`, `name` and `stack` are non-enumerable own properties, and a
+    // Map's or Set's contents are not properties at all. A secret in any of
+    // them walked past this check while it reported no leak -- which is the
+    // failure this file exists to prevent, in the check itself.
+    if (node instanceof Error) {
+      walk(node.message)
+      walk(node.name)
+      walk(node.stack)
+      walk(node.cause)
+    } else if (node instanceof Map) {
+      node.forEach((entryValue, entryKey) => {
+        walk(entryKey)
+        walk(entryValue)
+      })
+    } else if (node instanceof Set) {
+      node.forEach(walk)
+    }
+    Object.values(node).forEach(walk)
   }
   walk(value)
   for (const fragment of HOSTILE_ERROR_FRAGMENTS) {
@@ -232,12 +254,33 @@ function assertNoHostileMaterial(label, value) {
 // The positive control the three dead checks never had. If this stops failing,
 // the walker has stopped looking.
 test('the hostile-material check can fail', () => {
+  // One sink per shape the walker has to reach. The first three were added
+  // after review found the walker blind to all of them: `Object.values` alone
+  // returned [] for an Error, a Map and a Set, so the check passed by seeing
+  // nothing -- indistinguishable from passing by finding nothing.
+  const sinks = [
+    ['Error message', (secret) => new Error(secret)],
+    ['Map value', (secret) => new Map([['k', secret]])],
+    ['Map key', (secret) => new Map([[secret, 'v']])],
+    ['Set member', (secret) => new Set([secret])],
+    ['plain object', (secret) => ({ nested: [{ text: secret }] })],
+  ]
   for (const fragment of HOSTILE_ERROR_FRAGMENTS) {
+    for (const [shape, build] of sinks) {
+      assert.throws(
+        () => assertNoHostileMaterial('control', build(fragment)),
+        /leaked hostile material/,
+        `the walker misses a ${shape}: ${JSON.stringify(fragment.slice(0, 30))}`,
+      )
+    }
     assert.throws(
       () =>
-        assertNoHostileMaterial('control', { nested: [{ text: fragment }] }),
+        assertNoHostileMaterial(
+          'control',
+          new Error('outer', { cause: new Error(fragment) }),
+        ),
       /leaked hostile material/,
-      `the walker does not detect ${JSON.stringify(fragment.slice(0, 30))}`,
+      `the walker misses an Error cause: ${JSON.stringify(fragment.slice(0, 30))}`,
     )
   }
 })

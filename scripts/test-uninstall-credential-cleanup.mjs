@@ -184,6 +184,28 @@ test('the reinstall launches pass UninstallString unwrapped', () => {
   )
 })
 
+test('a failed service removal does not exit with the code that means cancelled', () => {
+  // The uninstaller's exit code is read by this same installer's reinstall
+  // path, where 1 means "user cancelled" and Aborts BEFORE the branch that
+  // shows an error. A removal failure exiting 1 is therefore shown to the user
+  // as a cancellation and to a managed uninstall as nothing at all -- the
+  // silent success the SetErrorLevel line was added to prevent. 2 is what the
+  // file already uses for its own failures.
+  const nsi = readSource('src-tauri/packages/windows/installer.nsi')
+  // Anchored at both ends, so this is the whole line and not a prefix of
+  // 'SetErrorLevel 10'. atLineStart escapes metacharacters, so the closing
+  // anchor cannot go through it.
+  assert.equal(
+    new RegExp('^[ \\t]*SetErrorLevel 1[ \\t]*$', 'm').test(nsi),
+    false,
+    'installer.nsi exits 1 on a service-removal failure, which its own reinstall path reads as user-cancelled',
+  )
+  assert.ok(
+    new RegExp('^[ \\t]*SetErrorLevel 2[ \\t]*$', 'm').test(nsi),
+    'installer.nsi no longer reports a service-removal failure through the exit code at all',
+  )
+})
+
 test('every external program is invoked by an absolute path', () => {
   const executable = readSource('src-tauri/packages/windows/installer.nsi')
 

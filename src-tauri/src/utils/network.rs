@@ -1,5 +1,5 @@
 use crate::config::Config;
-use anyhow::{Context as _, Result};
+use anyhow::{Context as _, Result, anyhow};
 use base64::{Engine as _, engine::general_purpose};
 use reqwest::{
     Client, Proxy, StatusCode,
@@ -206,8 +206,21 @@ impl NetworkManager {
         //
         // `_ref` rather than the consuming form: `response.text()` below still
         // needs the response, and a non-2xx body stays readable.
-        if let Err(err) = response.error_for_status_ref() {
-            return Err(err).context("remote profile responded with an error status");
+        if !response.status().is_success() {
+            // 4xx/5xx give a real `reqwest::Error`. Everything else non-2xx does
+            // not: a 304, a 1xx, or a 3xx the redirect policy did not follow
+            // comes back as an ordinary response, and `error_for_status_ref`
+            // says nothing about it. Those used to fall through to a `bail!` in
+            // the caller and reach every log line as class "unknown".
+            //
+            // `anyhow!(status)` carries the StatusCode itself as the error's
+            // payload, which `downcast_ref` finds -- no new type, and
+            // `to_string()` stays the fixed context below rather than any text
+            // the server chose.
+            return match response.error_for_status_ref() {
+                Err(err) => Err(err).context("remote profile responded with an error status"),
+                Ok(_) => Err(anyhow!(response.status())).context("remote profile responded with an error status"),
+            };
         }
         let body = match response.text().await {
             Ok(text) => text.into(),

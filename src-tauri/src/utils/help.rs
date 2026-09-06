@@ -222,9 +222,27 @@ pub fn parse_str<T: FromStr>(target: &str, key: &str) -> Option<T> {
 /// `prfitem.rs` preserves the source through `anyhow::Context`, which is what
 /// makes the downcast possible; a `bail!("... {e}")` would have flattened it to
 /// a string and lost both the type and the containment.
-pub fn fetch_error_class(err: &anyhow::Error) -> &'static str {
+pub(crate) fn fetch_error_class(err: &anyhow::Error) -> std::string::String {
+    // YAML first, because it is the one failure whose position the user can act
+    // on, and M17 asked for line and column by name. `PrfItem::from_url` parses
+    // the fetched body itself and lets the error out with `?`, so the typed
+    // error is still here to downcast. A location is two integers -- it carries
+    // no part of the profile, so nothing needs masking.
+    if let Some(yaml) = err.downcast_ref::<serde_yaml_ng::Error>() {
+        return match yaml.location() {
+            Some(at) => format!("invalid-yaml line {} column {}", at.line(), at.column()),
+            None => "invalid-yaml".into(),
+        };
+    }
+    // A status reqwest did not turn into an error of its own -- a 304, a 1xx, a
+    // 3xx the redirect policy did not follow -- arrives as the StatusCode
+    // itself, because `reqwest::Error` has no public constructor and there is
+    // nothing else to carry the fact with.
+    if err.downcast_ref::<reqwest::StatusCode>().is_some() {
+        return "status".into();
+    }
     let Some(err) = err.downcast_ref::<reqwest::Error>() else {
-        return "unknown";
+        return "unknown".into();
     };
     if err.is_timeout() {
         "timeout"
@@ -245,6 +263,7 @@ pub fn fetch_error_class(err: &anyhow::Error) -> &'static str {
     } else {
         "unknown"
     }
+    .into()
 }
 
 /// Reduce a URL to what a log line actually uses: its scheme and host.
@@ -465,22 +484,96 @@ mod runtime_boundary_tests {
         Ok(())
     }
 
-    // The production-path acceptance test M25 asked for is NOT here, and the
-    // reason is recorded rather than worked around. Written as a `#[tokio::test]`
-    // that calls `NetworkManager::get_with_interrupt` against a local 403 and
-    // asserts the class, it makes this test binary fail to LOAD with
-    // STATUS_ENTRYPOINT_NOT_FOUND (0xc0000139) -- and once it is present, every
-    // other test in the binary fails the same way, so it would take the whole
-    // Rust CI job down with it.
+    // The production-path acceptance test M25 asked for is still NOT here, but
+    // the cause is no longer unknown -- it was found by command this round.
     //
-    // What was established, so the next attempt does not start from zero: the
-    // four-kind test alone passes; a probe that makes the same
-    // `get_with_interrupt` call and discards the result also passes; sysproxy,
-    // `Config::verge` and `danger_accept_invalid_certs` were each linked in
-    // isolation and none of them reproduces it. The cause is NOT known. It is
-    // filed rather than guessed at, and the property it would prove -- that an
-    // HTTP status failure carries its class through the real call chain -- is
-    // covered for now only by the `unknown` control below and by reading.
+    // A test that calls `NetworkManager::get_with_interrupt` makes tauri's window
+    // code reachable from the test binary's roots, so the linker keeps its
+    // comctl32 imports: `SetWindowSubclass`, `RemoveWindowSubclass`,
+    // `DefSubclassProc`, `TaskDialogIndirect`. Those four live only in comctl32
+    // **v6**, which the loader reaches through an application manifest.
+    // `C:\Windows\System32\comctl32.dll` is v5 and exports none of them
+    // (verified with objdump against the real file), and a `cargo test` binary
+    // has no manifest -- so the process fails to LOAD, 0xc0000139
+    // STATUS_ENTRYPOINT_NOT_FOUND, before any test runs, taking the other 35 with
+    // it. The shipped app is unaffected: tauri gives it that manifest.
+    //
+    // The fix is a build-system change (embedding the Common-Controls v6
+    // dependency into test binaries) and is proposed rather than taken here:
+    // `rustc-link-arg-tests` needs a `[[test]]` target this package does not
+    // have, and the unqualified `rustc-link-arg` would also alter the shipped
+    // binary's link line. Until it is decided, the network.rs half of the status
+    // fix is covered by reading; the classification half is covered by
+    // `a_status_reqwest_did_not_error_on_is_still_classified` below.
+
+    // M17 asked these sites to log "YAML line and column". This asserts they
+    // can: the classifier is given the error `PrfItem::from_url` produces --
+    // `serde_yaml_ng::from_str::<Mapping>` behind the same `.context` -- and
+    // must name the position. What it does NOT prove is that from_url still
+    // lets that error out with `?`; a `bail!` added there would flatten it and
+    // this test would stay green while every site said "unknown" again.
+    #[test]
+    fn a_malformed_profile_reports_where_it_is_malformed() {
+        // Valid on line 1, broken on line 2: a mapping value that opens a flow
+        // sequence and never closes it.
+        let broken = "proxies: []
+mixed-port: [7890
+";
+        let parsed: Result<Mapping> =
+            serde_yaml_ng::from_str::<Mapping>(broken).context("the remote profile data is invalid yaml");
+        let err = match parsed {
+            Ok(_) => anyhow!("the fixture parsed; it is no longer malformed"),
+            Err(err) => err,
+        };
+        let class = fetch_error_class(&err);
+        assert!(class.starts_with("invalid-yaml line "), "class was {class:?}");
+        assert!(class.contains(" column "), "class was {class:?}");
+
+        // The position must be the real one, not a constant: line 1 parses.
+        assert!(!class.starts_with("invalid-yaml line 1 "), "class was {class:?}");
+
+        // No part of the profile may travel with the position.
+        assert!(!class.contains("7890"), "class carried profile content: {class:?}");
+        assert!(
+            !class.contains("mixed-port"),
+            "class carried profile content: {class:?}"
+        );
+
+        // The control: flattened, it is "unknown" again -- which is what all
+        // five sites printed for a malformed profile before this arm existed.
+        let flattened = anyhow!("invalid yaml: {}", "some detail");
+        assert_eq!(fetch_error_class(&flattened), "unknown");
+    }
+
+    // Covers the classification half of the 304 fix, and ONLY that half: it
+    // asserts what `fetch_error_class` does with the value `network.rs` hands
+    // it, not that `network.rs` hands it that value -- the test that would
+    // prove the second thing cannot load, for the reason recorded above.
+    // Deleting the StatusCode arm in `fetch_error_class` turns this red.
+    #[test]
+    fn a_status_reqwest_did_not_error_on_is_still_classified() {
+        // reqwest turns 4xx and 5xx into errors of its own. A 304, a 1xx, or a
+        // 3xx the redirect policy did not follow it simply returns, so the
+        // status itself is the only thing there is to carry.
+        let carried: Result<()> = Err(anyhow!(reqwest::StatusCode::NOT_MODIFIED));
+        let err = match carried.context("remote profile responded with an error status") {
+            Ok(()) => anyhow!("unreachable: an Err was wrapped"),
+            Err(err) => err,
+        };
+        assert_eq!(fetch_error_class(&err), "status");
+
+        // The message a user or a log line sees must stay the fixed context,
+        // never the reason phrase, which the server chooses.
+        assert_eq!(err.to_string(), "remote profile responded with an error status");
+
+        // The control: the same status formatted into a message -- what the
+        // caller's `bail!` still does for anything that gets past network.rs --
+        // carries nothing to downcast and must report "unknown". Without this
+        // line the assertion above passes on a build where the arm works and on
+        // one where every error is classified "status".
+        let flattened = anyhow!("status {}", reqwest::StatusCode::NOT_MODIFIED);
+        assert_eq!(fetch_error_class(&flattened), "unknown");
+    }
 
     // One test for one rule, because there is now one rule. The predicates these
     // replace -- a length threshold on path segments, a key/value split in the

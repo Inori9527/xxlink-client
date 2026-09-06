@@ -751,7 +751,13 @@ FunctionEnd
       ; uninstall, which would otherwise exit 0 while leaving the service
       ; registered -- reporting success for the one outcome that needs a human.
       DetailPrint "${PRODUCTNAME} Service could not be removed ($0); run: sc delete xxlink_service"
-      SetErrorLevel 1
+      ; 2, not 1. This installer's own reinstall path reads exit 1 from the
+      ; uninstaller as "user cancelled" and Aborts silently -- before the branch
+      ; that shows an error -- so exiting 1 here turned a real failure back into
+      ; the quiet success this whole block exists to prevent. 2 is the value the
+      ; file already uses for its own failures (see the ExecWait fallback), and
+      ; it falls through to the generic error message.
+      SetErrorLevel 2
       MessageBox MB_OK|MB_ICONEXCLAMATION "${PRODUCTNAME} Service could not be removed ($0).$\r$\n$\r$\nTo remove it, run this from an elevated command prompt:$\r$\n$\r$\n    sc delete xxlink_service" /SD IDOK
     ${EndIf}
   ${EndIf}
