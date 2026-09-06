@@ -5,7 +5,9 @@ import path from 'path'
 // PROVES:         Executes the code under test. A green run proves that ONE mihomo
 //                 sidecar binary — argv[2] if passed, otherwise the first existing of
 //                 src-tauri/sidecar/xxlink-mihomo-x86_64-pc-windows-gnu.exe then
-//                 ...-x86_64-pc-windows-msvc.exe — exists on ...
+//                 ...-x86_64-pc-windows-msvc.exe -- exists on disk and, run with -v,
+//                 reports the expected mihomo version (XXLINK_EXPECTED_MIHOMO_VERSION,
+//                 default v1.19.25).
 // DOES NOT PROVE: It does not prove every bundled sidecar is at the pinned version.
 
 const EXPECTED_VERSION =

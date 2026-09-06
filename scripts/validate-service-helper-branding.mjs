@@ -4,11 +4,11 @@ import path from 'path'
 // PROVES:         Reads build artifacts on disk. A green run proves only that three
 //                 already-built Windows binaries exist on disk and pass a raw byte
 //                 scan: src-tauri/resources/xxlink-service.exe,
-//                 xxlink-service-install.exe and xxlink-service-uninstall.exe (or ...
+//                 xxlink-service-install.exe and xxlink-service-uninstall.exe.
 // DOES NOT PROVE: Nothing is executed: no helper is launched, no Windows service is
 //                 installed, registered, queried or removed, so green says nothing
 //                 about the display name Windows actually registers for xxlink_service,
-//                 nor that ...
+//                 nor that the bytes found here are the bytes a running service uses.
 
 const EXPECTED_BRANDING = 'XXLink Service'
 const LEGACY_BRANDING = 'Clash Verge Service'

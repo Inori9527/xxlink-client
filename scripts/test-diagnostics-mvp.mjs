@@ -10,7 +10,8 @@ import ts from 'typescript'
 // PROVES:         Part executed, part source text. Five of the six tests execute the
 //                 real renderer code: they read src/services/diagnostics-bundle.ts,
 //                 transpile it with the TypeScript compiler API (ts.transpileModule),
-//                 and run it in a node:vm context where ...
+//                 and run it in a node:vm context whose two Tauri IPC commands are
+//                 stubs that record the arguments they were given.
 // DOES NOT PROVE: Nothing about the Rust side or the real clipboard: both IPC commands
 //                 are mocked, so no Tauri command, no log collection and no clipboard
 //                 write is exercised.

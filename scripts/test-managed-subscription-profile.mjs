@@ -10,7 +10,8 @@ import ts from 'typescript'
 // DOES NOT PROVE: That managed-subscription-profile.ts works, or even runs — nothing in
 //                 the file imports or calls the adapter, so the three exported
 //                 functions are parsed but never invoked, and a green run says nothing
-//                 about ...
+//                 about what they do when called. The other four tests match source
+//                 text only.
 
 const repoRoot = resolve(import.meta.dirname, '..')
 const adapterPath = resolve(

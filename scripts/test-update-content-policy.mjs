@@ -8,7 +8,8 @@ import ts from 'typescript'
 //                 src/services/update-content-policy.ts only, the script EXECUTES the
 //                 code under test: it reads the real .ts file, transpiles it with the
 //                 TypeScript compiler, runs it in a vm sandbox, and calls the exported
-//                 ...
+//                 getSafeUpdateLink against constructed inputs while reading
+//                 UPDATE_MARKDOWN_ALLOWED_ELEMENTS.
 // DOES NOT PROVE: Nothing about the runtime behaviour of the viewer or the Rust updater
 //                 — neither is imported, compiled or run, only string-matched.
 

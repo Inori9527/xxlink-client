@@ -9,11 +9,13 @@ import vm from 'node:vm'
 //                 EXECUTE the code under test: loadPolicy() reads
 //                 src/services/runtime-state-policy.ts, transpiles it with
 //                 ts.transpileModule to CommonJS, runs it in a bare `vm` context, and
-//                 ...
+//                 calls the exported policy functions directly.
 // DOES NOT PROVE: The seventh test, 'runtime controls reject failed reads and gate
 //                 unsafe mutations', executes nothing — it is readFileSync + regex over
-//                 ten files (src/services/cmds.ts, src/hooks/use-system-proxy-state.ts,
-//                 ...
+//                 seven files -- src/services/cmds.ts, the four use-* hooks,
+//                 src/pages/connect.tsx and src/providers/app-data-provider.tsx. An
+//                 earlier version of this line said ten; the count was never checked
+//                 against the test until round seven.
 
 const repoRoot = resolve(import.meta.dirname, '..')
 

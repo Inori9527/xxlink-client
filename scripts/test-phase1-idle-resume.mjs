@@ -9,8 +9,8 @@ import vm from 'node:vm'
 //                 EXECUTE the code under test.
 // DOES NOT PROVE: Nothing about src/pages/plans.tsx or src/pages/mine.tsx beyond the
 //                 presence of text: those two tests never render, mount, or import the
-//                 components, so green means the characters are in the file — not that
-//                 the ...
+//                 components, so green means the characters are in the file -- not that
+//                 the component renders them, or renders at all.
 
 const repoRoot = resolve(import.meta.dirname, '..')
 

@@ -14,10 +14,12 @@ import {
   selectableChangedFiles,
 } from './check-scope.mjs'
 
-// PROVES:         Executes the code under test. Imports check-scope.mjs's own helpers
-//                 and runs them over constructed inputs -- diff name-status lines,
-//                 cargo JSON diagnostics, path sets -- asserting which changes it
-//                 classifies as Rust-impacting or Prettier-supported.
+// PROVES:         Executes the code under test, two ways. It imports check-scope.mjs's
+//                 own helpers and runs them over constructed inputs -- diff name-status
+//                 lines, cargo JSON diagnostics, path sets -- asserting which changes it
+//                 classifies as Rust-impacting or Prettier-supported; and one test
+//                 spawns the CLI as a subprocess and requires it to fail closed when
+//                 base/head are missing.
 // DOES NOT PROVE: that any workflow calls check-scope.mjs with these inputs, or that
 //                 a real diff produces the shapes constructed here. This file sits
 //                 under scripts/ci/ rather than scripts/, which is why the M27

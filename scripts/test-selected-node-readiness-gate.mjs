@@ -8,7 +8,8 @@ import vm from 'node:vm'
 // PROVES:         Part executed, part source text. Six of the eight tests genuinely
 //                 execute the code under test: the file transpiles
 //                 src/services/selected-node-readiness.ts in-process
-//                 (typescript.transpileModule + node:vm, with ...
+//                 (typescript.transpileModule, then vm.runInNewContext over a CommonJS
+//                 wrapper with a stubbed require that resolves the module's imports).
 // DOES NOT PROVE: Nothing about connect.tsx behaviour - tests 7 and 8 are substring
 //                 matches on file text;
 
