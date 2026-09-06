@@ -8,6 +8,19 @@ import ts from 'typescript'
 
 const repoRoot = resolve(import.meta.dirname, '..')
 
+// PROVES:         Part executed, part source text. Transpiles
+//                 src/services/safe-client-error.ts and runs it in a vm against
+//                 hostile fixtures, asserting that no supplied material reaches a
+//                 log line, a notice, the clipboard or a persisted payload; the
+//                 sink-inventory tests match source text across src/.
+// DOES NOT PROVE: that the app's own build produces this module, that a value
+//                 shape the walker was never handed is covered, or that anything
+//                 in a WeakMap or behind a Proxy that hides ownKeys is seen --
+//                 those two are unreachable by any traversal, not merely
+//                 unimplemented -- or that anything
+//                 runs this file in CI -- frontend-check.yml:113 executes two
+//                 guard scripts and this is not one of them.
+
 class ApiError extends Error {
   constructor(message, status, code) {
     super(message)
@@ -215,30 +228,43 @@ const HOSTILE_ERROR_FRAGMENTS = [
 function assertNoHostileMaterial(label, value) {
   const leaves = []
   const seen = new Set()
+  // `instanceof` is realm-bound, and every value this oracle inspects is built
+  // inside the `node:vm` context the module under test runs in -- so each
+  // `instanceof` branch here was false for exactly the objects it existed to
+  // open, and the check reported "no hostile material" by not looking. The
+  // brand string crosses realms; a cross-realm Error still answers
+  // "[object Error]".
+  const brandOf = (node) => Object.prototype.toString.call(node)
   const walk = (node) => {
     if (typeof node === 'string') return void leaves.push(node)
     if (!node || typeof node !== 'object') return
     if (seen.has(node)) return
     seen.add(node)
-    // `Object.values` enumerates none of the three shapes below: an Error's
-    // `message`, `name` and `stack` are non-enumerable own properties, and a
-    // Map's or Set's contents are not properties at all. A secret in any of
-    // them walked past this check while it reported no leak -- which is the
-    // failure this file exists to prevent, in the check itself.
-    if (node instanceof Error) {
+    const brand = brandOf(node)
+    if (brand === '[object Error]') {
+      // None of these four is an own enumerable property, so Object.values
+      // returns [] for an Error and the secret rides out untouched.
       walk(node.message)
       walk(node.name)
       walk(node.stack)
       walk(node.cause)
-    } else if (node instanceof Map) {
+    } else if (brand === '[object Map]') {
+      // Not properties at all. Keys too: a token can be the key.
       node.forEach((entryValue, entryKey) => {
         walk(entryKey)
         walk(entryValue)
       })
-    } else if (node instanceof Set) {
+    } else if (brand === '[object Set]') {
       node.forEach(walk)
+    } else if (brand === '[object String]' || brand === '[object URL]') {
+      // A boxed String and a URL both hold their text somewhere Object.values
+      // cannot reach, and a subscription URL is the thing this file guards.
+      walk(String(node))
     }
+    // Keys, not just values: `{ [token]: 1 }` puts the secret in the key.
+    Object.keys(node).forEach(walk)
     Object.values(node).forEach(walk)
+    Object.getOwnPropertySymbols(node).forEach((key) => walk(node[key]))
   }
   walk(value)
   for (const fragment of HOSTILE_ERROR_FRAGMENTS) {
@@ -253,34 +279,152 @@ function assertNoHostileMaterial(label, value) {
 
 // The positive control the three dead checks never had. If this stops failing,
 // the walker has stopped looking.
-test('the hostile-material check can fail', () => {
-  // One sink per shape the walker has to reach. The first three were added
-  // after review found the walker blind to all of them: `Object.values` alone
-  // returned [] for an Error, a Map and a Set, so the check passed by seeing
-  // nothing -- indistinguishable from passing by finding nothing.
-  const sinks = [
-    ['Error message', (secret) => new Error(secret)],
-    ['Map value', (secret) => new Map([['k', secret]])],
-    ['Map key', (secret) => new Map([[secret, 'v']])],
-    ['Set member', (secret) => new Set([secret])],
-    ['plain object', (secret) => ({ nested: [{ text: secret }] })],
-  ]
+// The controls for the oracle above. Two properties they have to have, and the
+// previous version had neither: every traversal branch needs a sink that ONLY
+// that branch can reach, and every shape needs a cross-realm twin -- the values
+// this file actually inspects are built inside the vm the module runs in.
+//
+// Measured before this rewrite: deleting walk(message), walk(name), walk(stack)
+// or the cycle guard each left the suite fully green. message and stack masked
+// each other (a stack begins with the message), and nothing exercised name or a
+// cycle at all.
+const REALM = vm.createContext({})
+vm.runInContext(
+  'globalThis.mk = {' +
+    'error: (m) => new Error(m),' +
+    'errorWithCause: (s) => new Error("outer", { cause: new Error(s) }),' +
+    'map: (k, v) => new Map([[k, v]]),' +
+    'set: (v) => new Set([v]),' +
+    'boxed: (s) => new String(s),' +
+    '}',
+  REALM,
+)
+const SAME_REALM = {
+  error: (m) => new Error(m),
+  errorWithCause: (s) => new Error('outer', { cause: new Error(s) }),
+  map: (k, v) => new Map([[k, v]]),
+  set: (v) => new Set([v]),
+  boxed: (s) => new String(s),
+}
+const CROSS_REALM = vm.runInContext('globalThis.mk', REALM)
+
+// Each sink is reachable through exactly one branch of the walker. The Error
+// cases blank the fields they are not testing, because a default stack repeats
+// the message and would keep two branches alive on one sink.
+const HOSTILE_SINKS = [
+  [
+    'Error message',
+    (s, R) => {
+      const e = R.error(s)
+      e.stack = ''
+      return e
+    },
+  ],
+  // defineProperty, not assignment: `e.name = s` would create an own
+  // ENUMERABLE property, which Object.values also finds -- so the sink would
+  // stay detected with walk(node.name) deleted, and prove nothing about that
+  // branch. Error.prototype.name is non-enumerable, which is the shape here.
+  [
+    'Error name',
+    (s, R) => {
+      const e = R.error('')
+      Object.defineProperty(e, 'name', {
+        value: s,
+        enumerable: false,
+        configurable: true,
+        writable: true,
+      })
+      e.stack = ''
+      return e
+    },
+  ],
+  [
+    'Error stack',
+    (s, R) => {
+      const e = R.error('')
+      e.name = 'E'
+      e.stack = s
+      return e
+    },
+  ],
+  ['Error cause', (s, R) => R.errorWithCause(s)],
+  ['Map key', (s, R) => R.map(s, 'v')],
+  ['Map value', (s, R) => R.map('k', s)],
+  ['Set member', (s, R) => R.set(s)],
+  ['boxed String', (s, R) => R.boxed(s)],
+  ['object key', (s) => ({ [s]: 1 })],
+  ['object value', (s) => ({ nested: [{ text: s }] })],
+  ['symbol-keyed value', (s) => ({ [Symbol('k')]: s })],
+]
+
+test('the hostile-material check can fail, for every shape and in both realms', () => {
   for (const fragment of HOSTILE_ERROR_FRAGMENTS) {
-    for (const [shape, build] of sinks) {
-      assert.throws(
-        () => assertNoHostileMaterial('control', build(fragment)),
-        /leaked hostile material/,
-        `the walker misses a ${shape}: ${JSON.stringify(fragment.slice(0, 30))}`,
-      )
+    for (const [realmName, R] of [
+      ['same realm', SAME_REALM],
+      ['vm realm', CROSS_REALM],
+    ]) {
+      for (const [shape, build] of HOSTILE_SINKS) {
+        assert.throws(
+          () => assertNoHostileMaterial('control', build(fragment, R)),
+          /leaked hostile material/,
+          'the walker misses a ' +
+            shape +
+            ' in the ' +
+            realmName +
+            ': ' +
+            JSON.stringify(fragment.slice(0, 30)),
+        )
+      }
     }
+  }
+})
+
+// Separate because a URL cannot carry every fixture verbatim -- it percent-
+// encodes whatever it is handed -- so only the two fixtures that ARE URLs can
+// be a URL sink. A conditional skip inside the loop above would have turned
+// into "never ran" without saying so. Same realm only: a bare vm context has no
+// URL constructor (checked: `typeof URL` is undefined there).
+test('the hostile-material check sees a URL object, whose text is on no own property', () => {
+  const urlFixtures = HOSTILE_ERROR_FRAGMENTS.filter((f) => {
+    try {
+      return String(new URL(f)) === f
+    } catch {
+      return false
+    }
+  })
+  assert.ok(
+    urlFixtures.length > 0,
+    'no fixture round-trips through URL, so this test proves nothing',
+  )
+  for (const fragment of urlFixtures) {
+    const url = new URL(fragment)
+    assert.deepEqual(
+      Object.values(url),
+      [],
+      'a URL now has own enumerable values; this test rests on it not having any',
+    )
     assert.throws(
-      () =>
-        assertNoHostileMaterial(
-          'control',
-          new Error('outer', { cause: new Error(fragment) }),
-        ),
+      () => assertNoHostileMaterial('control', { detail: url }),
       /leaked hostile material/,
-      `the walker misses an Error cause: ${JSON.stringify(fragment.slice(0, 30))}`,
+      'the walker misses a URL object: ' +
+        JSON.stringify(fragment.slice(0, 30)),
+    )
+  }
+})
+
+// Separate, because its failure mode is a stack overflow rather than a missed
+// leak: without the cycle guard this recurses until V8 gives up, and the error
+// that comes back is not the one the assertion asks for.
+test('the hostile-material check terminates on a cycle and still finds the leak', () => {
+  for (const fragment of HOSTILE_ERROR_FRAGMENTS) {
+    const cyclic = { text: fragment }
+    cyclic.self = cyclic
+    cyclic.deeper = { back: cyclic }
+    assert.throws(
+      () => assertNoHostileMaterial('control', cyclic),
+      /leaked hostile material/,
+      'the walker does not survive a cycle: ' +
+        JSON.stringify(fragment.slice(0, 30)),
     )
   }
 })

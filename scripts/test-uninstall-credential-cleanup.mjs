@@ -8,12 +8,20 @@ const repoRoot = resolve(import.meta.dirname, '..')
 const readSource = (relativePath) =>
   readFileSync(resolve(repoRoot, relativePath), 'utf8')
 
-// PROVES:         that these exact strings appear at the head of a line in
-//                 src-tauri/packages/windows/installer.nsi.
-// DOES NOT PROVE: that the line compiles, that the branch runs, that the
-//                 command executes, or that the credential is gone. Proof of
-//                 effect is the bundler's NSIS compile in CI and the C3 VM
-//                 uninstall test; this file is a tripwire, not evidence.
+// PROVES:         that certain exact strings DO appear, and one exact line does
+//                 NOT appear, at the head of a line in
+//                 src-tauri/packages/windows/installer.nsi; and that the file
+//                 contains no /* block comment, which the other assertions
+//                 assume. Its scope is uninstall behaviour: the credential
+//                 vault, the reinstall launches, absolute program paths, and
+//                 the exit code a failed service removal reports.
+// DOES NOT PROVE: that any line compiles, that any branch runs, that any
+//                 command executes, that the credential is gone, or that a
+//                 managed uninstall observes the exit code. Proof of effect is
+//                 the bundler's NSIS compile in CI and the C3 VM uninstall
+//                 test; this file is a tripwire, not evidence. Nothing here
+//                 runs in CI either -- frontend-check.yml:113 executes two
+//                 guard scripts and this is not one of them.
 //
 // Assertions are anchored with ^[ \t]* against the RAW file. A previous
 // revision hand-wrote an NSIS comment stripper so it could search anywhere in
@@ -21,7 +29,13 @@ const readSource = (relativePath) =>
 // in both directions, and one of those let the uninstaller ship with no
 // credential deletion at all while every assertion here stayed green. Anchoring
 // needs no tokenizer: nothing preceded by ";", "#" or a DetailPrint can satisfy
-// it, and there is no second lexer to drift from the first.
+// it, and there is no second lexer to drift from the first. Two assertions do
+// build their own regex rather than going through `atLineStart` -- the
+// exit-code pair, which needs a closing anchor that `atLineStart` would escape
+// into a literal. That is a second MATCHER, not a second lexer: it is the same
+// line-head anchoring with an added end anchor, and it is written out here
+// because an earlier version of this paragraph claimed there was no second one
+// at all.
 const atLineStart = (literal) =>
   new RegExp('^[ \\t]*' + literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'm')
 

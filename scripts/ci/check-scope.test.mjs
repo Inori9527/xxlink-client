@@ -14,6 +14,16 @@ import {
   selectableChangedFiles,
 } from './check-scope.mjs'
 
+// PROVES:         Executes the code under test. Imports check-scope.mjs's own helpers
+//                 and runs them over constructed inputs -- diff name-status lines,
+//                 cargo JSON diagnostics, path sets -- asserting which changes it
+//                 classifies as Rust-impacting or Prettier-supported.
+// DOES NOT PROVE: that any workflow calls check-scope.mjs with these inputs, or that
+//                 a real diff produces the shapes constructed here. This file sits
+//                 under scripts/ci/ rather than scripts/, which is why the M27
+//                 labelling round -- which enumerated the root corpus, 27 files --
+//                 did not reach it. Counted recursively the corpus is 28.
+
 test('name-status parser handles modified, copied, renamed, and deleted files', () => {
   const entries = parseNameStatus(
     [

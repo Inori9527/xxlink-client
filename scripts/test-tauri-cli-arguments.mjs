@@ -7,9 +7,11 @@ import { fileURLToPath } from 'node:url'
 import {
   // PROVES:         Executes the code under test. Two layers, both of which actually run
   //                 the code under test;
-  // DOES NOT PROVE: Nothing is ever packaged: every wrapper probe is --help or --version,
-  //                 so no build, bundle, signing or notarization step runs and none of
-  //                 this shows the guard holds during a real `tauri build`.
+  // DOES NOT PROVE: Nothing is ever packaged: no build, bundle, signing or notarization
+  //                 step runs, so none of this shows the guard holds during a real
+  //                 `tauri build`. Most probes end in --help or --version; two do not --
+  //                 an unknown-command probe and a `build -- --target-dir` probe -- and
+  //                 an earlier version of this line claimed every one of them did.
   getTauriCommandIndex,
   getTauriPackagingInputs,
   getTauriPackagingPlan,

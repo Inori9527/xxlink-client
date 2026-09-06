@@ -3,9 +3,17 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, posix, relative, resolve } from 'node:path'
 import test from 'node:test'
 
-// PROVES:         Source text only. A green run proves two filesystem facts and nothing
-//                 more.
-// DOES NOT PROVE: Anything about behaviour.
+// PROVES:         Source text only, but more than filesystem facts: besides asserting
+//                 that the retired paths are absent, it scans every file under src/ for
+//                 imports that still reach them, and asserts routing, control,
+//                 synchronization, error-surface and persistence shapes by matching
+//                 source text. An earlier version of this header said "two filesystem
+//                 facts and nothing more", which understated it in the direction that
+//                 makes a label dangerous -- it invited trusting the file less than it
+//                 deserves and reading its green as narrower than it is.
+// DOES NOT PROVE: Anything about behaviour. Nothing here executes the code it describes,
+//                 an import reached by a dynamic specifier is invisible to the scan, and
+//                 nothing runs this file in CI.
 
 const repoRoot = resolve(import.meta.dirname, '..')
 const sourceRoot = resolve(repoRoot, 'src')
