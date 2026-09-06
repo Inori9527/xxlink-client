@@ -10,16 +10,20 @@ const repoRoot = resolve(import.meta.dirname, '..')
 
 // PROVES:         Part executed, part source text. Transpiles
 //                 src/services/safe-client-error.ts and runs it in a vm against
-//                 hostile fixtures, asserting that no supplied material reaches a
-//                 log line, a notice, the clipboard or a persisted payload; the
-//                 sink-inventory tests match source text across src/.
-// DOES NOT PROVE: that the app's own build produces this module, that a value
-//                 shape the walker was never handed is covered, or that anything
-//                 in a WeakMap or behind a Proxy that hides ownKeys is seen --
-//                 those two are unreachable by any traversal, not merely
-//                 unimplemented -- or that anything
-//                 runs this file in CI -- frontend-check.yml:113 executes two
-//                 guard scripts and this is not one of them.
+//                 hostile fixtures, then asserts the EXACT shape of what comes
+//                 back -- key sets, enum values, no free-form string fields --
+//                 plus one canary that the serialised output does not contain a
+//                 fixture secret. The sink-inventory tests from roughly the
+//                 midpoint of the file onward match source text across src/ and
+//                 src-tauri/, and execute nothing.
+// DOES NOT PROVE: that the app own build produces this module, or that the real
+//                 sinks behave as the mocks here do -- clipboard, notice and
+//                 persistence calls are recorded, not performed. It no longer
+//                 traverses values looking for secrets, and makes no claim about
+//                 what a Map, a Proxy or a WeakMap might hold: the assertions
+//                 pin a closed shape instead, in which none of those can appear.
+//                 Nothing here runs in CI -- of the four guard steps in
+//                 frontend-check.yml this file is in none of them.
 
 class ApiError extends Error {
   constructor(message, status, code) {
@@ -219,214 +223,71 @@ const HOSTILE_ERROR_FRAGMENTS = [
   'proxies:\n  - name: private-profile\n    password: profile-password-fixture',
 ]
 
-// Compare DECODED leaves, never a serialization. JSON.stringify escapes a
-// newline into two characters, and `raw` is built by joining the fixtures with
-// one, so all three checks written as
-// `JSON.stringify(x).includes(raw)` could not match ANY fixture -- not just the
-// multiline one. Two of them had a strict deepEqual beside them doing the real
-// work; the third did not, and had been passing on nothing at all.
-function assertNoHostileMaterial(label, value) {
-  const leaves = []
-  const seen = new Set()
-  // `instanceof` is realm-bound, and every value this oracle inspects is built
-  // inside the `node:vm` context the module under test runs in -- so each
-  // `instanceof` branch here was false for exactly the objects it existed to
-  // open, and the check reported "no hostile material" by not looking. The
-  // brand string crosses realms; a cross-realm Error still answers
-  // "[object Error]".
-  const brandOf = (node) => Object.prototype.toString.call(node)
-  const walk = (node) => {
-    if (typeof node === 'string') return void leaves.push(node)
-    if (!node || typeof node !== 'object') return
-    if (seen.has(node)) return
-    seen.add(node)
-    const brand = brandOf(node)
-    if (brand === '[object Error]') {
-      // None of these four is an own enumerable property, so Object.values
-      // returns [] for an Error and the secret rides out untouched.
-      walk(node.message)
-      walk(node.name)
-      walk(node.stack)
-      walk(node.cause)
-    } else if (brand === '[object Map]') {
-      // Not properties at all. Keys too: a token can be the key.
-      node.forEach((entryValue, entryKey) => {
-        walk(entryKey)
-        walk(entryValue)
-      })
-    } else if (brand === '[object Set]') {
-      node.forEach(walk)
-    } else if (brand === '[object String]' || brand === '[object URL]') {
-      // A boxed String and a URL both hold their text somewhere Object.values
-      // cannot reach, and a subscription URL is the thing this file guards.
-      walk(String(node))
-    }
-    // Keys, not just values: `{ [token]: 1 }` puts the secret in the key.
-    Object.keys(node).forEach(walk)
-    Object.values(node).forEach(walk)
-    Object.getOwnPropertySymbols(node).forEach((key) => walk(node[key]))
-  }
-  walk(value)
-  for (const fragment of HOSTILE_ERROR_FRAGMENTS) {
-    const hit = leaves.find((leaf) => leaf.includes(fragment))
-    assert.equal(
-      hit,
-      undefined,
-      `${label} leaked hostile material: ${JSON.stringify(fragment.slice(0, 40))}`,
-    )
-  }
-}
-
-// The positive control the three dead checks never had. If this stops failing,
-// the walker has stopped looking.
-// The controls for the oracle above. Two properties they have to have, and the
-// previous version had neither: every traversal branch needs a sink that ONLY
-// that branch can reach, and every shape needs a cross-realm twin -- the values
-// this file actually inspects are built inside the vm the module runs in.
+// The oracle is the exact-shape assertion beside each call site. It is not a
+// search for secrets, and two rounds of review are the reason.
 //
-// Measured before this rewrite: deleting walk(message), walk(name), walk(stack)
-// or the cycle guard each left the suite fully green. message and stack masked
-// each other (a stack begins with the message), and nothing exercised name or a
-// cycle at all.
-const REALM = vm.createContext({})
-vm.runInContext(
-  'globalThis.mk = {' +
-    'error: (m) => new Error(m),' +
-    'errorWithCause: (s) => new Error("outer", { cause: new Error(s) }),' +
-    'map: (k, v) => new Map([[k, v]]),' +
-    'set: (v) => new Set([v]),' +
-    'boxed: (s) => new String(s),' +
-    '}',
-  REALM,
-)
-const SAME_REALM = {
-  error: (m) => new Error(m),
-  errorWithCause: (s) => new Error('outer', { cause: new Error(s) }),
-  map: (k, v) => new Map([[k, v]]),
-  set: (v) => new Set([v]),
-  boxed: (s) => new String(s),
+// The first walker enumerated with Object.values, which returns [] for an
+// Error, a Map and a Set. The second dispatched on `instanceof`, which is
+// realm-bound and answers false for every value built inside the vm this file
+// loads the module into. The third dispatched on Object.prototype.toString,
+// which an object sets for itself with Symbol.toStringTag, and which answers
+// "[object Object]" for a Proxy over an Error that `instanceof` would have
+// caught. Every classifier asks the object what it is, and the object is the
+// one answering.
+//
+// So there is no classifier. The sanitizer under test discards its input and
+// emits a closed shape, and the assertion is that shape: an exact key set,
+// enum-valued fields, and no free-form string field for a secret to sit in.
+// `asPlainValue` is JSON.parse(JSON.stringify(...)), so an Error, Map, Set or
+// Proxy anywhere in the output collapses to {} and breaks the deepEqual. A
+// closed shape has nowhere to hide one, and nothing here traverses looking.
+//
+// The canary below is the second line of defence, for the day a shape
+// assertion is loosened.
+function assertSecretAbsent(label, output) {
+  const serialised = JSON.stringify(output) ?? ''
+  for (const fragment of HOSTILE_ERROR_FRAGMENTS) {
+    // Encode the fixture the way JSON.stringify encoded the output. Comparing
+    // a RAW fixture against serialised output is exactly how three checks in
+    // this file passed on nothing: JSON escapes the newline in the multi-line
+    // fixture, so the needle could never appear in the haystack.
+    const encoded = JSON.stringify(fragment).slice(1, -1)
+    assert.ok(
+      !serialised.includes(encoded),
+      `${label} serialised a fixture secret: ${JSON.stringify(fragment.slice(0, 40))}`,
+    )
+  }
 }
-const CROSS_REALM = vm.runInContext('globalThis.mk', REALM)
 
-// Each sink is reachable through exactly one branch of the walker. The Error
-// cases blank the fields they are not testing, because a default stack repeats
-// the message and would keep two branches alive on one sink.
-const HOSTILE_SINKS = [
-  [
-    'Error message',
-    (s, R) => {
-      const e = R.error(s)
-      e.stack = ''
-      return e
-    },
-  ],
-  // defineProperty, not assignment: `e.name = s` would create an own
-  // ENUMERABLE property, which Object.values also finds -- so the sink would
-  // stay detected with walk(node.name) deleted, and prove nothing about that
-  // branch. Error.prototype.name is non-enumerable, which is the shape here.
-  [
-    'Error name',
-    (s, R) => {
-      const e = R.error('')
-      Object.defineProperty(e, 'name', {
-        value: s,
-        enumerable: false,
-        configurable: true,
-        writable: true,
-      })
-      e.stack = ''
-      return e
-    },
-  ],
-  [
-    'Error stack',
-    (s, R) => {
-      const e = R.error('')
-      e.name = 'E'
-      e.stack = s
-      return e
-    },
-  ],
-  ['Error cause', (s, R) => R.errorWithCause(s)],
-  ['Map key', (s, R) => R.map(s, 'v')],
-  ['Map value', (s, R) => R.map('k', s)],
-  ['Set member', (s, R) => R.set(s)],
-  ['boxed String', (s, R) => R.boxed(s)],
-  ['object key', (s) => ({ [s]: 1 })],
-  ['object value', (s) => ({ nested: [{ text: s }] })],
-  ['symbol-keyed value', (s) => ({ [Symbol('k')]: s })],
-]
-
-test('the hostile-material check can fail, for every shape and in both realms', () => {
+// The control those dead checks never had. It has to cover the multi-line
+// fixture by name, because that is the one the old comparison could not match
+// and therefore the one a repair is most likely to get wrong again.
+test('the secret canary can fail, including for the fixture containing a newline', () => {
   for (const fragment of HOSTILE_ERROR_FRAGMENTS) {
-    for (const [realmName, R] of [
-      ['same realm', SAME_REALM],
-      ['vm realm', CROSS_REALM],
-    ]) {
-      for (const [shape, build] of HOSTILE_SINKS) {
-        assert.throws(
-          () => assertNoHostileMaterial('control', build(fragment, R)),
-          /leaked hostile material/,
-          'the walker misses a ' +
-            shape +
-            ' in the ' +
-            realmName +
-            ': ' +
-            JSON.stringify(fragment.slice(0, 30)),
-        )
-      }
-    }
+    assert.throws(
+      () => assertSecretAbsent('control', { detail: fragment }),
+      /serialised a fixture secret/,
+      `the canary misses ${JSON.stringify(fragment.slice(0, 30))}`,
+    )
   }
-})
 
-// Separate because a URL cannot carry every fixture verbatim -- it percent-
-// encodes whatever it is handed -- so only the two fixtures that ARE URLs can
-// be a URL sink. A conditional skip inside the loop above would have turned
-// into "never ran" without saying so. Same realm only: a bare vm context has no
-// URL constructor (checked: `typeof URL` is undefined there).
-test('the hostile-material check sees a URL object, whose text is on no own property', () => {
-  const urlFixtures = HOSTILE_ERROR_FRAGMENTS.filter((f) => {
-    try {
-      return String(new URL(f)) === f
-    } catch {
-      return false
-    }
-  })
+  const multiline = HOSTILE_ERROR_FRAGMENTS.find((f) => f.includes('\n'))
   assert.ok(
-    urlFixtures.length > 0,
-    'no fixture round-trips through URL, so this test proves nothing',
+    multiline,
+    'no fixture contains a newline, so this control proves nothing',
   )
-  for (const fragment of urlFixtures) {
-    const url = new URL(fragment)
-    assert.deepEqual(
-      Object.values(url),
-      [],
-      'a URL now has own enumerable values; this test rests on it not having any',
-    )
-    assert.throws(
-      () => assertNoHostileMaterial('control', { detail: url }),
-      /leaked hostile material/,
-      'the walker misses a URL object: ' +
-        JSON.stringify(fragment.slice(0, 30)),
-    )
-  }
-})
-
-// Separate, because its failure mode is a stack overflow rather than a missed
-// leak: without the cycle guard this recurses until V8 gives up, and the error
-// that comes back is not the one the assertion asks for.
-test('the hostile-material check terminates on a cycle and still finds the leak', () => {
-  for (const fragment of HOSTILE_ERROR_FRAGMENTS) {
-    const cyclic = { text: fragment }
-    cyclic.self = cyclic
-    cyclic.deeper = { back: cyclic }
-    assert.throws(
-      () => assertNoHostileMaterial('control', cyclic),
-      /leaked hostile material/,
-      'the walker does not survive a cycle: ' +
-        JSON.stringify(fragment.slice(0, 30)),
-    )
-  }
+  assert.throws(
+    () => assertSecretAbsent('control', { detail: multiline }),
+    /serialised a fixture secret/,
+    'the canary misses the multi-line fixture, which is the one the old check could not see',
+  )
+  // The old mistake itself, kept executable rather than described: the raw
+  // fixture does NOT appear in the serialised output, which is why comparing
+  // against it found nothing for years.
+  assert.ok(
+    !JSON.stringify({ detail: multiline }).includes(multiline),
+    'the raw multi-line fixture now survives JSON.stringify; the encoding step above is no longer needed',
+  )
 })
 
 test('classifies ApiError status and transport code-like shapes without exposing details', () => {
@@ -577,7 +438,7 @@ test('production-enableable debug wrapper emits only allowlisted categorical met
 
   debug.debugLog(raw, { url: raw })
   assert.deepEqual(asPlainValue(calls), [[{ event: 'client-debug' }]])
-  assertNoHostileMaterial('debug log', calls)
+  assertSecretAbsent('debug log', calls)
 })
 
 test('safe failure records exclude hostile client material from logs, copies, and persistence payloads', () => {
@@ -659,7 +520,7 @@ test('global browser failure handlers suppress raw WebView defaults after safe r
       },
     ],
   )
-  assertNoHostileMaterial('debug log', calls)
+  assertSecretAbsent('debug log', calls)
 })
 
 test('safe clipboard and notice sinks receive generic material only', async () => {
@@ -732,7 +593,25 @@ test('legacy error notices map unknown values to generic copy without extracting
       },
     )
     assert.equal(copied, 'Something went wrong. Please try again.')
-    assertNoHostileMaterial('legacy notice', notice)
+    // The positive shape of the whole notice, not just its i18n field: the
+    // deepEqual above pins notice.i18n, and the retired walker was the only
+    // thing looking at the rest of it. Every field here is a number or an
+    // enum; there is no free-form string for a secret to occupy.
+    assert.deepEqual(Object.keys(notice).sort(), [
+      'duration',
+      'i18n',
+      'id',
+      'timerId',
+      'type',
+    ])
+    assert.ok(
+      ['error', 'info', 'success', 'warning'].includes(notice.type),
+      'notice.type is not one of the known kinds',
+    )
+    assert.equal(typeof notice.id, 'number')
+    assert.equal(typeof notice.timerId, 'number')
+    assert.equal(typeof notice.duration, 'number')
+    assertSecretAbsent('legacy notice', notice)
   }
 })
 

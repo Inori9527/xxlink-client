@@ -19,9 +19,10 @@ const readSource = (relativePath) =>
 //                 command executes, that the credential is gone, or that a
 //                 managed uninstall observes the exit code. Proof of effect is
 //                 the bundler's NSIS compile in CI and the C3 VM uninstall
-//                 test; this file is a tripwire, not evidence. Nothing here
-//                 runs in CI either -- frontend-check.yml:113 executes two
-//                 guard scripts and this is not one of them.
+//                 test; this file is a tripwire, not evidence. It DOES run in
+//                 CI, via `pnpm test:consumer-continuity` in frontend-check.yml --
+//                 an earlier version of this line said the opposite, from a grep
+//                 that could not see a `pnpm test:` step.
 //
 // Assertions are anchored with ^[ \t]* against the RAW file. A previous
 // revision hand-wrote an NSIS comment stripper so it could search anywhere in
@@ -29,13 +30,21 @@ const readSource = (relativePath) =>
 // in both directions, and one of those let the uninstaller ship with no
 // credential deletion at all while every assertion here stayed green. Anchoring
 // needs no tokenizer: nothing preceded by ";", "#" or a DetailPrint can satisfy
-// it, and there is no second lexer to drift from the first. Two assertions do
-// build their own regex rather than going through `atLineStart` -- the
-// exit-code pair, which needs a closing anchor that `atLineStart` would escape
-// into a literal. That is a second MATCHER, not a second lexer: it is the same
-// line-head anchoring with an added end anchor, and it is written out here
-// because an earlier version of this paragraph claimed there was no second one
-// at all.
+// it. Two assertions build their own regex rather than going through
+// `atLineStart` -- the exit-code pair, which needs a closing anchor that
+// `atLineStart` would escape into a literal.
+//
+// THERE IS STILL ONE HAND-WRITTEN NSIS LEXER IN THIS FILE, and two earlier
+// versions of this paragraph denied it. `operands()` in the absolute-path test
+// walks the line character by character tracking quotes. It does not know
+// NSIS's `$\"` escape: given `Exec "$\"cmd.exe$\" /c echo bypass"` it returns
+// ["$\\", "cmd.exe$\\ /c echo bypass"] (JSON.stringify form) and reads
+// `$\` as the program, while
+// makensis 3.11 compiles the same line as `Exec: ""cmd.exe" /c echo bypass"`.
+// That is the same disagree-with-the-compiler class M27 ordered deleted, it was
+// introduced inside this batch by 326f8c51, and removing it is a change with a
+// ruling attached rather than something to slip in under a header fix -- so it
+// is disclosed here and reported, not quietly rewritten.
 const atLineStart = (literal) =>
   new RegExp('^[ \\t]*' + literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'm')
 

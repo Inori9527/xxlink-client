@@ -12,8 +12,11 @@ import test from 'node:test'
 //                 makes a label dangerous -- it invited trusting the file less than it
 //                 deserves and reading its green as narrower than it is.
 // DOES NOT PROVE: Anything about behaviour. Nothing here executes the code it describes,
-//                 an import reached by a dynamic specifier is invisible to the scan, and
-//                 nothing runs this file in CI.
+//                 or an import reached by a dynamic specifier, which is invisible
+//                 to the scan. It DOES run in CI, via `pnpm test:runtime-boundary`
+//                 in frontend-check.yml -- an earlier version of this line said the
+//                 opposite, because the grep behind it looked for script paths and
+//                 `npm run test`, and a `pnpm test:` step contains neither.
 
 const repoRoot = resolve(import.meta.dirname, '..')
 const sourceRoot = resolve(repoRoot, 'src')
