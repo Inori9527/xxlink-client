@@ -442,7 +442,7 @@ mod runtime_boundary_tests {
     async fn class_of(request: reqwest::RequestBuilder) -> std::string::String {
         match request.send().await {
             Ok(_) => "no-error".into(),
-            Err(err) => fetch_error_class(&wrapped(err)).into(),
+            Err(err) => fetch_error_class(&wrapped(err)),
         }
     }
 
@@ -463,10 +463,10 @@ mod runtime_boundary_tests {
 
         let url = serve(b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\nshort", false)?;
         let decode = match reqwest::Client::new().get(&url).send().await {
-            Err(err) => fetch_error_class(&wrapped(err)).to_string(),
+            Err(err) => fetch_error_class(&wrapped(err)),
             Ok(response) => match response.text().await {
                 Ok(_) => "no-error".to_string(),
-                Err(err) => fetch_error_class(&wrapped(err)).to_string(),
+                Err(err) => fetch_error_class(&wrapped(err)),
             },
         };
         assert_eq!(decode, "decode");
