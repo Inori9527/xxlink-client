@@ -53,20 +53,25 @@ for (const file of files) {
     process.exit(1)
   }
 
-  // Case-insensitive, and the gate no longer decides whether the positive
-  // assertion runs at all -- it used to skip silently for any other name, so
-  // `validate-service-helper-branding.mjs package.json` exited 0 printing
-  // "service helper branding OK".
+  // The three helpers are NAMED, not prefixed. A first attempt accepted any
+  // basename starting with 'xxlink-service', so xxlink-service-foo.exe with no
+  // branding at all still exited 0: the prefix let it past the recogniser and
+  // the install-only positive check never ran. A prefix is not identity.
+  const KNOWN_HELPERS = [
+    'xxlink-service.exe',
+    'xxlink-service-install.exe',
+    'xxlink-service-uninstall.exe',
+  ]
   const base = path.basename(filePath).toLowerCase()
-  if (!base.startsWith('xxlink-service')) {
+  if (!KNOWN_HELPERS.includes(base)) {
     console.error(
-      `${filePath}: not a service helper; this guard checks xxlink-service*.exe only`,
+      `${filePath}: not one of the service helpers this guard knows (${KNOWN_HELPERS.join(', ')})`,
     )
     process.exit(1)
   }
 
   if (
-    base.startsWith('xxlink-service-install') &&
+    base === 'xxlink-service-install.exe' &&
     !binaryIncludesText(buffer, EXPECTED_BRANDING)
   ) {
     console.error(

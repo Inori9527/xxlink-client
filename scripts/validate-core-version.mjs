@@ -43,13 +43,28 @@ const candidates = [
 // not exist was silently dropped so a default binary was validated instead:
 // measured, passing node.exe with XXLINK_EXPECTED_MIHOMO_VERSION=v24.14 exited
 // 0 and printed "mihomo version OK: v24.14".
+// Identity is the PATH, not the name. A first attempt checked only the
+// basename shape, and a copy of the real sidecar renamed
+// xxlink-mihomo-anywhere.exe outside the tree passed with exit 0 -- a name
+// pattern is something an input supplies about itself, which is the whole
+// class this guard was being fixed for.
+const SIDECAR_DIR = path.resolve(cwd, 'src-tauri', 'sidecar')
 const SIDECAR_NAME = /^xxlink-mihomo-[A-Za-z0-9_.-]+\.exe$/i
 
-if (explicitPath && !SIDECAR_NAME.test(path.basename(explicitPath))) {
-  console.error(
-    `refusing to validate ${explicitPath}: only a bundled xxlink-mihomo-*.exe is a mihomo sidecar`,
-  )
-  process.exit(1)
+if (explicitPath) {
+  const resolved = path.resolve(cwd, explicitPath)
+  if (path.dirname(resolved) !== SIDECAR_DIR) {
+    console.error(
+      `refusing to validate ${explicitPath}: a bundled sidecar lives in ${SIDECAR_DIR}`,
+    )
+    process.exit(1)
+  }
+  if (!SIDECAR_NAME.test(path.basename(resolved))) {
+    console.error(
+      `refusing to validate ${explicitPath}: not an xxlink-mihomo-*.exe sidecar`,
+    )
+    process.exit(1)
+  }
 }
 if (explicitPath && !fs.existsSync(explicitPath)) {
   console.error(

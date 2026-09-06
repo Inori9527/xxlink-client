@@ -79,6 +79,12 @@ jobs:
               - 'src-tauri/src/cmd/app.rs'
               - 'src-tauri/src/cmd/clash.rs'
               - 'src-tauri/src/cmd/lightweight.rs'
+              # A DIRECTORY absence assertion (test-retired-tauri-commands.mjs):
+              # recreating any file under it must trigger the job. The first
+              # version of this list dropped it, because the list was filtered to
+              # entries with a file extension -- a rule that silently removed the
+              # one input that is not a file.
+              - 'src-tauri/src/cmd/media_unlock_checker/**'
               - 'src-tauri/src/cmd/mod.rs'
               - 'src-tauri/src/cmd/network.rs'
               - 'src-tauri/src/cmd/oauth.rs'
