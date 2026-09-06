@@ -10,11 +10,14 @@ const readSource = (relativePath) =>
 
 // PROVES:         that certain exact strings DO appear, and one exact line does
 //                 NOT appear, at the head of a line in
-//                 src-tauri/packages/windows/installer.nsi; and that the file
-//                 contains no /* block comment, which the other assertions
-//                 assume. Its scope is uninstall behaviour: the credential
-//                 vault, the reinstall launches, absolute program paths, and
-//                 the exit code a failed service removal reports.
+//                 src-tauri/packages/windows/installer.nsi; that the file's
+//                 fourteen launch lines are exactly a reviewed list, each of
+//                 which names its program through an NSIS variable rather
+//                 than a bare name the executable search order resolves; and
+//                 that the file contains no /* block comment, which the
+//                 other assertions assume. Its scope is uninstall behaviour:
+//                 the credential vault, the reinstall launches, the program
+//                 paths, and the exit code a failed removal reports.
 // DOES NOT PROVE: that any line compiles, that any branch runs, that any
 //                 command executes, that the credential is gone, or that a
 //                 managed uninstall observes the exit code. Proof of effect is
@@ -34,17 +37,17 @@ const readSource = (relativePath) =>
 // `atLineStart` -- the exit-code pair, which needs a closing anchor that
 // `atLineStart` would escape into a literal.
 //
-// THERE IS STILL ONE HAND-WRITTEN NSIS LEXER IN THIS FILE, and two earlier
-// versions of this paragraph denied it. `operands()` in the absolute-path test
-// walks the line character by character tracking quotes. It does not know
-// NSIS's `$\"` escape: given `Exec "$\"cmd.exe$\" /c echo bypass"` it returns
-// ["$\\", "cmd.exe$\\ /c echo bypass"] (JSON.stringify form) and reads
-// `$\` as the program, while
-// makensis 3.11 compiles the same line as `Exec: ""cmd.exe" /c echo bypass"`.
-// That is the same disagree-with-the-compiler class M27 ordered deleted, it was
-// introduced inside this batch by 326f8c51, and removing it is a change with a
-// ruling attached rather than something to slip in under a header fix -- so it
-// is disclosed here and reported, not quietly rewritten.
+// There is no NSIS lexer in this file any more. There was one until this
+// candidate: `operands()` in the launch-line test split each line character
+// by character and decided which operand was the program. It did not know
+// NSIS's $\" escape -- given
+// `Exec "$\"cmd.exe$\" /c echo bypass"` it returned
+// ["$\\", "cmd.exe$\\ /c echo bypass"] and read `$\` as the program,
+// while makensis 3.11 compiles that line as `Exec: ""cmd.exe" /c echo bypass"`.
+// Two earlier versions of this paragraph asserted no second lexer existed
+// while that one sat forty lines below. It is deleted; the launch lines are
+// enumerated against a reviewed list instead, and the regex that finds them
+// makes no judgement about their contents.
 const atLineStart = (literal) =>
   new RegExp('^[ \\t]*' + literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'm')
 
@@ -229,75 +232,82 @@ test('a failed service removal does not exit with the code that means cancelled'
   )
 })
 
-test('every external program is invoked by an absolute path', () => {
-  const executable = readSource('src-tauri/packages/windows/installer.nsi')
+// The launch lines are enumerated, not parsed. Until this candidate the
+// assertion split each line into operands with a hand-written
+// character-by-character scanner and decided which operand was the program.
+// That scanner did not know NSIS's $\" escape: given
+// `Exec "$\"cmd.exe$\" /c echo bypass"` it produced
+// ["$\\", "cmd.exe$\\ /c echo bypass"] and read `$\` as the
+// program, while makensis 3.11 compiles that same line as
+// `Exec: ""cmd.exe" /c echo bypass"`. A second lexer that disagrees with the
+// real one is the class M27 ordered out of these guards, and 326f8c51 had
+// introduced this one inside the same batch that deleted the other.
+//
+// What replaces it: the regex still FINDS the launch lines -- that is
+// line-head anchoring, the same thing atLineStart does, and it makes no
+// judgement about their contents -- and the assertion is a deepEqual against
+// the exact list below. Every entry was read once: each names its program
+// through an NSIS variable or constant ($SYSDIR, $INSTDIR, $TEMP, or a
+// register holding a path from the registry), never a bare name the
+// executable search order would resolve. Adding, removing or editing any
+// launch line fails this test, which is the point: that is a change a person
+// should look at, and no scanner has to be right about NSIS for it to work.
+const EXPECTED_LAUNCHES = [
+  "ExecWait '$R1' $0",
+  "ExecWait '$R1' $0",
+  'nsis_tauri_utils::RunAsUser "$INSTDIR\\${MAINBINARYNAME}.exe" ""',
+  'nsExec::ExecToLog \'"$INSTDIR\\resources\\xxlink-service-install.exe"\'',
+  'ExecWait \'"$TEMP\\$VC_REDIST_EXE" /quiet /norestart\' $0',
+  'ExecWait \'"$6" ${WEBVIEW2INSTALLERARGS} /install\' $1',
+  'ExecWait `"$R1" /install appguid=${WEBVIEW2APPGUID}&needsadmin=true` $1',
+  'nsExec::Exec \'"$SYSDIR\\netsh.exe" int tcp res\'',
+  'nsis_tauri_utils::RunAsUser "$INSTDIR\\${MAINBINARYNAME}.exe" "$R0"',
+  'nsis_tauri_utils::RunAsUser "$SYSDIR\\cmd.exe" \'/c rmdir /s /q "%APPDATA%\\${BUNDLEID}" & rmdir /s /q "%LOCALAPPDATA%\\${BUNDLEID}"\'',
+  'nsExec::Exec \'"$SYSDIR\\cmdkey.exe" /delete:primary.com.xxlink.desktop.secure-session\'',
+  'nsExec::Exec \'"$SYSDIR\\cmdkey.exe" /delete:logout-pending.com.xxlink.desktop.secure-session\'',
+  'nsis_tauri_utils::RunAsUser "$SYSDIR\\cmdkey.exe" "/delete:primary.com.xxlink.desktop.secure-session"',
+  'nsis_tauri_utils::RunAsUser "$SYSDIR\\cmdkey.exe" "/delete:logout-pending.com.xxlink.desktop.secure-session"',
+]
 
-  // The program is the first argument of the call. It may be bare ($R1), or
-  // quoted inside the command string ('"$SYSDIR\\netsh.exe" int tcp res'), and
-  // NSIS accepts ' " and ` as string delimiters.
-  // Longest first: `Exec` is a prefix of the other three, and leaving it out
-  // entirely was a real bypass -- `Exec 'cmdkey /list'` and
-  // `ExecShellWait "open" "cmdkey"` both launched a bare program past this
-  // scan while it reported the file clean.
-  // ExecShell's syntax is `ExecShell "verb" "command" [params] [SW_*]`, so its
-  // program is the SECOND operand. Reading operand 1 as the program both let
-  // `ExecShell "$R2" "netsh.exe"` through and reported the legitimate
-  // `ExecShell "open" "$INSTDIR\\app.exe"` as an offender.
-  // Anchored at the head of a line for the same reason as the assertions above:
-  // an NSIS comment starts with ";" or "#", so `^[ \t]*` excludes it without a
-  // stripper. Unanchored, this scan reported the prose line
-  // "; ExecWait failed, set fake exit code" as a bare invocation -- a guard that
-  // cries wolf on its own source is one people learn to switch off.
-  const CALL =
-    /^[ \t]*(?:nsExec::Exec(?:ToLog|ToStack)?|nsis_tauri_utils::RunAsUser|ExecShellWait|ExecShell|ExecWait|Exec)[^\S\r\n]+(.*)/gm
-  const operands = (rest) => {
-    const out = []
-    let cur = ''
-    let quote = null
-    for (const c of rest) {
-      if (quote) {
-        if (c === quote) {
-          quote = null
-          out.push(cur)
-          cur = ''
-        } else cur += c
-      } else if (c === "'" || c === '"' || c === '`') {
-        quote = c
-      } else if (/\s/.test(c)) {
-        if (cur) {
-          out.push(cur)
-          cur = ''
-        }
-      } else cur += c
-    }
-    if (cur) out.push(cur)
-    return out
-  }
-  const offenders = []
-  for (const [whole, rest] of executable.matchAll(CALL)) {
-    const isShell = /^\s*ExecShell/.test(whole)
-    const ops = operands(rest)
-    // A quoted command string carries the program as its own first token.
-    const first = (ops[isShell ? 1 : 0] || '').trim().split(/\s+/)[0]
-    const program = first.replace(/^[`'"]+/, '').replace(/[`'"]+$/, '')
-    // Every legitimate call names an NSIS variable or constant: $SYSDIR,
-    // $INSTDIR, $TEMP, or a register holding a path read from the registry.
-    if (program && !program.startsWith('$')) offenders.push(whole.trim())
-  }
+// Longest first: `Exec` is a prefix of the other three, and leaving it out
+// entirely was a real bypass -- `Exec 'cmdkey /list'` and
+// `ExecShellWait "open" "cmdkey"` both launched a bare program past an
+// earlier version of this scan while it reported the file clean. Anchored at
+// the head of a line so an NSIS comment (";" or "#") cannot satisfy it:
+// unanchored, it once reported the prose "; ExecWait failed, set fake exit
+// code" as an invocation, and a guard that cries wolf on its own source is
+// one people learn to switch off.
+const LAUNCH_LINE =
+  /^[ \t]*(?:nsExec::Exec(?:ToLog|ToStack)?|nsis_tauri_utils::RunAsUser|ExecShellWait|ExecShell|ExecWait|Exec)[^\S\r\n].*/gm
 
+test('the launch lines in installer.nsi are exactly the reviewed set', () => {
+  const nsi = readSource('src-tauri/packages/windows/installer.nsi')
+  const found = [...nsi.matchAll(LAUNCH_LINE)].map((m) => m[0].trim())
   assert.deepEqual(
-    offenders,
-    [],
-    `these invocations resolve the program through the executable search order:\n  ${offenders.join('\n  ')}`,
+    found,
+    EXPECTED_LAUNCHES,
+    'installer.nsi launch lines changed; each one runs a program, so read the diff before updating this list',
   )
 })
 
-// The vault side of the same defect: logout persists the secret under the
-// logout-pending account before deleting it, so an interruption between those
-// two steps leaves a real token behind. Recovery only runs at the next app
-// start, which never happens if the user's next act is to uninstall. That makes
-// the uninstaller the last line of defence, which is why the assertions above
-// have to keep holding.
+// Red-first, because a snapshot assertion is worthless if the finder misses
+// the thing it is supposed to snapshot. A bare program name added to the
+// file must show up as an extra entry rather than slipping past the regex.
+test('a bare program name would appear in that set', () => {
+  const nsi = readSource('src-tauri/packages/windows/installer.nsi')
+  const tampered = nsi + "\n  Exec 'cmdkey /list'\n"
+  const found = [...tampered.matchAll(LAUNCH_LINE)].map((m) => m[0].trim())
+  assert.notDeepEqual(
+    found,
+    EXPECTED_LAUNCHES,
+    'the finder does not see a bare Exec',
+  )
+  assert.ok(
+    found.includes("Exec 'cmdkey /list'"),
+    'the finder missed a bare program name appended to the file',
+  )
+})
+
 test('logout still deletes the credential rather than only marking it', () => {
   const source = readSource('src-tauri/src/cmd/secure_session.rs')
 
