@@ -6,8 +6,10 @@ import { fileURLToPath } from 'node:url'
 // PROVES:         Source text only. For each of src/locales/en and src/locales/zh: (a)
 //                 the five retired namespace files connections.json, logs.json,
 //                 proxies.json, rules.json, tests.json are absent from that directory
-//                 (real existsSync filesystem checks), and (b) every still-active
-//                 namespace file is present and imported by that locale's index.
+//                 (real existsSync filesystem checks), and (b) the SEVEN NAMED active
+//                 namespaces are present and imported by that locale's index. The
+//                 active list is hardcoded here, so an eighth namespace added to the
+//                 index would pass unnoticed -- this does not establish 'every'.
 // DOES NOT PROVE: It never executes the code under test.
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..')

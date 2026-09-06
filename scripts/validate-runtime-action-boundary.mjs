@@ -2,9 +2,12 @@ import { readFileSync } from 'node:fs'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-// PROVES:         Source text only. Only textual facts about 26 checked-in source files
-//                 read as plain strings and matched with String#includes/indexOf plus
-//                 three regexes.
+// PROVES:         Source text only. Textual facts about the checked-in sources it
+//                 reads as plain strings and matches with String#includes/indexOf
+//                 and a few regexes, PLUS two filesystem facts -- notably that
+//                 src/services/update.ts is absent, which fails the guard without
+//                 any read file changing. The file count is deliberately not stated:
+//                 four such counts in this corpus were wrong when checked.
 // DOES NOT PROVE: That any of the asserted behaviour happens at runtime.
 
 const root = process.cwd()

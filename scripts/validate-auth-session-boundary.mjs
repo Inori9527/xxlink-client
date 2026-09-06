@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-// PROVES:         Source text only. Two unequal things.
+// PROVES:         Part executed, part source text, and the executed half is a
+//                 DUPLICATE rather than shipped code: the file defines its own
+//                 isServiceAccessBlockedResponse and runs it against inline
+//                 expectations, so changing only that copy fails the guard while
+//                 every scanned production file is unchanged. The rest is source
+//                 text.
 // DOES NOT PROVE: That any shipped auth code behaves as claimed.
 
 const AUTH_FATAL_CODES = new Set([

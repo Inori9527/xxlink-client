@@ -16,9 +16,14 @@ const readSource = (relativePath) =>
 //                 variable rather than a bare name the executable search order
 //                 resolves; and
 //                 that the file contains no /* block comment, which the
-//                 other assertions assume. Its scope is uninstall behaviour:
-//                 the credential vault, the reinstall launches, the program
-//                 paths, and the exit code a failed removal reports.
+//                 other assertions assume. It also reads production Rust and Tauri
+//                 configuration, not only installer text: removing
+//                 delete_credential_internal().await from secure_session.rs fails
+//                 the last test with installer.nsi untouched, and the vault
+//                 constants are compared against tauri.conf.json's bundle identity.
+//                 Its scope is uninstall behaviour: the credential vault, the
+//                 reinstall launches, the program paths, and the exit code a failed
+//                 removal reports.
 // DOES NOT PROVE: that any line compiles, that any branch runs, that any
 //                 command executes, that the credential is gone, or that a
 //                 managed uninstall observes the exit code. Nor that those

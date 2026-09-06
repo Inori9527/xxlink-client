@@ -6,8 +6,9 @@ import { load as parseYaml } from 'js-yaml'
 
 // PROVES:         Part executed, part source text. That the checked-in inputs hold the
 //                 reviewed values -- tauri.conf.json and the per-platform
-//                 tauri.<platform>.conf.json files, package.json, src/main.tsx and one
-//                 GitHub workflow file, so source and workflow text as well as data --
+//                 tauri.<platform>.conf.json files, package.json, src/main.tsx and
+//                 three GitHub workflow files (dev.yml, autobuild.yml, release.yml),
+//                 so source and workflow text as well as data --
 //                 plus that this file's own inline helpers reject its negative fixtures.
 // DOES NOT PROVE: That any application, build, or Tauri code works.
 

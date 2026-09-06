@@ -8,8 +8,10 @@ import { fileURLToPath } from 'node:url'
 
 import { updateLocaleData } from './cleanup-unused-i18n.mjs'
 
-// PROVES:         Part executed, part source text. Two unrelated things by two
-//                 different means.
+// PROVES:         Part executed, part source text. It EXECUTES the real cleanup CLI
+//                 twice as a subprocess and calls the real updateLocaleData
+//                 implementation directly -- either can fail on its own -- and
+//                 separately matches text in package.json.
 // DOES NOT PROVE: That `pnpm i18n:format` / `i18n:align` / `i18n:prune` actually behave
 //                 safely -- the five assertSafeI18nScripts assertions only prove the
 //                 flag text is present in package.json;

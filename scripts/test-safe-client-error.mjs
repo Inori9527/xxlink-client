@@ -20,14 +20,18 @@ const repoRoot = resolve(import.meta.dirname, '..')
 //                 sinks behave as the mocks here do -- clipboard, notice and
 //                 persistence calls are recorded, not performed. It no longer
 //                 traverses values looking for secrets, and makes no claim about
-//                 what a Map, a Proxy or a WeakMap might hold. It pins an exact
-//                 shape instead, which is weaker than "nothing can hide there":
-//                 a value whose toJSON returns something innocuous, or a secret
-//                 on a non-enumerable property, would survive the JSON projection
-//                 and satisfy the deepEqual. Neither is reachable from the three
-//                 producers these tests drive, which build literals of fixed
-//                 enums and primitives -- that is why the shape assertion suffices
-//                 HERE, and it is not a general property of JSON round-trips.
+//                 what a Map, a Proxy or a WeakMap might hold. What it pins is an
+//                 exact JSON-VISIBLE PROJECTION, not an exact object: asPlainValue
+//                 is JSON.parse(JSON.stringify(...)), so a symbol-keyed property, an
+//                 undefined- or function-valued own property, an inherited property,
+//                 a toJSON returning something innocuous, and a secret on a
+//                 non-enumerable property all survive it and satisfy the deepEqual.
+//                 Production itself relies on that: notice-service.ts builds
+//                 { key, params: undefined }, which projects to { key }. None of
+//                 those routes is reachable from the three producers these tests
+//                 drive, which build literals of fixed enums and primitives -- that
+//                 is why the projection suffices HERE, and it is not a general
+//                 property of JSON round-trips.
 //                 Nothing here runs in CI -- of the four guard steps in
 //                 frontend-check.yml this file is in none of them.
 
@@ -611,12 +615,14 @@ test('legacy error notices map unknown values to generic copy without extracting
       'type',
     ])
     assert.ok(
-      // Exactly the three values NoticeType admits
-      // (src/services/notice-service.ts:11). An earlier version also allowed
-      // 'warning', which production cannot produce -- an allowlist wider than
-      // the type it guards passes for values that can never occur.
-      ['error', 'info', 'success'].includes(notice.type),
-      'notice.type is not one of the three NoticeType values',
+      // Equality, not an allowlist. All three fixtures call showNotice.error, and
+      // copyNoticeToClipboard only returns generic text for type 'error', so an
+      // allowlist here could lose 'info' or 'success' and stay green -- a
+      // membership test nothing exercises is a membership test that cannot fail.
+      // NoticeType is success|error|info (notice-service.ts:11); covering the
+      // other two needs fixtures that reach their shortcuts, not a wider list.
+      notice.type === 'error',
+      'the notice on this path is not an error notice',
     )
     assert.equal(typeof notice.id, 'number')
     assert.equal(typeof notice.timerId, 'number')

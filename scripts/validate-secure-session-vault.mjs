@@ -2,7 +2,11 @@ import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
-// PROVES:         Source text only. Two unequal things.
+// PROVES:         Part executed, part source text, and the executed half is a
+//                 DUPLICATE rather than shipped code: the file defines its own
+//                 migrationDecision model and runs it over a case table, so changing
+//                 only that copy fails the guard independently of the production
+//                 source. The rest is source text.
 // DOES NOT PROVE: That any shipped session code behaves this way.
 
 const readSource = (path) =>

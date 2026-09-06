@@ -8,6 +8,11 @@ import path from 'path'
 //                 but only when no paths are passed on the command line. argv
 //                 REPLACES that default set rather than adding to it, so a green
 //                 run invoked with arguments says nothing about the three above.
+//                 Worse, the only POSITIVE branding assertion is gated on the
+//                 supplied basename starting, case-sensitively, with
+//                 'xxlink-service-install': measured, passing package.json exits 0
+//                 with "service helper branding OK". An arbitrary argv input need
+//                 only lack the legacy string. Filed to the guard item.
 // DOES NOT PROVE: Nothing is executed: no helper is launched, no Windows service is
 //                 installed, registered, queried or removed, so green says nothing
 //                 about the display name Windows actually registers for xxlink_service,

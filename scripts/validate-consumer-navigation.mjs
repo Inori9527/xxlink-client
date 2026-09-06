@@ -3,9 +3,10 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// PROVES:         Source text only. A green run proves only that the source TEXT of
-//                 eight checked-in files matches the post-2026-08-21 bottom-tab-bar
-//                 shape.
+// PROVES:         Source text only. That the source TEXT of the files it reads matches
+//                 the post-2026-08-21 bottom-tab-bar shape, AND one path-absence
+//                 fact: recreating use-nav-menu-order.ts fails the guard even when
+//                 every read text is unchanged.
 // DOES NOT PROVE: Anything about running code.
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..')

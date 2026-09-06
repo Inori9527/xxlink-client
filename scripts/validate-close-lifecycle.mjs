@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-// PROVES:         Source text only. A green run proves only that certain text is
-//                 present in two Rust files it reads with readFileSync —
-//                 src-tauri/src/lib.rs and src-tauri/src/utils/window_manager.rs.
+// PROVES:         Source text only. That certain text is PRESENT, and that one
+//                 forbidden form is ABSENT, in the two Rust files it reads with
+//                 readFileSync -- src-tauri/src/lib.rs and
+//                 src-tauri/src/utils/window_manager.rs. Adding
+//                 `let _ = window.hide();` to the sliced close handler fails it.
 // DOES NOT PROVE: That any of the checked code runs, compiles, or has the asserted
 //                 effect.
 

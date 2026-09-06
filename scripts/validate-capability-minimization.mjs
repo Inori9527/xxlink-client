@@ -2,8 +2,10 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-// PROVES:         Source text only. A green run proves facts about the current content
-//                 of seven checked-in files, read from disk relative to process.cwd().
+// PROVES:         Source text only. Facts about the current content of the checked-in
+//                 files it reads relative to process.cwd(), AND three path-absence
+//                 assertions: reintroducing migrated.json, desktop-windows.json or
+//                 announcements.ts fails the guard with every read file unchanged.
 // DOES NOT PROVE: That the shipped app is actually minimized.
 
 const root = process.cwd()

@@ -10,7 +10,14 @@ import path from 'path'
 //                 so passing a wrong path silently validates a default binary)
 //                 reports the expected mihomo version (XXLINK_EXPECTED_MIHOMO_VERSION,
 //                 default v1.19.25).
-// DOES NOT PROVE: It does not prove every bundled sidecar is at the pinned version.
+// DOES NOT PROVE: It does not prove every bundled sidecar is at the pinned version,
+//                 nor that the binary it checked is mihomo at all, nor that the
+//                 version is EQUAL to the expected one. argv[2] may name any
+//                 executable and the check is a substring search of its -v output:
+//                 measured, `validate-core-version.mjs <path to node.exe>` with
+//                 XXLINK_EXPECTED_MIHOMO_VERSION=v24.14 exits 0 and prints
+//                 "mihomo version OK: v24.14" while node reports v24.14.1.
+//                 Identity and exact-version checking are filed to the guard item.
 
 const EXPECTED_VERSION =
   process.env.XXLINK_EXPECTED_MIHOMO_VERSION || 'v1.19.25'
