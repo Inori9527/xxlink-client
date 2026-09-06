@@ -20,8 +20,14 @@ const repoRoot = resolve(import.meta.dirname, '..')
 //                 sinks behave as the mocks here do -- clipboard, notice and
 //                 persistence calls are recorded, not performed. It no longer
 //                 traverses values looking for secrets, and makes no claim about
-//                 what a Map, a Proxy or a WeakMap might hold: the assertions
-//                 pin a closed shape instead, in which none of those can appear.
+//                 what a Map, a Proxy or a WeakMap might hold. It pins an exact
+//                 shape instead, which is weaker than "nothing can hide there":
+//                 a value whose toJSON returns something innocuous, or a secret
+//                 on a non-enumerable property, would survive the JSON projection
+//                 and satisfy the deepEqual. Neither is reachable from the three
+//                 producers these tests drive, which build literals of fixed
+//                 enums and primitives -- that is why the shape assertion suffices
+//                 HERE, and it is not a general property of JSON round-trips.
 //                 Nothing here runs in CI -- of the four guard steps in
 //                 frontend-check.yml this file is in none of them.
 
@@ -605,8 +611,12 @@ test('legacy error notices map unknown values to generic copy without extracting
       'type',
     ])
     assert.ok(
-      ['error', 'info', 'success', 'warning'].includes(notice.type),
-      'notice.type is not one of the known kinds',
+      // Exactly the three values NoticeType admits
+      // (src/services/notice-service.ts:11). An earlier version also allowed
+      // 'warning', which production cannot produce -- an allowlist wider than
+      // the type it guards passes for values that can never occur.
+      ['error', 'info', 'success'].includes(notice.type),
+      'notice.type is not one of the three NoticeType values',
     )
     assert.equal(typeof notice.id, 'number')
     assert.equal(typeof notice.timerId, 'number')

@@ -4,8 +4,10 @@ import { dirname, posix, relative, resolve } from 'node:path'
 import test from 'node:test'
 
 // PROVES:         Source text only, but more than filesystem facts: besides asserting
-//                 that the retired paths are absent, it scans every file under src/ for
-//                 imports that still reach them, and asserts routing, control,
+//                 that the retired paths are absent, it scans every .ts and .tsx file
+//                 under src/ for imports that still reach them -- and ONLY those two
+//                 extensions, so a .js, .mjs or .jsx importer would be invisible --
+//                 and asserts routing, control,
 //                 synchronization, error-surface and persistence shapes by matching
 //                 source text. An earlier version of this header said "two filesystem
 //                 facts and nothing more", which understated it in the direction that

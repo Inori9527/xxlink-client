@@ -6,6 +6,8 @@ import path from 'path'
 //                 sidecar binary — argv[2] if passed, otherwise the first existing of
 //                 src-tauri/sidecar/xxlink-mihomo-x86_64-pc-windows-gnu.exe then
 //                 ...-x86_64-pc-windows-msvc.exe -- exists on disk and, run with -v,
+//                 (an argv[2] that does not exist is dropped rather than reported,
+//                 so passing a wrong path silently validates a default binary)
 //                 reports the expected mihomo version (XXLINK_EXPECTED_MIHOMO_VERSION,
 //                 default v1.19.25).
 // DOES NOT PROVE: It does not prove every bundled sidecar is at the pinned version.

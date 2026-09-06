@@ -12,10 +12,13 @@ import vm from 'node:vm'
 //                 calls the exported policy functions directly.
 // DOES NOT PROVE: The seventh test, 'runtime controls reject failed reads and gate
 //                 unsafe mutations', executes nothing — it is readFileSync + regex over
-//                 seven files -- src/services/cmds.ts, the four use-* hooks,
-//                 src/pages/connect.tsx and src/providers/app-data-provider.tsx. An
-//                 earlier version of this line said ten; the count was never checked
-//                 against the test until round seven.
+//                 ten files: seven TS/TSX under src/ (services/cmds.ts, the four
+//                 use-* hooks, pages/connect.tsx, providers/app-data-provider.tsx)
+//                 AND three Rust files under src-tauri/src/
+//                 (cmd/runtime_action_controller.rs, core/sysopt.rs,
+//                 utils/server.rs). Ten was right; a round-seven "correction" to
+//                 seven came from a grep for src/**.tsx? that could not see the
+//                 Rust half at all -- the same blind spot, one file over.
 
 const repoRoot = resolve(import.meta.dirname, '..')
 

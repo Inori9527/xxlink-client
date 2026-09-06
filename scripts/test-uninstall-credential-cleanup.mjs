@@ -10,17 +10,25 @@ const readSource = (relativePath) =>
 
 // PROVES:         that certain exact strings DO appear, and one exact line does
 //                 NOT appear, at the head of a line in
-//                 src-tauri/packages/windows/installer.nsi; that the file's
-//                 fourteen launch lines are exactly a reviewed list, each of
-//                 which names its program through an NSIS variable rather
-//                 than a bare name the executable search order resolves; and
+//                 src-tauri/packages/windows/installer.nsi; that the lines
+//                 BEGINNING with a launch instruction are exactly a reviewed list
+//                 of fourteen, each of which names its program through an NSIS
+//                 variable rather than a bare name the executable search order
+//                 resolves; and
 //                 that the file contains no /* block comment, which the
 //                 other assertions assume. Its scope is uninstall behaviour:
 //                 the credential vault, the reinstall launches, the program
 //                 paths, and the exit code a failed removal reports.
 // DOES NOT PROVE: that any line compiles, that any branch runs, that any
 //                 command executes, that the credential is gone, or that a
-//                 managed uninstall observes the exit code. Proof of effect is
+//                 managed uninstall observes the exit code. Nor that those
+//                 fourteen are EVERY launch in the file: a macro that expands to
+//                 one, a launch after something else on the same line, or an
+//                 !insertmacro that runs a program are invisible to a line-head
+//                 finder, and closing that would need the NSIS grammar this file
+//                 deliberately does not carry. installer.nsi:338-350 records the
+//                 one known residual -- $R1 can hold a bare MsiExec.exe from the
+//                 WiX branch. Proof of effect is
 //                 the bundler's NSIS compile in CI and the C3 VM uninstall
 //                 test; this file is a tripwire, not evidence. It DOES run in
 //                 CI, via `pnpm test:consumer-continuity` in frontend-check.yml --
@@ -277,8 +285,13 @@ const EXPECTED_LAUNCHES = [
 // unanchored, it once reported the prose "; ExecWait failed, set fake exit
 // code" as an invocation, and a guard that cries wolf on its own source is
 // one people learn to switch off.
+// The `i` flag is load-bearing, not tidiness: NSIS instructions are
+// case-insensitive, and makensis 3.11 compiles `exec 'cmdkey /list'` at rc=0
+// (measured). Without it the finder saw only the casing that happens to be
+// in the file today, so a lower-case launch added later would never enter
+// the snapshot and the deepEqual would stay green.
 const LAUNCH_LINE =
-  /^[ \t]*(?:nsExec::Exec(?:ToLog|ToStack)?|nsis_tauri_utils::RunAsUser|ExecShellWait|ExecShell|ExecWait|Exec)[^\S\r\n].*/gm
+  /^[ \t]*(?:nsExec::Exec(?:ToLog|ToStack)?|nsis_tauri_utils::RunAsUser|ExecShellWait|ExecShell|ExecWait|Exec)[^\S\r\n].*/gim
 
 test('the launch lines in installer.nsi are exactly the reviewed set', () => {
   const nsi = readSource('src-tauri/packages/windows/installer.nsi')
@@ -295,7 +308,8 @@ test('the launch lines in installer.nsi are exactly the reviewed set', () => {
 // file must show up as an extra entry rather than slipping past the regex.
 test('a bare program name would appear in that set', () => {
   const nsi = readSource('src-tauri/packages/windows/installer.nsi')
-  const tampered = nsi + "\n  Exec 'cmdkey /list'\n"
+  // Lower case on purpose: makensis accepts it, so the finder has to.
+  const tampered = nsi + "\n  exec 'cmdkey /list'\n"
   const found = [...tampered.matchAll(LAUNCH_LINE)].map((m) => m[0].trim())
   assert.notDeepEqual(
     found,
@@ -303,7 +317,7 @@ test('a bare program name would appear in that set', () => {
     'the finder does not see a bare Exec',
   )
   assert.ok(
-    found.includes("Exec 'cmdkey /list'"),
+    found.includes("exec 'cmdkey /list'"),
     'the finder missed a bare program name appended to the file',
   )
 })
